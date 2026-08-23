@@ -1,0 +1,9 @@
+{
+  "project": "RefConcept",
+  "pack": "AI One-Shot Software Factory",
+  "milestone": "WEB_FIRST",
+  "completion_signal": "WEB_RELEASE_APPROVED",
+  "master_spec": "REFCONCEPT_MASTER_SPEC.md",
+  "launch_prompt": "00_COPY_THIS_PROMPT.md",
+  "mobile_allowed_after": "WEB_RELEASE_APPROVED"
+}

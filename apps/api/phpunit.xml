@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+        <!-- Domain-owned tests live next to the code they cover (app/Domains/*/Tests). -->
+        <testsuite name="Domains">
+            <directory>app/Domains/*/Tests</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>app</directory>
+        </include>
+    </source>
+    <php>
+        <!--
+            force="true" is mandatory here. The api container receives apps/api/.env
+            through docker compose `env_file`, so APP_ENV/DB_* already exist as real
+            process environment variables. Without force, PHPUnit leaves them alone and
+            the suite runs against the *development* database — RefreshDatabase would
+            then wipe local data while silently reporting green.
+        -->
+        <env name="APP_ENV" value="testing" force="true"/>
+        <env name="APP_MAINTENANCE_DRIVER" value="file" force="true"/>
+        <env name="APP_DEBUG" value="false" force="true"/>
+        <env name="BCRYPT_ROUNDS" value="4" force="true"/>
+        <env name="BROADCAST_CONNECTION" value="null" force="true"/>
+        <env name="CACHE_STORE" value="array" force="true"/>
+
+        <!--
+            Tests run against real PostgreSQL, never SQLite: the schema relies on
+            check constraints, partial indexes, citext and pgvector, and a SQLite
+            run would silently skip exactly the guarantees the financial and
+            matching domains depend on. See 08_DATABASE_AND_DOMAIN_RULES.md.
+        -->
+        <env name="DB_CONNECTION" value="pgsql" force="true"/>
+        <env name="DB_HOST" value="postgres" force="true"/>
+        <env name="DB_PORT" value="5432" force="true"/>
+        <env name="DB_DATABASE" value="refconcept_test" force="true"/>
+        <env name="DB_USERNAME" value="refconcept" force="true"/>
+        <env name="DB_PASSWORD" value="refconcept" force="true"/>
+        <env name="DB_URL" value="" force="true"/>
+
+        <env name="MAIL_MAILER" value="array" force="true"/>
+        <env name="QUEUE_CONNECTION" value="sync" force="true"/>
+        <env name="SESSION_DRIVER" value="array" force="true"/>
+        <env name="FILESYSTEM_DISK" value="local" force="true"/>
+        <env name="PULSE_ENABLED" value="false" force="true"/>
+        <env name="TELESCOPE_ENABLED" value="false" force="true"/>
+        <env name="NIGHTWATCH_ENABLED" value="false" force="true"/>
+    </php>
+</phpunit>

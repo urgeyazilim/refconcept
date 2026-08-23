@@ -1,0 +1,56 @@
+# --- dependencies ---
+node_modules/
+vendor/
+.pnpm-store/
+
+# --- build output ---
+dist/
+.output/
+.nuxt/
+.nitro/
+.cache/
+storybook-static/
+
+# --- env & secrets ---
+.env
+.env.*
+!.env.example
+!.env.docker.example
+*.pem
+*.key
+auth.json
+
+# --- laravel ---
+apps/api/storage/*.key
+apps/api/storage/framework/cache/data/*
+apps/api/storage/framework/sessions/*
+apps/api/storage/framework/views/*
+apps/api/storage/framework/testing/*
+apps/api/storage/logs/*
+apps/api/bootstrap/cache/*
+apps/api/public/storage
+apps/api/public/hot
+apps/api/.phpunit.result.cache
+apps/api/.phpunit.cache/
+
+# --- tests ---
+coverage/
+playwright-report/
+test-results/
+.playwright/
+
+# --- tooling ---
+.phpstan.cache/
+.eslintcache
+*.log
+npm-debug.log*
+
+# --- os / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+
+# --- local archives ---
+_archive/
+REFCONCEPT_FULL_SOFTWARE_FACTORY_PACKAGE.zip

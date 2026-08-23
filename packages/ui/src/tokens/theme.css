@@ -1,0 +1,114 @@
+/**
+ * Tailwind v4 theme bridge for RefConcept.
+ *
+ * Import order in an app entry stylesheet:
+ *   @import "tailwindcss";
+ *   @import "@refconcept/ui/tokens.css";
+ *   @import "@refconcept/ui/theme.css";
+ *
+ * Utilities generated here (bg-surface, text-muted, rounded-lg, shadow-md, ...)
+ * resolve to the same custom properties the raw CSS uses, so a component can mix
+ * utility classes and hand-written CSS without palette drift.
+ */
+
+@theme {
+  /* Disable Tailwind's default blue-ish palette entry points we must not use. */
+  --color-*: initial;
+
+  --color-white: #ffffff;
+  --color-black: #111111;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-inherit: inherit;
+
+  --color-charcoal: #111111;
+  --color-warm-gray: #f5f3f0;
+  --color-sand: #dcce86;
+  --color-taupe: #a89e8e;
+  --color-gold: #c9a86a;
+
+  --color-neutral-0: #ffffff;
+  --color-neutral-25: #fdfcfb;
+  --color-neutral-50: #f9f7f5;
+  --color-neutral-100: #f5f3f0;
+  --color-neutral-150: #efece7;
+  --color-neutral-200: #e6e2db;
+  --color-neutral-300: #d5cfc5;
+  --color-neutral-400: #b9b2a6;
+  --color-neutral-500: #a89e8e;
+  --color-neutral-600: #857c6e;
+  --color-neutral-700: #5f594f;
+  --color-neutral-800: #3a3630;
+  --color-neutral-900: #211f1c;
+  --color-neutral-950: #111111;
+
+  --color-accent-50: #fbf7ef;
+  --color-accent-100: #f4ebd8;
+  --color-accent-200: #e9d8b4;
+  --color-accent-300: #dcc48d;
+  --color-accent-400: #d0b478;
+  --color-accent-500: #c9a86a;
+  --color-accent-600: #b08f52;
+  --color-accent-700: #8c7141;
+  --color-accent-800: #665231;
+  --color-accent-900: #463823;
+
+  --color-success-subtle: #eef2e6;
+  --color-success: #6e8c4b;
+  --color-success-strong: #4e6634;
+  --color-warning-subtle: #fbf1e2;
+  --color-warning: #c08a3e;
+  --color-warning-strong: #8e6427;
+  --color-danger-subtle: #f9ebe7;
+  --color-danger: #b4573f;
+  --color-danger-strong: #8a3f2c;
+
+  /* Role aliases → utilities such as bg-surface / border-line / text-muted. */
+  --color-bg: var(--rc-bg);
+  --color-bg-muted: var(--rc-bg-muted);
+  --color-surface: var(--rc-surface);
+  --color-surface-raised: var(--rc-surface-raised);
+  --color-surface-sunken: var(--rc-surface-sunken);
+  --color-line: var(--rc-border);
+  --color-line-strong: var(--rc-border-strong);
+  --color-ink: var(--rc-text);
+  --color-ink-secondary: var(--rc-text-secondary);
+  --color-muted: var(--rc-text-muted);
+  --color-inverse: var(--rc-text-inverse);
+
+  --font-sans: 'Satoshi', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Satoshi', 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-2xl: 36px;
+  --radius-pill: 9999px;
+
+  --shadow-xs: 0 1px 2px 0 rgba(17, 17, 17, 0.04);
+  --shadow-sm: 0 2px 8px -2px rgba(17, 17, 17, 0.06), 0 1px 2px 0 rgba(17, 17, 17, 0.04);
+  --shadow-md: 0 8px 24px -8px rgba(17, 17, 17, 0.1), 0 2px 6px -2px rgba(17, 17, 17, 0.05);
+  --shadow-lg: 0 20px 48px -16px rgba(17, 17, 17, 0.14), 0 4px 12px -4px rgba(17, 17, 17, 0.06);
+
+  --container-content: 1200px;
+  --container-wide: 1440px;
+  --container-prose: 720px;
+
+  --ease-standard: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-entrance: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --text-4xl: 38px;
+  --text-4xl--line-height: 46px;
+  --text-4xl--letter-spacing: -0.02em;
+  --text-5xl: 48px;
+  --text-5xl--line-height: 56px;
+  --text-5xl--letter-spacing: -0.025em;
+  --text-6xl: 60px;
+  --text-6xl--line-height: 66px;
+  --text-6xl--letter-spacing: -0.03em;
+  --text-7xl: 72px;
+  --text-7xl--line-height: 78px;
+  --text-7xl--letter-spacing: -0.03em;
+}

@@ -1,0 +1,16 @@
+.git
+.github
+_archive
+node_modules
+**/node_modules
+**/vendor
+**/.output
+**/.nuxt
+**/dist
+apps/api/storage/logs
+apps/api/storage/framework/cache
+design_refs
+docs
+*.zip
+*.md
+!infra/**

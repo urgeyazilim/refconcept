@@ -1,0 +1,31 @@
+# Opt-in overlay for Linux/macOS developers.
+#
+# On those platforms a bind mount has no measurable penalty, so editing apps/api in
+# place is preferable to the sync step the Windows setup needs (docs/ADR/ADR-0002).
+#
+#   docker compose -f docker-compose.yml -f infra/docker/compose.bindmount.yml up -d
+#
+# vendor/ stays in its named volume either way: it is platform-specific, huge, and
+# rebuilt by composer inside the container.
+
+services:
+  api:
+    volumes:
+      - ./apps/api:/var/www/html
+      - api-vendor:/var/www/html/vendor
+
+  nginx:
+    volumes:
+      - ./apps/api:/var/www/html:ro
+      - api-vendor:/var/www/html/vendor:ro
+      - ./infra/docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+
+  queue:
+    volumes:
+      - ./apps/api:/var/www/html
+      - api-vendor:/var/www/html/vendor
+
+  scheduler:
+    volumes:
+      - ./apps/api:/var/www/html
+      - api-vendor:/var/www/html/vendor

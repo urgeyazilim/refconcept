@@ -1,0 +1,150 @@
+/**
+ * RefConcept design tokens as CSS custom properties.
+ * Mirrors packages/ui/src/tokens/tokens.ts — keep the two in sync.
+ */
+
+:root {
+  /* --- brand (approved, do not change without ADR) --- */
+  --rc-brand-charcoal: #111111;
+  --rc-brand-warm-gray: #f5f3f0;
+  --rc-brand-sand: #dcce86;
+  --rc-brand-taupe: #a89e8e;
+  --rc-brand-gold: #c9a86a;
+
+  /* --- warm neutral ramp --- */
+  --rc-neutral-0: #ffffff;
+  --rc-neutral-25: #fdfcfb;
+  --rc-neutral-50: #f9f7f5;
+  --rc-neutral-100: #f5f3f0;
+  --rc-neutral-150: #efece7;
+  --rc-neutral-200: #e6e2db;
+  --rc-neutral-300: #d5cfc5;
+  --rc-neutral-400: #b9b2a6;
+  --rc-neutral-500: #a89e8e;
+  --rc-neutral-600: #857c6e;
+  --rc-neutral-700: #5f594f;
+  --rc-neutral-800: #3a3630;
+  --rc-neutral-900: #211f1c;
+  --rc-neutral-950: #111111;
+
+  /* --- gold accent ramp --- */
+  --rc-accent-50: #fbf7ef;
+  --rc-accent-100: #f4ebd8;
+  --rc-accent-200: #e9d8b4;
+  --rc-accent-300: #dcc48d;
+  --rc-accent-400: #d0b478;
+  --rc-accent-500: #c9a86a;
+  --rc-accent-600: #b08f52;
+  --rc-accent-700: #8c7141;
+  --rc-accent-800: #665231;
+  --rc-accent-900: #463823;
+
+  /* --- semantic states --- */
+  --rc-success-subtle: #eef2e6;
+  --rc-success: #6e8c4b;
+  --rc-success-strong: #4e6634;
+  --rc-warning-subtle: #fbf1e2;
+  --rc-warning: #c08a3e;
+  --rc-warning-strong: #8e6427;
+  --rc-danger-subtle: #f9ebe7;
+  --rc-danger: #b4573f;
+  --rc-danger-strong: #8a3f2c;
+  --rc-info-subtle: #f0efec;
+  --rc-info: #5f594f;
+  --rc-info-strong: #3a3630;
+
+  /* --- surfaces & text roles --- */
+  --rc-bg: var(--rc-neutral-0);
+  --rc-bg-muted: var(--rc-neutral-100);
+  --rc-surface: var(--rc-neutral-0);
+  --rc-surface-raised: var(--rc-neutral-25);
+  --rc-surface-sunken: var(--rc-neutral-50);
+  --rc-border: var(--rc-neutral-200);
+  --rc-border-strong: var(--rc-neutral-300);
+  --rc-text: var(--rc-neutral-950);
+  --rc-text-secondary: var(--rc-neutral-700);
+  --rc-text-muted: var(--rc-neutral-500);
+  --rc-text-inverse: var(--rc-neutral-0);
+
+  /* --- CTA roles: dark button on light surface (spec §4) --- */
+  --rc-cta-bg: var(--rc-neutral-950);
+  --rc-cta-fg: var(--rc-neutral-0);
+  --rc-cta-bg-hover: var(--rc-neutral-800);
+
+  /* --- spacing --- */
+  --rc-space-1: 4px;
+  --rc-space-2: 8px;
+  --rc-space-3: 12px;
+  --rc-space-4: 16px;
+  --rc-space-6: 24px;
+  --rc-space-8: 32px;
+  --rc-space-12: 48px;
+  --rc-space-16: 64px;
+  --rc-space-20: 80px;
+  --rc-space-24: 96px;
+
+  /* --- radius --- */
+  --rc-radius-sm: 10px;
+  --rc-radius-md: 16px;
+  --rc-radius-lg: 20px;
+  --rc-radius-xl: 28px;
+  --rc-radius-2xl: 36px;
+  --rc-radius-pill: 9999px;
+
+  /* --- shadow --- */
+  --rc-shadow-xs: 0 1px 2px 0 rgba(17, 17, 17, 0.04);
+  --rc-shadow-sm: 0 2px 8px -2px rgba(17, 17, 17, 0.06), 0 1px 2px 0 rgba(17, 17, 17, 0.04);
+  --rc-shadow-md: 0 8px 24px -8px rgba(17, 17, 17, 0.1), 0 2px 6px -2px rgba(17, 17, 17, 0.05);
+  --rc-shadow-lg: 0 20px 48px -16px rgba(17, 17, 17, 0.14), 0 4px 12px -4px rgba(17, 17, 17, 0.06);
+  --rc-shadow-focus: 0 0 0 3px rgba(201, 168, 106, 0.35);
+
+  /* --- typography --- */
+  --rc-font-sans: 'Satoshi', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --rc-font-display: 'Satoshi', 'Inter', system-ui, sans-serif;
+  --rc-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* --- layout --- */
+  --rc-container: 1200px;
+  --rc-container-wide: 1440px;
+  --rc-prose: 720px;
+  --rc-gutter: 20px;
+
+  /* --- motion --- */
+  --rc-duration-fast: 150ms;
+  --rc-duration-normal: 240ms;
+  --rc-duration-slow: 400ms;
+  --rc-ease-standard: cubic-bezier(0.32, 0.72, 0, 1);
+  --rc-ease-entrance: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (min-width: 768px) {
+  :root {
+    --rc-gutter: 32px;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --rc-gutter: 48px;
+  }
+}
+
+/**
+ * Operational surfaces (seller portal / super admin) may opt into a dimmed shell,
+ * but customer-facing flows stay light — "dark heavy enterprise admin look for
+ * customer flows" is an explicit anti-pattern (spec §2).
+ */
+[data-rc-theme='operational'] {
+  --rc-bg: var(--rc-neutral-50);
+  --rc-bg-muted: var(--rc-neutral-100);
+  --rc-surface: var(--rc-neutral-0);
+  --rc-surface-sunken: var(--rc-neutral-100);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --rc-duration-fast: 0ms;
+    --rc-duration-normal: 0ms;
+    --rc-duration-slow: 0ms;
+  }
+}

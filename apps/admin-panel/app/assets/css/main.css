@@ -1,0 +1,9 @@
+/* RefConcept app stylesheet — order matters: tailwind, tokens, theme bridge, base layer. */
+@import 'tailwindcss';
+@import '@refconcept/ui/tokens.css';
+@import '@refconcept/ui/theme.css';
+@import '@refconcept/ui/base.css';
+
+/* Class scanning: this app's own sources plus the shared design-system components. */
+@source '../../**/*.{vue,ts,js}';
+@source '../../../../../packages/ui/src/components/**/*.vue';

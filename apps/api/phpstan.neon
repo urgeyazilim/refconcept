@@ -1,0 +1,33 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 6
+
+    paths:
+        - app
+        - config
+        - database
+        - routes
+        - tests
+
+    excludePaths:
+        - vendor
+        - bootstrap/cache
+
+    treatPhpDocTypesAsCertain: false
+    reportUnmatchedIgnoredErrors: true
+
+    ignoreErrors:
+        # Pest binds `$this` inside test closures to the configured TestCase at runtime.
+        # Static analysis sees Pest\PendingCalls\TestCall instead, so every framework
+        # assertion helper ($this->getJson(), $this->assertDatabaseHas(), ...) reads as
+        # undefined. Scoped strictly to test directories so production code keeps the check.
+        -
+            identifier: method.notFound
+            # Not every test directory contains such a call, and directories come and go
+            # as phases land — an unmatched entry here is expected, not a misconfiguration.
+            reportUnmatched: false
+            paths:
+                - tests/*
+                - app/Domains/*/Tests/*

@@ -1,0 +1,24 @@
+{
+  "name": "refconcept",
+  "private": true,
+  "version": "0.1.0",
+  "description": "RefConcept — AI-driven interior design & multi-seller marketplace (web milestone)",
+  "workspaces": [
+    "apps/storefront",
+    "apps/seller-portal",
+    "apps/admin-panel",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "scripts": {
+    "dev:storefront": "npm run dev --workspace @refconcept/storefront",
+    "dev:seller": "npm run dev --workspace @refconcept/seller-portal",
+    "dev:admin": "npm run dev --workspace @refconcept/admin-panel",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  }
+}
