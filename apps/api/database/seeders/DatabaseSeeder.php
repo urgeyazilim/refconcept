@@ -4,24 +4,27 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
-class DatabaseSeeder extends Seeder
+/**
+ * Entry point for seeding.
+ *
+ * Split deliberately: reference data (roles, permissions) is required in every
+ * environment including production, while demo accounts exist only where losing them
+ * costs nothing.
+ */
+final class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // User::factory(10)->create();
+        $this->call(RolesAndPermissionsSeeder::class);
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        if (app()->environment('production')) {
+            $this->command?->info('Production environment: demo data skipped.');
+
+            return;
+        }
+
+        $this->call(DemoAccountsSeeder::class);
     }
 }

@@ -20,13 +20,27 @@ parameters:
 
     ignoreErrors:
         # Pest binds `$this` inside test closures to the configured TestCase at runtime.
-        # Static analysis sees Pest\PendingCalls\TestCall instead, so every framework
-        # assertion helper ($this->getJson(), $this->assertDatabaseHas(), ...) reads as
-        # undefined. Scoped strictly to test directories so production code keeps the check.
+        # Static analysis sees Pest\PendingCalls\TestCall instead, so framework assertion
+        # helpers ($this->getJson(), ...) and per-test properties set in beforeEach
+        # ($this->sellerA) both read as undefined. Scoped strictly to test directories so
+        # production code keeps every check.
+        #
+        # reportUnmatched is off because test directories come and go as phases land; an
+        # unmatched entry here is expected, not a misconfiguration.
         -
             identifier: method.notFound
-            # Not every test directory contains such a call, and directories come and go
-            # as phases land — an unmatched entry here is expected, not a misconfiguration.
+            reportUnmatched: false
+            paths:
+                - tests/*
+                - app/Domains/*/Tests/*
+        -
+            identifier: property.notFound
+            reportUnmatched: false
+            paths:
+                - tests/*
+                - app/Domains/*/Tests/*
+        -
+            identifier: argument.templateType
             reportUnmatched: false
             paths:
                 - tests/*

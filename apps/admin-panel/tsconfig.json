@@ -1,3 +1,16 @@
 {
-  "extends": "./.nuxt/tsconfig.json"
+  // Nuxt regenerates .nuxt/tsconfig.json on every `nuxt prepare`; this file holds the
+  // two project-level overrides that generated config cannot express.
+  "extends": "./.nuxt/tsconfig.json",
+  "compilerOptions": {
+    // nuxt.config.ts imports node:url and reads process.env, so the Node globals must
+    // be visible. The generated config sets "types": [] for app code.
+    "types": ["node"]
+  },
+  "vueCompilerOptions": {
+    // Nuxt registers `vue-router/volar/sfc-route-blocks`, but vue-router 4.6 no longer
+    // exports that subpath and vue-tsc aborts with ERR_PACKAGE_PATH_NOT_EXPORTED.
+    // The plugin only adds typing for <route> SFC blocks, which this project does not use.
+    "plugins": []
+  }
 }

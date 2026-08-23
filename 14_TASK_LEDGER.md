@@ -10,12 +10,25 @@
 | P0-T006 | 0 | ADMIN_AGENT | P0-T002 | DONE | app builds | Nuxt 4 super admin shell, Phase 18 section anchors |
 | P0-T007 | 0 | INDEPENDENT_TEST_AGENT | P0-T003..006 | PASS | Phase 0 gate | `TEST_REPORT.md` — PASS, 4 defects found and fixed |
 | P0-T008 | 0 | DESIGN_SYSTEM_AGENT | P0-T001 | DONE | token guard PASS | `@refconcept/ui`: tokens.ts / tokens.css / theme.css / base.css + CI colour guard |
-| P1-T001 | 1 | ARCHITECT_AGENT | P0-T007 | TODO | schema review | Identity schema: UUIDv7 keys, citext e-mail, UTC, audit baseline |
-| P1-T002 | 1 | BACKEND_AGENT | P1-T001 | TODO | auth feature tests | Registration, login, tokens, e-mail verification, password reset |
-| P1-T003 | 1 | BACKEND_AGENT | P1-T002 | TODO | policy tests | Roles/permissions, organizations, tenant scoping |
-| P1-T004 | 1 | BACKEND_AGENT | P1-T003 | TODO | audit tests | Audit log baseline for identity and permission changes |
-| P1-T005 | 1 | STOREFRONT_AGENT | P1-T002 | TODO | E2E auth journey | Sign up / sign in / verify / reset screens |
-| P1-T006 | 1 | INDEPENDENT_TEST_AGENT | P1-T001..005 | TODO | Phase 1 gate | Authentication + policy + tenant isolation suite |
+| P1-T001 | 1 | ARCHITECT_AGENT | P0-T007 | DONE | schema review | Identity schema: UUIDv7 keys, citext e-mail, UTC, DB CHECK constraints, partial unique indexes |
+| P1-T002 | 1 | BACKEND_AGENT | P1-T001 | DONE | auth feature tests | Registration, login, tokens, sessions, e-mail verification, password reset |
+| P1-T003 | 1 | BACKEND_AGENT | P1-T002 | DONE | policy tests | Permissions/roles/grants, organizations, membership, `AccessControl` |
+| P1-T004 | 1 | BACKEND_AGENT | P1-T003 | DONE | audit tests | Append-only `audit_logs` with DB trigger, redacting `AuditLogger` |
+| P1-T005 | 1 | BACKEND_AGENT | P1-T002 | DONE | isolation tests | Profile and address book, ownership policies, verified-e-mail gate |
+| P1-T006 | 1 | INDEPENDENT_TEST_AGENT | P1-T001..005 | PASS | Phase 1 gate | 78 tests / 235 assertions; 15 tenant isolation cases; 5 defects found and fixed |
+| P2-T001 | 2 | ARCHITECT_AGENT | P1-T006 | TODO | schema review | Seller application, legal entity, contacts, addresses, bank accounts, tax profile |
+| P2-T002 | 2 | BACKEND_AGENT | P2-T001 | TODO | workflow tests | Application intake, document upload to private storage, state machine |
+| P2-T003 | 2 | BACKEND_AGENT | P2-T002 | TODO | agreement tests | Versioned agreements and acceptance records |
+| P2-T004 | 2 | BACKEND_AGENT | P2-T003 | TODO | admin action tests | Approval / rejection / suspension with reason + audit |
+| P2-T005 | 2 | SELLER_PORTAL_AGENT | P2-T002 | TODO | portal E2E | Seller onboarding UI in the seller portal |
+| P2-T006 | 2 | INDEPENDENT_TEST_AGENT | P2-T001..005 | TODO | Phase 2 gate | Complete workflow + audit + isolation |
+
+## Scope notes
+
+- Customer-facing **sign-up / sign-in screens** belong to Phase 20 (Storefront Complete)
+  per `04_WEB_PHASE_PLAN.md`. Phase 1 delivered the API those screens consume.
+- Rate limiting for the auth endpoints is configured and active; an isolated-cache test
+  for it is scheduled with Phase 21 hardening.
 
 ## Allowed Status
 ```text

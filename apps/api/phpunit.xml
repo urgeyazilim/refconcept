@@ -50,6 +50,11 @@
         <env name="DB_PASSWORD" value="refconcept" force="true"/>
         <env name="DB_URL" value="" force="true"/>
 
+        <!-- No live network calls from the suite: MX lookups and the Have I Been Pwned
+             breach check would make tests slow, flaky and offline-hostile. -->
+        <env name="AUTH_EMAIL_DNS_CHECK" value="false" force="true"/>
+        <env name="AUTH_PASSWORD_CHECK_COMPROMISED" value="false" force="true"/>
+
         <env name="MAIL_MAILER" value="array" force="true"/>
         <env name="QUEUE_CONNECTION" value="sync" force="true"/>
         <env name="SESSION_DRIVER" value="array" force="true"/>

@@ -12,20 +12,21 @@ WEB
 IN_PROGRESS
 
 ## Current Phase
-PHASE_1_IDENTITY_RBAC_ORGANIZATIONS
+PHASE_2_SELLER_ONBOARDING
 
 ## Current Task
-P1-T001 — identity domain design: users, sessions/tokens, verification, reset.
+P2-T001 — seller application intake: company/legal info, contacts, IBAN, documents.
 
 ## Last Completed Task
-P0-T007 — Phase 0 gate verified by the Independent Test Agent (see `TEST_REPORT.md`).
+P1-T006 — Phase 1 gate verified by the Independent Test Agent (see `TEST_REPORT.md`).
 
 ## Next Task
-Replace the framework's default `users` table with the RefConcept identity schema
-(UUIDv7 primary keys, citext e-mail, UTC timestamps) and build the auth surface.
+Seller onboarding workflow: application, legal entity, contacts, bank details,
+documents, versioned agreement acceptance, approval/rejection/suspension.
 
 ## Test State
-PASS — 8 tests / 38 assertions, PHPStan level 6 clean, Pint clean, design token guard clean.
+PASS — 78 tests / 235 assertions, PHPStan level 6 clean, Pint clean, ESLint clean,
+vue-tsc clean, design token guard clean, live end-to-end verified.
 
 ## Release State
 NOT_APPROVED
@@ -79,6 +80,45 @@ Redis 7 · MinIO (S3) · Mailpit · Nuxt 4 × 3 apps · Node 24.
 
 **Defects found and fixed in this phase:** P0-D001 (P1 — test suite pointed at the
 development database), P0-D002, P0-D003, P0-D004. Detail in `TEST_REPORT.md`.
+
+### PHASE_1_IDENTITY_RBAC_ORGANIZATIONS — DONE (2026-08-24)
+
+```text
+UPDATED_AT: 2026-08-24
+COMMIT_OR_SNAPSHOT: phase-1-identity
+PHASE: 1 — Identity / RBAC / Organizations
+TASK: P1-T001 .. P1-T006
+STATUS: DONE
+FILES_CHANGED:
+  apps/api/database/migrations/* (identity, authentication, RBAC, organizations, audit)
+  apps/api/app/Domains/Identity/** (models, enums, DTOs, actions, services, requests,
+    controllers, resources, policies, middleware, notifications, tests)
+  apps/api/app/Domains/Organizations/** (models, enums, policy, tenant isolation tests)
+  apps/api/app/Domains/Audit/** (immutable audit log, redacting logger)
+  apps/api/app/Support/{Concerns/HasUuidV7,Validation/{EmailRules,PasswordRules}}
+  apps/api/app/Providers/AppServiceProvider.php (policies, gates, rate limiters, factories)
+  apps/api/config/{auth,cors,refconcept}.php, routes/domains/identity.php
+  apps/api/database/seeders/* , apps/api/database/factories/UserFactory.php
+  scripts/sync.* (compiled-cache fix)
+MIGRATIONS: 7 total — users, user_profiles, user_addresses, personal_access_tokens,
+  email_verification_tokens, password_reset_tokens, login_attempts, user_sessions,
+  consents, permissions, roles, role_permissions, user_roles, organizations,
+  organization_users, audit_logs (+ cache and jobs)
+TESTS_RUN: php artisan test · phpstan level 6 · pint --test · npm run build/lint/typecheck
+  · live HTTP end-to-end
+TEST_RESULT: PASS (78 tests, 235 assertions)
+BLOCKERS: none
+NEXT_ACTION: Phase 2 — Seller Onboarding
+```
+
+**Endpoints delivered:** `POST /api/v1/auth/{register,login,logout,logout-all,
+email/verify,email/resend,password/forgot,password/reset}`, `GET /api/v1/auth/me`,
+`GET|PATCH /api/v1/profile`, `GET|POST|GET|PATCH|DELETE /api/v1/addresses`.
+
+**Security properties proven by tests:** account-enumeration resistance on login,
+password reset and token redemption; hashed single-use tokens; immediate effect of
+suspension on live tokens; session revocation on password reset; append-only audit
+log enforced by a database trigger; complete seller-to-seller isolation.
 
 ---
 

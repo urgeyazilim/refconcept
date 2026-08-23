@@ -9,13 +9,13 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 | RefConcept API routes
 |--------------------------------------------------------------------------
-| Domain route files are registered here as phases land. Everything is
-| versioned under /api/v1 except the unversioned platform endpoints below,
-| which infrastructure depends on and must never move.
+| Platform endpoints stay unversioned because infrastructure depends on their
+| paths. Everything else lives under /api/v1 and is grouped per domain, with
+| each domain owning its own route file.
 */
 
 Route::get('/health', HealthController::class)->name('health');
 
 Route::prefix('v1')->as('v1.')->group(function (): void {
-    // Phase 1+ domain routes are attached here.
+    require __DIR__.'/domains/identity.php';
 });

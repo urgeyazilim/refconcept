@@ -77,3 +77,66 @@ source · production cloud/DNS/storage · legal/KVKK review · accounting/tax re
 **PHASE 0 GATE: PASS** — proceed to Phase 1 (Identity / RBAC / Organizations).
 
 `WEB_RELEASE_APPROVED`: **NOT GRANTED** (22 phases remaining).
+
+---
+
+## Phase 1 — Identity / RBAC / Organizations
+
+- **Run date:** 2026-08-24
+- **Environment:** Docker (PHP 8.3, Laravel 13.26.1, PostgreSQL 16 + pgvector 0.8.6, Redis 7, MinIO, Mailpit)
+- **Commit/snapshot:** Phase 1 identity
+
+### Gate definition (04_WEB_PHASE_PLAN.md)
+
+> Authentication + policy + tenant tests.
+
+### Results
+
+| # | Check | Method | Result |
+|---|---|---|---|
+| 1 | Identity schema migrates | `migrate:fresh` | **PASS** — 7 migrations, UUIDv7 keys, citext e-mail, CHECK constraints |
+| 2 | Reference data seeds | `db:seed` | **PASS** — 12 permissions, 5 system roles, idempotent |
+| 3 | Registration | Pest feature suite | **PASS** — account + profile + consents, no token before verification, no roles granted |
+| 4 | KVKK consent enforcement | Pest | **PASS** — privacy notice and terms mandatory, marketing optional and separable |
+| 5 | Password policy | Pest | **PASS** — weak passwords rejected; breach check configurable |
+| 6 | Authentication | Pest | **PASS** — token issued, session recorded, last login stamped |
+| 7 | Account enumeration resistance | Pest | **PASS** — identical answers for unknown account, wrong password, unknown/expired/reused tokens |
+| 8 | Blocked accounts | Pest | **PASS** — suspended/banned refused; live token rejected immediately after suspension |
+| 9 | E-mail verification | Pest | **PASS** — single use, expiry honoured, previous token invalidated, address-change guard |
+| 10 | Password reset | Pest | **PASS** — hashed tokens, single use, all sessions revoked on redemption |
+| 11 | Profile | Pest | **PASS** — e-mail/status not editable through the profile endpoint |
+| 12 | Addresses | Pest | **PASS** — ownership enforced, one default per kind, soft delete, verification required |
+| 13 | **Tenant isolation** | Pest | **PASS** — 15 cases; seller A cannot read or write seller B in any direction |
+| 14 | Role expiry / membership states | Pest | **PASS** — expired grants, removed and invited members all deny |
+| 15 | Audit immutability | migration + model | **PASS** — DB trigger rejects UPDATE/DELETE; model throws first |
+| 16 | Static analysis | PHPStan level 6 | **PASS** — no errors |
+| 17 | Code style | Pint | **PASS** — 101 files |
+| 18 | Backend suite | `php artisan test` | **PASS** — 78 tests, 235 assertions |
+| 19 | Frontend build | `npm run build` | **PASS** — 3 Nuxt apps |
+| 20 | Frontend typecheck | `vue-tsc` | **PASS** |
+| 21 | Frontend lint | ESLint | **PASS** |
+| 22 | Live end-to-end | HTTP against the running stack | **PASS** — register → queued mail delivered to Mailpit → login → `/auth/me` → create/list address |
+
+### Defects found and fixed during this phase
+
+| ID | Severity | Finding | Resolution |
+|---|---|---|---|
+| P1-D001 | **P1** | A stale `bootstrap/cache/packages.php` on the host was synced into the container on every push, hiding newly installed packages. It silently removed Sanctum's auth guard, so **every authenticated route returned 500**. | `scripts/sync.*` now clears the compiled cache in the container on push and on pull; the artifacts were deleted from the host. |
+| P1-D002 | P2 | `auth.php` still pointed at the framework's `App\Models\User` and defined no Sanctum guard. | Rewritten for the Identity domain model with a `sanctum` guard as the default. |
+| P1-D003 | P2 | Model factories could not resolve for domain-namespaced models. | `Factory::guessFactoryNamesUsing` maps by class name. |
+| P1-D004 | P2 | `email:rfc,dns` performed a live MX lookup, breaking tests and blocking `*.local` accounts. | Extracted to `EmailRules`, configuration driven, disabled in tests and local. |
+| P1-D005 | P3 | Factory-built models were partially hydrated, so `Model::shouldBeStrict()` threw on unread attributes. | Factory refreshes after creation. |
+
+### Notes
+
+- Storefront sign-up/sign-in **screens** are Phase 20 work per `04_WEB_PHASE_PLAN.md`; Phase 1
+  delivers the API surface those screens will call.
+- Rate limiting is configured and wired (`auth-login`, `auth-register`, `auth-password-reset`,
+  `auth-verification-resend`) but is not asserted by the suite yet — the limiter shares cache
+  state across tests. A dedicated isolated-store test is scheduled for Phase 21 hardening.
+
+### Verdict
+
+**PHASE 1 GATE: PASS** — proceed to Phase 2 (Seller Onboarding).
+
+`WEB_RELEASE_APPROVED`: **NOT GRANTED** (21 phases remaining).

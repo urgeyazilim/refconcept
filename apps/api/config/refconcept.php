@@ -43,4 +43,69 @@ return [
         'admin_panel' => env('REFCONCEPT_ADMIN_PANEL_URL', 'http://localhost:3002'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Security
+    |--------------------------------------------------------------------------
+    */
+
+    'security' => [
+
+        'password' => [
+            'min_length' => (int) env('AUTH_PASSWORD_MIN_LENGTH', 12),
+
+            /*
+             * Checks the candidate password against the Have I Been Pwned k-anonymity
+             * API. Required by 11_...: "breached/common password policy". Disabled in
+             * testing because the suite must not depend on an external network call.
+             */
+            'check_compromised' => (bool) env('AUTH_PASSWORD_CHECK_COMPROMISED', true),
+        ],
+
+        'email' => [
+            /*
+             * MX lookup on the address domain at registration. A live network call, so
+             * it is disabled in the test environment (see phpunit.xml).
+             */
+            'dns_check' => (bool) env('AUTH_EMAIL_DNS_CHECK', true),
+        ],
+
+        'tokens' => [
+            'ttl_days' => (int) env('AUTH_TOKEN_TTL_DAYS', 30),
+        ],
+
+        'email_verification' => [
+            'ttl_minutes' => (int) env('AUTH_EMAIL_VERIFICATION_TTL_MINUTES', 1440),
+        ],
+
+        'password_reset' => [
+            'ttl_minutes' => (int) env('AUTH_PASSWORD_RESET_TTL_MINUTES', 60),
+        ],
+
+        /*
+         * Rate limits, expressed as "attempts per minute" per throttle key. Login and
+         * password reset are keyed by e-mail *and* IP so one attacker cannot lock out a
+         * victim's account simply by failing their login repeatedly.
+         */
+        'rate_limits' => [
+            'login' => (int) env('AUTH_RATE_LIMIT_LOGIN', 5),
+            'register' => (int) env('AUTH_RATE_LIMIT_REGISTER', 5),
+            'password_reset' => (int) env('AUTH_RATE_LIMIT_PASSWORD_RESET', 3),
+            'verification_resend' => (int) env('AUTH_RATE_LIMIT_VERIFICATION_RESEND', 3),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Legal document versions
+    |--------------------------------------------------------------------------
+    | The version a registration must accept. Bumping these forces re-acceptance
+    | and is recorded per user in the `consents` table.
+    */
+
+    'legal' => [
+        'privacy_notice_version' => env('REFCONCEPT_PRIVACY_VERSION', '2026-01'),
+        'terms_version' => env('REFCONCEPT_TERMS_VERSION', '2026-01'),
+    ],
+
 ];

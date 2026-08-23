@@ -37,82 +37,84 @@ const pillars = [
 </script>
 
 <template>
-  <!-- Hero: left value proposition + dark CTA, right premium interior visual (spec §8.1) -->
-  <section class="rc-container grid items-center gap-14 py-16 lg:grid-cols-[1.05fr_1fr] lg:py-24">
-    <div class="max-w-[620px]">
-      <span
-        class="mb-6 inline-flex items-center gap-2 rounded-pill border border-line bg-surface px-3.5 py-1.5 text-xs tracking-wide text-ink-secondary uppercase"
-      >
-        <span class="size-1.5 rounded-pill bg-gold" aria-hidden="true" />
-        Yapay zekâ destekli iç mekân
-      </span>
-
-      <h1 class="text-4xl font-medium text-balance sm:text-5xl lg:text-6xl">
-        Odanı gör, şekillendir,
-        <span class="text-accent-600">yaşa</span>.
-      </h1>
-
-      <p class="mt-6 max-w-[52ch] text-lg leading-relaxed text-ink-secondary">
-        Bir fotoğraf yükle; RefConcept odanı analiz etsin, sana özel bir tasarım üretsin ve
-        her parçayı bütçene uyan gerçek ürünlerle eşleştirsin.
-      </p>
-
-      <div class="mt-9 flex flex-wrap items-center gap-3">
-        <NuxtLink
-          to="/"
-          class="rounded-pill bg-charcoal px-7 py-3.5 text-sm font-medium text-inverse transition-colors hover:bg-neutral-800"
+  <div>
+    <!-- Hero: left value proposition + dark CTA, right premium interior visual (spec §8.1) -->
+    <section class="rc-container grid items-center gap-14 py-16 lg:grid-cols-[1.05fr_1fr] lg:py-24">
+      <div class="max-w-[620px]">
+        <span
+          class="mb-6 inline-flex items-center gap-2 rounded-pill border border-line bg-surface px-3.5 py-1.5 text-xs tracking-wide text-ink-secondary uppercase"
         >
-          Projeni başlat
-        </NuxtLink>
-        <NuxtLink
-          to="/"
-          class="rounded-pill border border-line-strong px-7 py-3.5 text-sm font-medium text-ink transition-colors hover:bg-bg-muted"
-        >
-          Ürünleri keşfet
-        </NuxtLink>
-      </div>
+          <span class="size-1.5 rounded-pill bg-gold" aria-hidden="true" />
+          Yapay zekâ destekli iç mekân
+        </span>
 
-      <div class="mt-10">
-        <RcSystemStatus />
-      </div>
-    </div>
+        <h1 class="text-4xl font-medium text-balance sm:text-5xl lg:text-6xl">
+          Odanı gör, şekillendir,
+          <span class="text-accent-600">yaşa</span>.
+        </h1>
 
-    <!-- Interior visual placeholder: replaced with approved photography in Phase 20. -->
-    <div class="relative">
-      <div
-        class="aspect-4/3 w-full rounded-xl border border-line bg-linear-to-br from-neutral-100 via-neutral-50 to-accent-50 shadow-lg"
-      />
-      <!-- Floating AI progress card (spec §8.1) -->
-      <div class="rc-card absolute -bottom-8 left-6 w-[280px] p-5 shadow-lg sm:left-10">
-        <p class="text-xs tracking-wide text-muted uppercase">AI tasarım</p>
-        <p class="mt-1.5 text-sm font-medium">Oturma odası · Warm Minimal</p>
-        <div class="mt-4 h-1.5 w-full overflow-hidden rounded-pill bg-neutral-150">
-          <div class="h-full w-2/3 rounded-pill bg-gold" />
-        </div>
-        <p class="mt-3 text-xs text-muted">14 ürün eşleşti · bütçenin %68'i</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- Capability strip -->
-  <section class="rc-section rc-section--muted mt-12">
-    <div class="rc-container">
-      <div class="mb-12 max-w-[56ch]">
-        <h2 class="text-3xl font-medium">Tasarımdan teslimata tek platform</h2>
-        <p class="mt-4 text-ink-secondary">
-          İlham aşamasından montaja kadar her adım aynı projenin içinde ilerler.
+        <p class="mt-6 max-w-[52ch] text-lg leading-relaxed text-ink-secondary">
+          Bir fotoğraf yükle; RefConcept odanı analiz etsin, sana özel bir tasarım üretsin ve
+          her parçayı bütçene uyan gerçek ürünlerle eşleştirsin.
         </p>
+
+        <div class="mt-9 flex flex-wrap items-center gap-3">
+          <NuxtLink
+            to="/"
+            class="rounded-pill bg-charcoal px-7 py-3.5 text-sm font-medium text-inverse transition-colors hover:bg-neutral-800"
+          >
+            Projeni başlat
+          </NuxtLink>
+          <NuxtLink
+            to="/"
+            class="rounded-pill border border-line-strong px-7 py-3.5 text-sm font-medium text-ink transition-colors hover:bg-bg-muted"
+          >
+            Ürünleri keşfet
+          </NuxtLink>
+        </div>
+
+        <div class="mt-10">
+          <RcSystemStatus />
+        </div>
       </div>
 
-      <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        <RcPillarCard
-          v-for="pillar in pillars"
-          :key="pillar.title"
-          :title="pillar.title"
-          :description="pillar.description"
-          :icon="pillar.icon"
+      <!-- Interior visual placeholder: replaced with approved photography in Phase 20. -->
+      <div class="relative">
+        <div
+          class="aspect-4/3 w-full rounded-xl border border-line bg-linear-to-br from-neutral-100 via-neutral-50 to-accent-50 shadow-lg"
         />
+        <!-- Floating AI progress card (spec §8.1) -->
+        <div class="rc-card absolute -bottom-8 left-6 w-[280px] p-5 shadow-lg sm:left-10">
+          <p class="text-xs tracking-wide text-muted uppercase">AI tasarım</p>
+          <p class="mt-1.5 text-sm font-medium">Oturma odası · Warm Minimal</p>
+          <div class="mt-4 h-1.5 w-full overflow-hidden rounded-pill bg-neutral-150">
+            <div class="h-full w-2/3 rounded-pill bg-gold" />
+          </div>
+          <p class="mt-3 text-xs text-muted">14 ürün eşleşti · bütçenin %68'i</p>
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
+
+    <!-- Capability strip -->
+    <section class="rc-section rc-section--muted mt-12">
+      <div class="rc-container">
+        <div class="mb-12 max-w-[56ch]">
+          <h2 class="text-3xl font-medium">Tasarımdan teslimata tek platform</h2>
+          <p class="mt-4 text-ink-secondary">
+            İlham aşamasından montaja kadar her adım aynı projenin içinde ilerler.
+          </p>
+        </div>
+
+        <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <RcPillarCard
+            v-for="pillar in pillars"
+            :key="pillar.title"
+            :title="pillar.title"
+            :description="pillar.description"
+            :icon="pillar.icon"
+          />
+        </div>
+      </div>
+    </section>
+  </div>
 </template>

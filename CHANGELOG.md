@@ -43,3 +43,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Laravel boot cost 22.8s per command over the Windows bind mount. Application source moved
   to a named volume with explicit host→container sync: boot 22.8s → 4.3s, test suite
   104s → 32s.
+
+### Added — Phase 1 (Identity / RBAC / Organizations)
+
+- Identity schema on UUIDv7 primary keys with `citext` e-mail, UTC timestamps, database
+  CHECK constraints on every status column and partial unique indexes guaranteeing one
+  default shipping and one default billing address per customer.
+- Authentication API: registration with KVKK consent capture, login issuing Sanctum
+  tokens, session records per device, logout and logout-everywhere, `GET /auth/me`.
+- E-mail verification and password reset built on single-use SHA-256 hashed tokens.
+  Redeeming a reset revokes every live token and closes every session.
+- RBAC: 12 seeded permissions and 5 system roles, platform- and organization-scoped
+  grants with expiry, and an `AccessControl` service that answers membership and
+  permission separately.
+- Organizations as the tenant boundary, with an `OrganizationPolicy` that decides
+  seller-to-seller isolation in one place.
+- Append-only `audit_logs`, immutability enforced by a PostgreSQL trigger, written by an
+  `AuditLogger` that redacts passwords, tokens, card data and IBANs.
+- Customer profile and address book with ownership policies and a verified-e-mail gate.
+- Rate limiters for login, registration, password reset and verification resend, keyed by
+  e-mail **and** IP so one attacker cannot lock out a victim by failing their login.
+- 78 backend tests / 235 assertions, including 15 tenant isolation cases.
+
+### Fixed — Phase 1
+
+- **Every authenticated route returned 500.** A stale `bootstrap/cache/packages.php` left
+  on the host was pushed into the container on each sync, hiding Sanctum and removing its
+  auth guard. The sync scripts now clear the compiled cache on both push and pull.
+- `config/auth.php` pointed at the framework's `App\Models\User` and defined no Sanctum
+  guard; rewritten for the Identity domain model.
+- Model factories could not resolve for domain-namespaced models
+  (`Factory::guessFactoryNamesUsing`).
+- `email:rfc,dns` performed a live MX lookup on every registration, breaking the test
+  suite and blocking `*.local` development accounts; extracted to configuration.
