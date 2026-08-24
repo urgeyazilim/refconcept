@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { ApiError } from '~/composables/useApi'
-
 definePageMeta({ middleware: 'guest' })
 useHead({ title: 'Yeni parola belirle' })
 

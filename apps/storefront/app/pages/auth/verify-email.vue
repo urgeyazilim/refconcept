@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { ApiError } from '~/composables/useApi'
-
 useHead({ title: 'E-posta doğrulama' })
 
 const route = useRoute()

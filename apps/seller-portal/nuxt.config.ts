@@ -11,6 +11,13 @@ export default defineNuxtConfig({
 
   css: ['~/assets/css/main.css'],
 
+
+  // Shared API/auth composables live in @refconcept/ui so all three apps talk to the
+  // backend the same way; duplicating them per app is how error handling drifts.
+  imports: {
+    dirs: [fileURLToPath(new URL('../../packages/ui/src/runtime', import.meta.url))],
+  },
+
   // Shared design-system components (@refconcept/ui) are auto-imported alongside local ones.
   components: [
     { path: '~/components', pathPrefix: false },

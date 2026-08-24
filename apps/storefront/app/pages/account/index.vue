@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { ApiError } from '~/composables/useApi'
-
 definePageMeta({ layout: 'account', middleware: 'auth' })
 useHead({ title: 'Hesabım' })
 

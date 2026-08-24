@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { ApiError } from '~/composables/useApi'
-import type { Address } from '~/types/api'
+import type { Address } from '@refconcept/ui/types'
 
 definePageMeta({ layout: 'account', middleware: ['auth', 'verified'] })
 useHead({ title: 'Adreslerim' })

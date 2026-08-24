@@ -47,11 +47,22 @@ const sizes = {
   md: 'px-5 py-2.5 text-sm',
   lg: 'px-7 py-3.5 text-[15px]',
 } as const
+
+/*
+ * NuxtLink has to be resolved, not named as a string.
+ *
+ * This component lives in @refconcept/ui rather than in an app's own components
+ * directory, and `<component is="NuxtLink">` only resolves a string against locally
+ * registered components. It silently rendered an unknown element instead: the button
+ * looked correct and did nothing when clicked, which took an end-to-end test to
+ * notice because every screenshot looked right.
+ */
+const NuxtLinkComponent = resolveComponent('NuxtLink')
 </script>
 
 <template>
   <component
-    :is="to ? 'NuxtLink' : 'button'"
+    :is="to ? NuxtLinkComponent : 'button'"
     :to="to"
     :type="to ? undefined : type"
     :disabled="to ? undefined : (disabled || loading)"

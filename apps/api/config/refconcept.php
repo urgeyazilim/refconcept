@@ -97,6 +97,31 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Storage
+    |--------------------------------------------------------------------------
+    | Seller documents, room photographs and AI outputs are private by default.
+    | Nothing customer-uploaded is ever placed on a publicly addressable disk.
+    */
+
+    'storage' => [
+        'private_disk' => env('REFCONCEPT_PRIVATE_DISK', 's3'),
+        'public_disk' => env('REFCONCEPT_PUBLIC_DISK', 's3'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Commission
+    |--------------------------------------------------------------------------
+    | Basis points, never percentages: 1200 bps = 12%. The resolver hierarchy in
+    | 06_SECURITY_PAYMENT_FINANCE_RULES.md falls back to this platform default.
+    */
+
+    'commission' => [
+        'platform_default_bps' => (int) env('REFCONCEPT_DEFAULT_COMMISSION_BPS', 1200),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Legal document versions
     |--------------------------------------------------------------------------
     | The version a registration must accept. Bumping these forces re-acceptance

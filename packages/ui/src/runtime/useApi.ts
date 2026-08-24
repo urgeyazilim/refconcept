@@ -1,4 +1,4 @@
-import type { ApiErrorBody, ValidationErrors } from '~/types/api'
+import type { ApiErrorBody, ValidationErrors } from './types'
 
 /**
  * A normalised API error.
@@ -67,8 +67,16 @@ export function useApi() {
     get: <T>(path: string, query?: Record<string, unknown>) =>
       request<T>(path, { method: 'GET', query }),
     post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body }),
+    put: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PUT', body }),
     patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body }),
     delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+
+    /**
+     * Escape hatch for requests the shorthands cannot express — a multipart upload,
+     * for instance, where the body must stay a FormData so the browser sets its own
+     * boundary. Still goes through the same token handling and error normalisation.
+     */
+    request,
   }
 }
 

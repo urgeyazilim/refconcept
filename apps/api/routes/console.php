@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
-use Illuminate\Foundation\Inspiring;
-use Illuminate\Support\Facades\Artisan;
-
-Artisan::command('inspire', function () {
-    $this->comment(Inspiring::quote());
-})->purpose('Display an inspiring quote');
+/*
+|--------------------------------------------------------------------------
+| Closure-based console commands
+|--------------------------------------------------------------------------
+| Domain commands are classes registered in bootstrap/app.php via withCommands(),
+| because they live with their domain rather than in app/Console/Commands where
+| Laravel would discover them automatically.
+*/

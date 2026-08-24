@@ -1,4 +1,4 @@
-import type { AuthUser, LoginResponse } from '~/types/api'
+import type { AuthUser, LoginResponse } from './types'
 
 /**
  * The API token.

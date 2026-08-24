@@ -14,6 +14,10 @@ use App\Domains\Identity\Services\EmailVerificationService;
 use App\Domains\Identity\Services\PasswordResetService;
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Organizations\Policies\OrganizationPolicy;
+use App\Domains\Sellers\Models\Seller;
+use App\Domains\Sellers\Models\SellerApplication;
+use App\Domains\Sellers\Policies\SellerApplicationPolicy;
+use App\Domains\Sellers\Policies\SellerPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Model;
@@ -126,6 +130,8 @@ class AppServiceProvider extends ServiceProvider
          */
         Gate::policy(UserAddress::class, UserAddressPolicy::class);
         Gate::policy(Organization::class, OrganizationPolicy::class);
+        Gate::policy(SellerApplication::class, SellerApplicationPolicy::class);
+        Gate::policy(Seller::class, SellerPolicy::class);
 
         /*
          * Super admin bypass. Returning null (not false) lets every other check run

@@ -11,7 +11,7 @@ const props = withDefaults(
     label: string
     name: string
     type?: string
-    modelValue?: string | boolean | null
+    modelValue?: string | number | boolean | null
     placeholder?: string
     hint?: string
     errors?: string[]
@@ -31,7 +31,7 @@ const props = withDefaults(
   },
 )
 
-const emit = defineEmits<{ 'update:modelValue': [string | boolean] }>()
+const emit = defineEmits<{ 'update:modelValue': [string | number | boolean] }>()
 
 const error = computed(() => props.errors?.[0])
 const describedBy = computed(() => {
@@ -41,7 +41,22 @@ const describedBy = computed(() => {
 
 function onInput(event: Event) {
   const target = event.target as HTMLInputElement
-  emit('update:modelValue', props.type === 'checkbox' ? target.checked : target.value)
+
+  if (props.type === 'checkbox') {
+    emit('update:modelValue', target.checked)
+
+    return
+  }
+
+  // A number input must emit a number, or arithmetic downstream silently becomes
+  // string concatenation — and an empty field must stay empty rather than become 0.
+  if (props.type === 'number') {
+    emit('update:modelValue', target.value === '' ? '' : Number(target.value))
+
+    return
+  }
+
+  emit('update:modelValue', target.value)
 }
 </script>
 

@@ -18,6 +18,7 @@ final class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call(RolesAndPermissionsSeeder::class);
+        $this->call(SellerAgreementsSeeder::class);
 
         if (app()->environment('production')) {
             $this->command?->info('Production environment: demo data skipped.');

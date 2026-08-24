@@ -11,8 +11,14 @@
     "./tokens": "./src/tokens/index.ts",
     "./tokens.css": "./src/tokens/tokens.css",
     "./theme.css": "./src/tokens/theme.css",
-    "./base.css": "./src/tokens/base.css"
+    "./base.css": "./src/tokens/base.css",
+    "./types": "./src/runtime/types.ts",
+    "./runtime": "./src/runtime/useApi.ts"
   },
-  "files": ["src"],
-  "sideEffects": ["*.css"]
+  "files": [
+    "src"
+  ],
+  "sideEffects": [
+    "*.css"
+  ]
 }
