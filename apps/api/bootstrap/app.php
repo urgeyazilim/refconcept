@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Domains\Identity\Console\GrantRoleCommand;
+use App\Domains\Inventory\Console\ReleaseExpiredReservationsCommand;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -19,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
     // rather than discovered from app/Console/Commands.
     ->withCommands([
         GrantRoleCommand::class,
+        ReleaseExpiredReservationsCommand::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         // The three Nuxt clients are separate origins; CORS is configured in config/cors.php.

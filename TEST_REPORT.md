@@ -356,3 +356,117 @@ than pointing at a static asset only the seeder knows about.
 **PHASE 3 GATE: PASS** — proceed to Phase 4.
 
 `WEB_RELEASE_APPROVED`: **NOT GRANTED** (19 phases remaining).
+
+---
+
+## Phase 4 — Import, pricing, inventory and the partner API
+
+**Date:** 2026-08-24
+**Scope:** spreadsheet import with a dry run, price lists and price history, a stock
+ledger with reservations, and scoped machine credentials for a seller's own systems.
+
+### Gate criteria
+
+| # | Criterion | Method | Result |
+|---|---|---|---|
+| 1 | Turkish spreadsheets read correctly | Pest | **PASS** — semicolon delimiter detected by column count, byte-order mark stripped, Windows-1254 converted, comma decimals parsed |
+| 2 | Column mapping guessed, never assumed | Pest | **PASS** — Turkish and English headers matched accent-insensitively; two columns claiming one field leaves both unmapped |
+| 3 | **Dry run writes nothing** | Pest + Playwright | **PASS** — the catalogue is asserted empty *after* validation and before the commit |
+| 4 | Row errors are per field and per line | Pest | **PASS** — the line number is the one the seller sees in Excel |
+| 5 | Duplicate SKU inside one file caught | Pest | **PASS** — names the earlier line |
+| 6 | Required columns enforced before validation | Pest | **PASS** |
+| 7 | Commit applies good rows, skips bad ones | Pest | **PASS** — one malformed line does not take the others |
+| 8 | Re-importing updates rather than duplicates | Pest | **PASS** — SKU code is identity |
+| 9 | Imported prices land in history as `import` | Pest | **PASS** — including the first price of a newly created SKU |
+| 10 | Imported stock goes through the ledger as a count | Pest | **PASS** |
+| 11 | Upload stays on the private disk, path never exposed | Pest | **PASS** |
+| 12 | **Price history is append-only** | Pest + trigger | **PASS** — UPDATE and DELETE both refused by the database |
+| 13 | Unchanged price writes no history row | Pest | **PASS** |
+| 14 | Campaign never overwrites the everyday price | Pest | **PASS** — ending a campaign restores yesterday's prices because nothing overwrote them |
+| 15 | Campaign windows respected in both directions | Pest | **PASS** — not-yet-started and already-ended both fall through to the SKU price |
+| 16 | One default price list per seller | Pest + partial unique index | **PASS** |
+| 17 | Sale above list refused | Pest + CHECK constraint | **PASS** — at the service and at the storage layer |
+| 18 | **Stock movements are append-only** | Pest + trigger | **PASS** |
+| 19 | Balance invariants enforced by the database | Pest + CHECK constraint | **PASS** — negative on-hand and reserved-above-on-hand both refused even bypassing the service |
+| 20 | **Reserving decides under a row lock** | Pest | **PASS** — the ledger issues `SELECT … FOR UPDATE` and re-reads inside it; a stale caller-held model cannot over-reserve |
+| 21 | Reserving is idempotent per reference | Pest + partial unique index | **PASS** — a retried checkout does not take the stock twice |
+| 22 | Releasing twice does not credit twice | Pest | **PASS** |
+| 23 | Expired holds free their stock | Pest + scheduler | **PASS** — cleared on the next reservation of that row, and swept every five minutes |
+| 24 | Multi-line reservation is all or nothing | Pest | **PASS** — rows locked in a fixed order, so two baskets cannot deadlock |
+| 25 | Dispatch moves both numbers in one transaction | Pest | **PASS** |
+| 26 | **Partner secret is shown once and never recoverable** | Pest | **PASS** — hashed at rest, absent from every later response |
+| 27 | Unknown key and wrong secret answer identically | Pest | **PASS** — including the timing, which is why an unknown key still pays for a hash |
+| 28 | Scopes are enforced per route | Pest + Playwright | **PASS** — a `stock:write` credential is refused at `/partner/prices` |
+| 29 | Revoked and expired credentials refused | Pest | **PASS** — revocation requires a reason, enforced by a CHECK constraint |
+| 30 | Rate limited per credential | Pest | **PASS** — 429 with `Retry-After` |
+| 31 | Request log keeps the path, never the query string | Pest | **PASS** |
+| 32 | **Tenant isolation** | Pest + Playwright | **PASS** — imports, prices, stock and credentials all refused across sellers; another seller's SKU code reads as unknown rather than as an error |
+| 33 | Backend suite | `php artisan test` | **PASS** — 290 tests, 878 assertions |
+| 34 | Static analysis / style | PHPStan L6, Pint | **PASS** |
+| 35 | Frontend gates | ESLint, vue-tsc, token guard | **PASS** |
+| 36 | **End-to-end** | Playwright, live stack | **PASS** — 15 journeys |
+
+### End-to-end journeys added
+
+```text
+bulk import      seller uploads a Turkish-Excel CSV (semicolons, BOM, comma decimals) ->
+                 the mapping is guessed from Turkish headers -> dry run ->
+                 catalogue checked and EMPTY ->
+                 the bad row is named with its line number ->
+                 commit applies the two good rows ->
+                 48.900,00 survives the round trip on the price screen ->
+                 stock arrived through the ledger
+
+repricing        bulk edit -> one save -> history shows old -> new, with its source
+
+partner API      seller issues a scoped credential in the portal ->
+                 the secret is shown exactly once ->
+                 a machine pushes stock with it ->
+                 the same credential is refused at the prices endpoint ->
+                 the seller sees the request in the usage log ->
+                 revoking kills it immediately
+```
+
+### Defects found and fixed during this phase
+
+| ID | Severity | Finding | Resolution |
+|---|---|---|---|
+| P4-D001 | **P2** | A newly imported SKU had no price history at all: the row was created already priced, so the price book correctly saw no change and wrote nothing. The origin of a product's very first price — the one most worth being able to explain — was the one thing nobody could look up. | `PriceBook::recordInitialPrice()`, called on create, with a null previous value. |
+| P4-D002 | P3 | The demo catalogue set `stock_quantity` on the SKU without any ledger rows behind it, so a demo product page claimed six in stock while the stock screen was empty — exactly the inconsistency the ledger exists to prevent. | The seeder now books opening stock as a receipt through `InventoryLedger`. |
+| P4-D003 | P3 | An earlier `migrate:fresh` left the development database with only the taxonomy seeded, which broke registration in the end-to-end run in a way that surfaced as "grant-role failed". | Development data restored with a full `db:seed`; noted here because the symptom pointed somewhere else entirely. |
+
+### Notes on the concurrency claim
+
+The ledger's guarantee is asserted at the level RefConcept is responsible for: that
+every write takes `SELECT … FOR UPDATE` on the stock row and decides from what it
+reads *inside* that lock, never from the model the caller passed in. Two of the tests
+say exactly that — one inspects the SQL, one hands the service a deliberately stale
+model and expects the reservation to be refused.
+
+That the lock then blocks a second transaction is PostgreSQL's behaviour rather than
+ours, and a test for it would be testing the database. The invariants that survive
+even a caller who forgets the lock are pushed down to the schema instead: a CHECK
+constraint refuses `reserved > on_hand`, and a partial unique index refuses a second
+live hold for one reference.
+
+### Notes
+
+- Import files go on the **private** disk. A seller's supplier price list is the one
+  document that tells a competitor exactly what they pay, so it is treated like an
+  identity document rather than like a product photograph.
+- The import template is generated from the field catalogue rather than committed as
+  a static file, so it cannot fall out of step with the columns the mapper
+  understands. Semicolon-separated with a byte-order mark, because a template that
+  opens as one column in Turkish Excel teaches the seller the feature is broken.
+- Partner credentials are deliberately not Sanctum tokens: a partner credential
+  belongs to a system rather than to a person, carries its own scopes, and must be
+  revocable without logging anybody out of the seller portal.
+- Stock reservations are consumed by the order flow, which is Phase 6. The reserve,
+  release and dispatch paths are built and tested here because inventory without them
+  is a number rather than a ledger.
+
+### Verdict
+
+**PHASE 4 GATE: PASS** — proceed to Phase 5.
+
+`WEB_RELEASE_APPROVED`: **NOT GRANTED** (18 phases remaining).

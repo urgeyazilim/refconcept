@@ -12,19 +12,19 @@ WEB
 IN_PROGRESS
 
 ## Current Phase
-PHASE_4
+PHASE_5
 
 ## Current Task
-Not started — Phase 3 is closed and Phase 4 has not begun.
+Not started — Phase 4 is closed and Phase 5 has not begun.
 
 ## Last Completed Task
-P3-T009 — Phase 3 gate verified end to end (see `TEST_REPORT.md`).
+P4-T007 — Phase 4 gate verified end to end (see `TEST_REPORT.md`).
 
 ## Next Task
-Phase 4, per `04_WEB_PHASE_PLAN.md`, shipping its own UI slice alongside its API.
+Phase 5 — Projects / Rooms / Design Versions, shipping its own UI slice alongside its API.
 
 ## Test State
-PASS — 213 backend tests / 657 assertions, 12 Playwright E2E journeys across all three
+PASS — 290 backend tests / 878 assertions, 15 Playwright E2E journeys across all three
 apps, PHPStan level 6, Pint, ESLint, vue-tsc and the design token guard all clean.
 
 ## Release State
@@ -221,6 +221,66 @@ carries `4890000`, and the storefront renders the server's own formatting.
 **Imagery:** product photographs are the only anonymously-readable store in the
 system, on their own bucket, under random keys, with the file extension derived from
 the decoded image type rather than from the uploaded filename. SVG is refused.
+
+### PHASE_4_IMPORT_PRICE_INVENTORY — DONE (2026-08-24)
+
+```text
+UPDATED_AT: 2026-08-24
+COMMIT_OR_SNAPSHOT: phase-4-commerce
+PHASE: 4 — Import / Price / Inventory and the seller API foundation
+TASK: P4-T001 .. P4-T007
+STATUS: DONE
+FILES_CHANGED:
+  apps/api/app/Domains/Imports/**  (ImportBatch, ImportRow, two enums, SpreadsheetReader,
+    ImportColumnMapper, ImportStorage, ProductImportRunner, SellerImportController,
+    ProductImportTest)
+  apps/api/app/Domains/Pricing/**  (PriceList, PriceListItem, PriceHistory, PriceBook,
+    SellerPriceController, PricingTest)
+  apps/api/app/Domains/Inventory/**  (StockLocation, StockItem, StockMovement,
+    StockReservation, three enums, InsufficientStock, InventoryLedger,
+    SellerInventoryController, ReleaseExpiredReservationsCommand, InventoryLedgerTest)
+  apps/api/app/Domains/Partners/**  (ApiCredential, ApiRequestLog, CredentialIssuer,
+    AuthenticatePartner, SellerApiCredentialController, PartnerStockController,
+    PartnerApiTest)
+  apps/api/routes/domains/commerce.php, routes/api.php, routes/console.php,
+    bootstrap/app.php
+  apps/api/database/migrations/0001_01_01_0000{13,14}_*
+  apps/api/database/seeders/DemoCatalogSeeder.php
+  apps/api/composer.json  (openspout/openspout for streaming CSV and XLSX)
+  packages/ui/src/runtime/types.ts
+  apps/seller-portal/app/pages/{prices,stock,integrations}.vue
+  apps/seller-portal/app/pages/imports/{index,[id]}.vue
+  apps/seller-portal/app/layouts/default.vue
+  tests/e2e/bulk-import.spec.ts
+MIGRATIONS: 2 (pricing and inventory; imports and API credentials) — append-only
+  triggers on price_history and stock_movements, CHECK constraints on stock balances,
+  partial unique indexes for one default price list, one default stock location and
+  one live hold per reference
+TESTS_RUN: php artisan test · phpstan level 6 · pint · npm run lint/typecheck
+  · check-design-tokens.mjs · playwright (15 journeys)
+TEST_RESULT: PASS (290 tests, 878 assertions; 15 E2E)
+BLOCKERS: none
+NEXT_ACTION: Phase 5 — Projects / Rooms / Design Versions
+```
+
+**Import is three steps on purpose.** Upload parses the file once into `import_rows`;
+validation reads those rows and writes nothing to the catalogue; commit applies the
+ones that passed, row by row in its own transaction. A seller sees exactly what will
+happen — how many created, how many updated, which lines are wrong and why — before
+anything happens, because there is no undo for a catalogue.
+
+**Stock is a ledger, not a number.** `stock_movements` is the record and `stock_items`
+is a snapshot of it, written inside the same locked transaction. Every path takes
+`SELECT … FOR UPDATE` and decides from what it reads under the lock; a CHECK
+constraint refuses an over-reserved balance even for a caller who forgets to.
+
+**A campaign never overwrites the everyday price.** Campaign prices live in their own
+list with a time window, so ending one restores yesterday's prices because nothing
+overwrote them — there is no "put it back" step for anybody to forget.
+
+**Partner credentials are not user tokens.** A key/secret pair belongs to a system,
+carries its own scopes, is rate-limited per credential, and is revocable without
+logging anybody out. The secret is hashed and shown exactly once.
 
 ---
 

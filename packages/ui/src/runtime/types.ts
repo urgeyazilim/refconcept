@@ -341,3 +341,165 @@ export interface Paginated<T> {
     to: number | null
   }
 }
+
+// --- import, pricing and inventory ---------------------------------------------
+
+export type ImportStatus =
+  | 'uploaded'
+  | 'analysing'
+  | 'mapped'
+  | 'validating'
+  | 'validated'
+  | 'importing'
+  | 'completed'
+  | 'failed'
+
+export interface ImportField {
+  field: string
+  label: string
+  required: boolean
+}
+
+export interface ImportBatchSummary {
+  id: string
+  original_name: string
+  status: ImportStatus
+  status_label: string
+  is_running: boolean
+  total_rows: number
+  valid_rows: number
+  error_rows: number
+  created_rows: number
+  updated_rows: number
+  progress_percent: number
+  failure_reason: string | null
+  created_at: string | null
+  committed_at: string | null
+}
+
+export interface ImportBatchDetail extends ImportBatchSummary {
+  detected_headers: string[]
+  /** Spreadsheet header → field name. Absent keys are columns the seller ignored. */
+  mapping: Record<string, string>
+  fields: ImportField[]
+  missing_required: string[]
+  can_validate: boolean
+  can_commit: boolean
+}
+
+export interface ImportRowResult {
+  line_number: number
+  status: 'pending' | 'valid' | 'invalid' | 'imported' | 'skipped'
+  status_label: string
+  action: 'create' | 'update' | 'skip' | null
+  raw: Record<string, string>
+  errors: string[]
+}
+
+/** Where the price a customer sees actually came from. */
+export type PriceSource = 'sku' | 'default_list' | 'campaign'
+
+export interface SellerPriceRow {
+  sku_id: string
+  sku: string
+  product_name: string | null
+  variant_label: string | null
+  list_price: MoneyValue
+  sale_price: MoneyValue | null
+  effective_price: MoneyValue
+  tax_rate_bps: number
+  price_source: PriceSource
+}
+
+export interface PriceHistoryEntry {
+  field: 'list_price' | 'sale_price'
+  old_price: MoneyValue | null
+  new_price: MoneyValue | null
+  change_bps: number | null
+  source: 'manual' | 'import' | 'api' | 'campaign' | 'system'
+  author: string | null
+  changed_at: string
+}
+
+export interface PriceListSummary {
+  id: string
+  code: string
+  name: string
+  currency: string
+  is_default: boolean
+  status: string
+  is_effective: boolean
+  starts_at: string | null
+  ends_at: string | null
+  item_count: number
+}
+
+export interface StockLocationSummary {
+  id: string
+  code: string
+  name: string
+  type: string
+  type_label: string
+  city: string | null
+  is_default: boolean
+  is_active: boolean
+}
+
+export interface StockRow {
+  id: string
+  sku: {
+    id: string | null
+    code: string | null
+    variant_label: string | null
+    product_name: string | null
+  }
+  location: { id: string | null, name: string | null, code: string | null }
+  on_hand: number
+  /** Spoken for but not yet dispatched. */
+  reserved: number
+  /** What can still be promised: on_hand minus reserved. */
+  sellable: number
+  reorder_point: number
+  needs_attention: boolean
+  counted_at: string | null
+}
+
+export interface StockMovementEntry {
+  id: string
+  type: string
+  type_label: string
+  quantity: number
+  on_hand_after: number
+  reserved_after: number
+  reason: string | null
+  reference_type: string | null
+  author: string | null
+  created_at: string
+}
+
+export interface ApiCredentialSummary {
+  id: string
+  name: string
+  key_id: string
+  secret_hint: string
+  scopes: string[]
+  rate_limit_per_minute: number
+  is_usable: boolean
+  last_used_at: string | null
+  expires_at: string | null
+  revoked_at: string | null
+  revoked_reason: string | null
+  created_at: string | null
+  /** Returned exactly once, by the creation request. Never fetchable again. */
+  secret?: string
+  secret_notice?: string
+}
+
+export interface ApiUsageEntry {
+  method: string
+  path: string
+  status: number
+  ok: boolean
+  duration_ms: number
+  created_at: string
+}

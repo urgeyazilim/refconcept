@@ -8,6 +8,10 @@ const { isAuthenticated, logout } = useAuth()
 const nav = [
   { label: 'Panel', to: '/', icon: 'M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-16v5h6V4h-6Z' },
   { label: 'Ürünlerim', to: '/products', icon: 'M20.5 7.5 12 3 3.5 7.5m17 0L12 12m8.5-4.5v9L12 21m0-9L3.5 7.5m8.5 4.5v9' },
+  { label: 'Fiyatlar', to: '/prices', icon: 'M7 7h.01M3 10V5a1 1 0 0 1 1-1h5l11 11-6 6L3 10Z' },
+  { label: 'Stok', to: '/stock', icon: 'M3 7.5 12 3l9 4.5v9L12 21l-9-4.5v-9Zm0 0 9 4.5m0 0 9-4.5m-9 4.5V21' },
+  { label: 'Toplu aktarma', to: '/imports', icon: 'M12 15V4m0 0L8 8m4-4 4 4M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2' },
+  { label: 'Entegrasyonlar', to: '/integrations', icon: 'M15 7a4 4 0 1 1-3.9 5H7v3H4v-3.1A4 4 0 0 1 11.1 8H15Z' },
   { label: 'Başvurum', to: '/onboarding', icon: 'M8 4h8a1 1 0 0 1 1 1v15l-5-3-5 3V5a1 1 0 0 1 1-1Zm2 5h4m-4 4h4' },
 ]
 </script>

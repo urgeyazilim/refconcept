@@ -30,6 +30,13 @@
 | P3-T005 | 3 | SELLER_PORTAL_AGENT | P3-T002 | DONE | portal E2E | Product list, creation, editor, gallery and SKU management in the seller portal |
 | P3-T006 | 3 | ADMIN_AGENT | P3-T004 | DONE | admin E2E | Moderation queue and review screen with approve, reject and recall |
 | P3-T007 | 3 | INDEPENDENT_TEST_AGENT | P3-T001..006 | DONE | Phase 3 gate | Phase 3 gate: 213 backend tests, 12 E2E journeys across three apps (see TEST_REPORT.md) |
+| P4-T001 | 4 | ARCHITECT_AGENT | P3-T007 | DONE | schema review | Pricing, inventory, imports and API credentials; append-only triggers, balance CHECK constraints, partial unique indexes |
+| P4-T002 | 4 | BACKEND_AGENT | P4-T001 | DONE | import tests | CSV/XLSX streaming reader, column mapping, dry run, per-row errors, commit |
+| P4-T003 | 4 | BACKEND_AGENT | P4-T001 | DONE | pricing tests | Price lists with time windows, append-only price history, campaign resolution |
+| P4-T004 | 4 | BACKEND_AGENT | P4-T001 | DONE | concurrency tests | Stock ledger with row locks, idempotent reservations, expiry sweep, all-or-nothing baskets |
+| P4-T005 | 4 | BACKEND_AGENT | P4-T004 | DONE | partner API tests | Scoped key/secret credentials, per-credential rate limits, request log |
+| P4-T006 | 4 | SELLER_PORTAL_AGENT | P4-T002..005 | DONE | portal E2E | Prices, stock, bulk import and integrations screens |
+| P4-T007 | 4 | INDEPENDENT_TEST_AGENT | P4-T001..006 | DONE | Phase 4 gate | 290 backend tests, 15 E2E journeys (see TEST_REPORT.md) |
 
 ## Scope notes
 

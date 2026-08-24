@@ -20,4 +20,5 @@ Route::prefix('v1')->as('v1.')->group(function (): void {
     require __DIR__.'/domains/identity.php';
     require __DIR__.'/domains/sellers.php';
     require __DIR__.'/domains/catalog.php';
+    require __DIR__.'/domains/commerce.php';
 });

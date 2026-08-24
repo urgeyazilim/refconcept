@@ -9,6 +9,8 @@ use App\Domains\Catalog\Models\Brand;
 use App\Domains\Catalog\Models\Category;
 use App\Domains\Catalog\Models\Style;
 use App\Domains\Identity\Models\User;
+use App\Domains\Inventory\Enums\MovementType;
+use App\Domains\Inventory\Services\InventoryLedger;
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Products\Enums\ModerationStatus;
 use App\Domains\Products\Enums\ProductStatus;
@@ -394,6 +396,23 @@ final class DemoCatalogSeeder extends Seeder
                 'height_mm' => $definition['height'],
                 'assembly_required' => ($definition['height'] ?? 0) > 1000,
             ]);
+
+            /*
+             * Stock goes in through the ledger rather than straight onto the SKU.
+             *
+             * The column on `product_skus` is a projection; `stock_movements` is the
+             * record. Seeding the projection alone would leave a demo catalogue whose
+             * product pages claim six in stock and whose stock screen is empty — which
+             * is exactly the inconsistency the ledger exists to make impossible.
+             */
+            $ledger = app(InventoryLedger::class);
+
+            $ledger->adjust(
+                item: $ledger->itemFor($sku),
+                delta: (int) $definition['stock'],
+                type: MovementType::Receipt,
+                reason: 'Demo veri kümesi: açılış stoğu',
+            );
 
             $this->publish($product, $sku, $operator);
         });

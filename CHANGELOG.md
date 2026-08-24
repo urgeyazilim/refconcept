@@ -184,3 +184,56 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Demo seller accounts had an organization and a role grant but no trading account, so
   a demo seller reached the product form and was refused at the last step for a reason
   nothing on screen explained.
+
+### Added — Phase 4 (Import, pricing, inventory and the partner API)
+
+- **Bulk product import in three steps.** The file is parsed once into `import_rows`;
+  validation reads those rows and writes nothing to the catalogue; commit applies the
+  ones that passed, each in its own transaction. A seller sees how many products will
+  be created, how many updated, and exactly which lines are wrong and why — before
+  anything happens, because there is no undo for a catalogue.
+- A streaming CSV and XLSX reader built for the files sellers actually have: the
+  semicolon delimiter Turkish Excel writes (detected by column count, not guessed),
+  the byte-order mark it prefixes, the Windows-1254 encoding older exports use, and
+  comma decimals. Every line is stored verbatim alongside its parsed form, so "why did
+  line 251 come out wrong" is answerable months later without the original file.
+- Column mapping guessed from Turkish or English headers, accent-insensitively, and
+  always shown to the seller for confirmation. Two columns claiming the same field
+  leaves both unmapped rather than picking one — a wrong guess nobody notices writes
+  wrong data into a live catalogue.
+- An import template generated from the field catalogue rather than committed as a
+  static file, so it cannot drift from the columns the importer understands.
+- **Price lists with time windows**, so a campaign never overwrites the everyday
+  price. Ending a campaign restores yesterday's prices because nothing overwrote them.
+- **Append-only price history**, enforced by a database trigger, recording what
+  changed, by how much in basis points, who changed it and *where it came from* — a
+  40% drop caused by a misplaced decimal in a spreadsheet is otherwise indistinguishable
+  from a deliberate campaign.
+- **A stock ledger.** `stock_movements` is the record; `stock_items` is a snapshot of
+  it written inside the same locked transaction. Every write takes a row lock and
+  decides from what it reads under that lock, and CHECK constraints refuse a negative
+  or over-reserved balance even for a caller that forgets to.
+- Reservations with expiry: idempotent per reference so a retried checkout cannot take
+  the stock twice, all-or-nothing across a multi-line basket, and released
+  automatically — on the next reservation of that row, and by a five-minute sweep for
+  everything else.
+- **Scoped machine credentials** for a seller's own systems. Deliberately not Sanctum
+  tokens: a partner credential belongs to a system rather than a person, carries its
+  own scopes, is rate-limited per credential, and is revocable without logging anybody
+  out. The secret is hashed and returned exactly once.
+- A partner API addressed by the seller's own SKU codes rather than by RefConcept ids,
+  reporting per-line results so one discontinued product does not fail a 4,000-row
+  nightly sync.
+- Seller portal: bulk import with the mapping and preview flow, a bulk price editor
+  with per-SKU history, a stock screen separating on-hand from reserved from sellable,
+  and integration credentials with a request log.
+
+### Fixed — Phase 4
+
+- A newly imported SKU had no price history at all: the row was created already
+  priced, so the price book correctly saw no change and wrote nothing. The origin of a
+  product's very first price — the one most worth being able to explain — was the one
+  thing nobody could look up.
+- The demo catalogue set stock quantities on SKUs with no ledger rows behind them, so
+  a demo product page claimed six in stock while the stock screen was empty. Opening
+  stock is now booked as a receipt through the ledger.
