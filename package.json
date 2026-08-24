@@ -22,7 +22,7 @@
     "test": "npm run test --workspaces --if-present",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "imagery": "node scripts/generate-imagery.mjs && node scripts/optimize-imagery.mjs",
+    "imagery": "node scripts/generate-imagery.mjs && node scripts/generate-catalog-imagery.mjs && node scripts/optimize-imagery.mjs",
     "screenshot": "node scripts/screenshot.mjs"
   },
   "devDependencies": {

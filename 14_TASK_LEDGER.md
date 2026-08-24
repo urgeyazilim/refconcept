@@ -23,13 +23,13 @@
 | P2-T005 | 2 | SELLER_PORTAL_AGENT | P2-T002 | DONE | portal E2E | Onboarding wizard with live checklist progress |
 | P2-T006 | 2 | ADMIN_AGENT | P2-T004 | DONE | admin E2E | Review queue, application review, seller administration |
 | P2-T007 | 2 | INDEPENDENT_TEST_AGENT | P2-T001..006 | PASS | Phase 2 gate | 135 tests / 389 assertions, 9 E2E journeys, 3 defects found and fixed |
-| P3-T001 | 3 | ARCHITECT_AGENT | P2-T007 | TODO | schema review | Categories, brands, attributes, styles, colours, materials, room taxonomy |
-| P3-T002 | 3 | BACKEND_AGENT | P3-T001 | TODO | catalog tests | Products, seller listings, SKUs, variants, dimensions |
-| P3-T003 | 3 | BACKEND_AGENT | P3-T002 | TODO | media tests | Product media and document metadata on private/public storage |
-| P3-T004 | 3 | BACKEND_AGENT | P3-T003 | TODO | moderation tests | Seller product → admin approve → public product |
-| P3-T005 | 3 | SELLER_PORTAL_AGENT | P3-T002 | TODO | portal E2E | Product creation and management in the seller portal |
-| P3-T006 | 3 | ADMIN_AGENT | P3-T004 | TODO | admin E2E | Product moderation queue |
-| P3-T007 | 3 | INDEPENDENT_TEST_AGENT | P3-T001..006 | TODO | Phase 3 gate | Seller product → admin approve → public product |
+| P3-T001 | 3 | ARCHITECT_AGENT | P2-T007 | DONE | schema review | Categories, brands, attributes, styles, colours, materials, room taxonomy; 40 categories with materialised paths |
+| P3-T002 | 3 | BACKEND_AGENT | P3-T001 | DONE | catalog tests | Products, seller listings, SKUs, variants, dimensions; money as integer minor units throughout |
+| P3-T003 | 3 | BACKEND_AGENT | P3-T002 | DONE | media tests | Product media on its own public bucket: random keys, extension from the decoded type, one cover per product |
+| P3-T004 | 3 | BACKEND_AGENT | P3-T003 | DONE | moderation tests | Seller product to admin approve to public product; an edit to a live listing re-queues it |
+| P3-T005 | 3 | SELLER_PORTAL_AGENT | P3-T002 | DONE | portal E2E | Product list, creation, editor, gallery and SKU management in the seller portal |
+| P3-T006 | 3 | ADMIN_AGENT | P3-T004 | DONE | admin E2E | Moderation queue and review screen with approve, reject and recall |
+| P3-T007 | 3 | INDEPENDENT_TEST_AGENT | P3-T001..006 | DONE | Phase 3 gate | Phase 3 gate: 213 backend tests, 12 E2E journeys across three apps (see TEST_REPORT.md) |
 
 ## Scope notes
 
@@ -40,7 +40,7 @@
 
 ## Allowed Status
 ```text
-TODO
+DONE
 IN_PROGRESS
 BLOCKED_EXTERNAL
 READY_FOR_TEST
@@ -52,3 +52,4 @@ DONE
 
 ## Rule
 `DONE` requires the task's required test gate to pass.
+Categories, brands, attributes, styles, colours, materials, room taxonomy — 40 categories seeded, materialised paths |

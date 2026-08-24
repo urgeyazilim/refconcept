@@ -62,6 +62,28 @@ return [
             'report' => false,
         ],
 
+        /*
+         * Product imagery, and only product imagery.
+         *
+         * A separate bucket rather than a prefix on the private one: bucket-level
+         * anonymous read is one auditable setting, whereas a public prefix inside a
+         * private bucket is one careless policy edit away from serving tax
+         * certificates. ProductImageStorage is the only writer.
+         */
+        's3-public' => [
+            'driver' => 's3',
+            'key' => env('AWS_ACCESS_KEY_ID'),
+            'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            'region' => env('AWS_DEFAULT_REGION'),
+            'bucket' => env('AWS_PUBLIC_BUCKET', 'refconcept-public'),
+            'url' => rtrim((string) env('AWS_URL'), '/').'/'.env('AWS_PUBLIC_BUCKET', 'refconcept-public'),
+            'endpoint' => env('AWS_ENDPOINT'),
+            'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
+            'visibility' => 'public',
+            'throw' => false,
+            'report' => false,
+        ],
+
     ],
 
     /*

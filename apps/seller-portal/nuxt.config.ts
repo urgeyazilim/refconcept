@@ -40,6 +40,9 @@ export default defineNuxtConfig({
     public: {
       apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:58000',
       appName: 'RefConcept Seller',
+
+      // So a seller can open their published listing the way a customer sees it.
+      storefrontUrl: process.env.NUXT_PUBLIC_STOREFRONT_URL || 'http://localhost:3000',
     },
   },
 

@@ -210,18 +210,3 @@ function makeSellerOrganization(string $name, string $slug): array
 
     return ['organization' => $organization, 'owner' => $owner];
 }
-
-function grantPlatformRole(User $user, SystemRole $role): void
-{
-    $roleModel = Role::query()
-        ->where('slug', $role->value)
-        ->where('scope', $role->scope()->value)
-        ->firstOrFail();
-
-    UserRole::query()->create([
-        'user_id' => $user->getKey(),
-        'role_id' => $roleModel->getKey(),
-        'organization_id' => null,
-        'granted_at' => now(),
-    ]);
-}

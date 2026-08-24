@@ -19,8 +19,13 @@ export default defineConfig({
 
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list']],
 
-  // Windows dev servers and a cold PHP-FPM are both slow on first touch.
-  timeout: 90_000,
+  /*
+   * Windows dev servers and a cold PHP-FPM are both slow on first touch, and the
+   * suite now creates enough accounts in a row to hit the registration throttle —
+   * which the helpers wait out rather than disable, because a rate limit that is
+   * turned off for tests is a rate limit nothing verifies.
+   */
+  timeout: 180_000,
   expect: { timeout: 15_000 },
 
   use: {

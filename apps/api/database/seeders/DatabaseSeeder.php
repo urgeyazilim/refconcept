@@ -19,6 +19,7 @@ final class DatabaseSeeder extends Seeder
     {
         $this->call(RolesAndPermissionsSeeder::class);
         $this->call(SellerAgreementsSeeder::class);
+        $this->call(CatalogTaxonomySeeder::class);
 
         if (app()->environment('production')) {
             $this->command?->info('Production environment: demo data skipped.');
@@ -27,5 +28,8 @@ final class DatabaseSeeder extends Seeder
         }
 
         $this->call(DemoAccountsSeeder::class);
+
+        // Needs the demo sellers and the taxonomy above it, so it runs last.
+        $this->call(DemoCatalogSeeder::class);
     }
 }

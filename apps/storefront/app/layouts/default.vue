@@ -4,7 +4,7 @@ const { isAuthenticated, displayName, logout } = useAuth()
 const nav = [
   { label: 'Platform', to: '/' },
   { label: 'Nasıl çalışır', to: '/' },
-  { label: 'Ürünler', to: '/' },
+  { label: 'Ürünler', to: '/catalog' },
   { label: 'Profesyoneller', to: '/' },
   { label: 'Krediler', to: '/' },
 ]

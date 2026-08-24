@@ -3,7 +3,12 @@
     "name": "refconcept/api",
     "type": "project",
     "description": "RefConcept API — AI interior design platform and multi-seller marketplace.",
-    "keywords": ["refconcept", "marketplace", "laravel", "ai"],
+    "keywords": [
+        "refconcept",
+        "marketplace",
+        "laravel",
+        "ai"
+    ],
     "license": "proprietary",
     "require": {
         "php": "^8.3",
@@ -32,7 +37,10 @@
     "autoload-dev": {
         "psr-4": {
             "Tests\\": "tests/"
-        }
+        },
+        "files": [
+            "tests/Helpers.php"
+        ]
     },
     "scripts": {
         "test": [

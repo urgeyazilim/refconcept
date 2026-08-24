@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { checkStable, fillStable } from './support/forms'
-import { gotoHydrated, waitForHydration } from './support/hydration'
+import { gotoHydrated, gotoInteractive, waitForHydration } from './support/hydration'
 import { clearInbox, extractLink, waitForMessage } from './support/mailpit'
 
 /**
@@ -97,7 +97,7 @@ test.describe('customer identity journey', () => {
     await expect(page.getByText('Profiliniz güncellendi.')).toBeVisible()
 
     // --- add an address -------------------------------------------------------
-    await gotoHydrated(page, '/account/addresses')
+    await gotoInteractive(page, '/account/addresses')
     await expect(page.getByText('Henüz kayıtlı adresiniz yok.')).toBeVisible()
 
     await page.getByRole('button', { name: 'İlk adresinizi ekleyin' }).click()
@@ -136,7 +136,7 @@ test.describe('customer identity journey', () => {
     await expect(page.getByText('E-postanız doğrulanmadı')).toBeVisible()
 
     // The client-side gate mirrors the API's 403 so the user gets a route they can act on.
-    await gotoHydrated(page, '/account/addresses')
+    await gotoInteractive(page, '/account/addresses')
     await expect(page).toHaveURL(/\/auth\/verify-email/)
   })
 

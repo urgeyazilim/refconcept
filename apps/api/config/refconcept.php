@@ -105,7 +105,7 @@ return [
 
     'storage' => [
         'private_disk' => env('REFCONCEPT_PRIVATE_DISK', 's3'),
-        'public_disk' => env('REFCONCEPT_PUBLIC_DISK', 's3'),
+        'public_disk' => env('REFCONCEPT_PUBLIC_DISK', 's3-public'),
     ],
 
     /*

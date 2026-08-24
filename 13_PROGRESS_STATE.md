@@ -12,21 +12,20 @@ WEB
 IN_PROGRESS
 
 ## Current Phase
-PHASE_3_CATALOG_PIM
+PHASE_4
 
 ## Current Task
-P3-T001 — catalog schema: categories, brands, attributes, styles, colours, materials.
+Not started — Phase 3 is closed and Phase 4 has not begun.
 
 ## Last Completed Task
-P2-T006 — Phase 2 gate verified by the Independent Test Agent (see `TEST_REPORT.md`).
+P3-T009 — Phase 3 gate verified end to end (see `TEST_REPORT.md`).
 
 ## Next Task
-Catalog and PIM: categories, brands, products, seller listings, SKUs, variants,
-attributes, dimensions, media and the moderation workflow.
+Phase 4, per `04_WEB_PHASE_PLAN.md`, shipping its own UI slice alongside its API.
 
 ## Test State
-PASS — 135 backend tests / 389 assertions, 9 Playwright E2E journeys across two apps,
-PHPStan level 6, Pint, ESLint, vue-tsc and the design token guard all clean.
+PASS — 213 backend tests / 657 assertions, 12 Playwright E2E journeys across all three
+apps, PHPStan level 6, Pint, ESLint, vue-tsc and the design token guard all clean.
 
 ## Release State
 NOT_APPROVED
@@ -167,6 +166,61 @@ disk under random keys, served by short-lived signed URL after a policy check;
 agreement acceptances immutable and checksummed; every decision carrying a mandatory
 reason enforced by both the application and a database constraint; complete
 seller-to-seller isolation across applications, documents and seller records.
+
+### PHASE_3_CATALOG_PIM — DONE (2026-08-24)
+
+```text
+UPDATED_AT: 2026-08-24
+COMMIT_OR_SNAPSHOT: phase-3-catalog
+PHASE: 3 — Catalog / PIM and the product lifecycle
+TASK: P3-T001 .. P3-T009
+STATUS: DONE
+FILES_CHANGED:
+  apps/api/app/Domains/Catalog/** (Category, Brand, Attribute, AttributeValue, Color,
+    Material, Style, PublicCatalogController)
+  apps/api/app/Domains/Products/** (Product, ProductSku, ProductDimension, ProductMedia,
+    ProductAttributeValue, ProductModeration, ProductStatusHistory, four enums,
+    ProductPolicy, ProductCompleteness, ProductModerationWorkflow, ProductImageStorage,
+    SellerProductController, ProductMediaController, AdminProductModerationController,
+    ProductResource, three form requests, ProductLifecycleTest, ProductMediaTest)
+  apps/api/config/{filesystems.php,refconcept.php}   (s3-public disk for imagery)
+  apps/api/routes/domains/catalog.php
+  apps/api/database/migrations/0001_01_01_0000{10,11,12}_*  (taxonomy, products, listings)
+  apps/api/database/seeders/{CatalogTaxonomySeeder,DemoAccountsSeeder,DemoCatalogSeeder,
+    DatabaseSeeder}.php + database/seeders/assets/products/*.webp
+  packages/ui/src/runtime/{types.ts,useMoney.ts}, packages/ui/src/components/RcStatusPill.vue
+  apps/seller-portal/app/pages/products/{index,new,[id]}.vue
+  apps/seller-portal/app/components/{ProductMediaManager,ProductSkuEditor}.vue
+  apps/admin-panel/app/pages/products/{index,[id]}.vue
+  apps/storefront/app/pages/catalog/{index,[slug]}.vue
+  apps/storefront/app/components/ProductCard.vue
+  tests/e2e/product-lifecycle.spec.ts, tests/e2e/support/sellers.ts, support/hydration.ts
+  scripts/generate-catalog-imagery.mjs, scripts/optimize-imagery.mjs
+MIGRATIONS: 3 (catalog taxonomy, products, seller listings) — materialised category paths,
+  a maintained tsvector, a partial unique index for the single cover image, and CHECK
+  constraints tying published_at to an approved moderation status
+TESTS_RUN: php artisan test · phpstan level 6 · pint · npm run lint/typecheck
+  · check-design-tokens.mjs · playwright (12 journeys, three apps)
+TEST_RESULT: PASS (213 tests, 657 assertions; 12 E2E)
+BLOCKERS: none
+NEXT_ACTION: Phase 4
+```
+
+**The gate this phase exists for:** a listing reaches a customer only after a reviewer
+approves it, and it leaves again the moment anything changes. Visibility takes three
+independent conditions — approved by moderation, set active by the seller, and
+carrying at least one *purchasable* offer — and the third delegates to the SKU scope,
+which also asks whether the offering seller may still trade. Repeating a simpler
+condition anywhere would be how a suspended seller's listings stay on sale.
+
+**Money:** every amount is an integer of minor units from the form field to the
+database column. The one conversion in the system lives in `useMoney.ts` and is
+exercised by a round trip in the end-to-end run: a seller types "48.900,00", the wire
+carries `4890000`, and the storefront renders the server's own formatting.
+
+**Imagery:** product photographs are the only anonymously-readable store in the
+system, on their own bucket, under random keys, with the file extension derived from
+the decoded image type rather than from the uploaded filename. SVG is refused.
 
 ---
 

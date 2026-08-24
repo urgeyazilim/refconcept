@@ -259,3 +259,100 @@ seller review            operator approves → seller code issued → applicant 
 **PHASE 2 GATE: PASS** — proceed to Phase 3 (Catalog / PIM).
 
 `WEB_RELEASE_APPROVED`: **NOT GRANTED** (20 phases remaining).
+
+---
+
+## Phase 3 — Catalog and product lifecycle
+
+**Date:** 2026-08-24
+**Scope:** category taxonomy, product/SKU model, imagery, moderation, the public
+catalogue, and the three screens that drive them.
+
+### Gate criteria
+
+| # | Criterion | Method | Result |
+|---|---|---|---|
+| 1 | Taxonomy seeds and is idempotent | Pest + `db:seed` | **PASS** — 40 categories, 8 attributes, 19 colours, 18 materials, 8 styles, 6 brands |
+| 2 | Category attributes drive the seller form | Pest | **PASS** — the required flag comes off the pivot, so the form and the submission gate cannot disagree |
+| 3 | **Prices are exact minor units end to end** | Pest | **PASS** — 48.900,00 ₺ posts as `4890000` and comes back as `4890000` |
+| 4 | Tax from basis points | Pest | **PASS** — 20% of 4.890.000 is 978.000, no drift |
+| 5 | Discount reported in basis points | Pest | **PASS** |
+| 6 | Sale price above list price refused | Pest | **PASS** |
+| 7 | Completeness derived, never stored | Pest | **PASS** — description, image, SKU, price, width + depth, required attributes |
+| 8 | Submission guard names what is missing | Pest | **PASS** |
+| 9 | Listing locked while a reviewer holds it | Pest | **PASS** |
+| 10 | **Unapproved listing invisible to customers** | Pest | **PASS** — checked before *and* after approval, through both catalogue endpoints |
+| 11 | Approval publishes and activates offers | Pest | **PASS** — status, `published_at` and draft SKUs move together |
+| 12 | Seller-paused offer survives approval | Pest | **PASS** — approval is a moderation decision, not a licence to undo the seller's |
+| 13 | **Editing a published listing re-queues it** | Pest | **PASS** — product, SKU and gallery edits all pull it out of the catalogue |
+| 14 | Every decision carries a reason | Pest + CHECK constraint | **PASS** |
+| 15 | Rejection names the fields at fault | Pest | **PASS** |
+| 16 | Recall takes a live listing off sale immediately | Pest | **PASS** |
+| 17 | Suspended seller's listings disappear | Pest | **PASS** — visibility delegates to the SKU scope, which asks the seller |
+| 18 | **Tenant isolation** | Pest + Playwright | **PASS** — list, edit, SKU, media and moderation all refused across sellers |
+| 19 | Imagery on the public bucket only | Pest | **PASS** — separate bucket, random key, extension from the decoded type |
+| 20 | Non-image uploads refused | Pest | **PASS** — PDF and SVG rejected; a file that will not decode is rejected even if its headers claim otherwise |
+| 21 | One cover image per product | Pest + partial unique index | **PASS** — reorder parks rows out of the index's way; deleting the cover promotes the next |
+| 22 | Catalogue filters | Pest | **PASS** — category branch, room, style, budget (on the *effective* price of a purchasable offer), search |
+| 23 | Unknown category returns nothing, not everything | Pest | **PASS** |
+| 24 | Backend suite | `php artisan test` | **PASS** — 213 tests, 657 assertions |
+| 25 | Static analysis / style | PHPStan L6, Pint | **PASS** |
+| 26 | Frontend gates | ESLint, vue-tsc, token guard | **PASS** |
+| 27 | **End-to-end** | Playwright, live stack | **PASS** — 12 journeys across all three apps |
+
+### End-to-end journeys added
+
+```text
+product lifecycle   seller creates a draft -> category-driven attributes -> photograph ->
+                    price and dimensions -> checklist clears -> submit ->
+                    catalogue checked and EMPTY ->
+                    reviewer picks it up -> approves with a reason ->
+                    catalogue shows it, priced and measured ->
+                    seller pauses it -> catalogue empty again
+
+                    reviewer rejects with named fields -> listing stays out of the
+                    catalogue and reopens for editing
+
+                    one seller cannot open another seller's listing (403, and the
+                    portal says so in Turkish rather than in Laravel's English)
+```
+
+### Defects found and fixed during this phase
+
+| ID | Severity | Finding | Resolution |
+|---|---|---|---|
+| P3-D001 | **P2** | A seller had no way to upload a product image at all — no endpoint, no screen — so the completeness gate demanded a photograph that could not be supplied and no listing could ever be submitted. | `ProductImageStorage` + `ProductMediaController`, on a separate anonymously-readable bucket, with 12 tests. |
+| P3-D002 | **P2** | Approval left `products.status` at `draft` and SKUs at `draft`, so an approved listing satisfied moderation and still failed `publiclyVisible()`. Approved, complete, and invisible. Unit tests passed because they forced the status by hand. Found by the end-to-end run. | Approval now publishes: status to active, draft offers to active, offers the seller paused left alone. |
+| P3-D003 | **P2** | An approved listing could never be edited again — no typo fix, no better photograph, ever. | Approved is editable; any edit sends the listing back to the review queue and clears `published_at`, so what a customer sees is always something a reviewer looked at. |
+| P3-D004 | **P2** | `SellerProductController::index` did not eager-load `skus.seller`, but the "from" price asks each offer whether its seller may trade. With lazy loading disabled, the seller's product list returned 500. Not caught by tests because the fixtures used there had no SKUs. | Eager load added in both places that serialise a product; regression test added. |
+| P3-D005 | P3 | `attributes` and `dimensions` were passed to `fill()` although neither is a column, so any request carrying them raised a mass-assignment error. | `Arr::except` at both call sites. |
+| P3-D006 | P3 | `ProductResource` serialised the attribute *label* as its value, so the seller's form matched none of its own options and silently cleared every attribute on the next save. | `value` (the stored code) and `display` (the label) are now separate fields. |
+| P3-D007 | P3 | Categories were ordered by `position` across all depths, so a flat select interleaved branches — "Kanepe" appeared three entries above the "Oturma Grubu" it belongs to. | Ordered by the materialised path; option indentation uses non-breaking spaces, which a browser does not collapse. |
+| P3-D008 | P3 | The seller portal on :3001 and the admin panel on :3002 share one cookie jar in development, because a browser scopes cookies by host and ignores the port. Signing into one silently signed into the other. | Test-side: cookies cleared before each sign-in. Not a product defect — the three apps sit on separate domains in production. |
+| P3-D009 | P3 | Demo seller accounts had an organization and a role grant but no `sellers` row, so a demo seller could reach the product form and be refused at the last step for a reason nothing on screen explained. | `DemoAccountsSeeder` creates the trading account too. |
+| P3-D010 | P3 | `__vue_app__` is set when `app.mount()` is called, which is *before* an async `<script setup>` resolves. Clicks landing in that window hit server-rendered markup with no listeners and were swallowed silently. | `gotoInteractive()` waits for the page's own fetch to settle. The same window is a real (small) UX cost of SSR, tracked as hardening. |
+
+### Demo data
+
+`php artisan db:seed` now leaves a working catalogue behind: twelve published
+listings across the two demo sellers, photographed, priced, measured and approved.
+The imagery is uploaded to the public bucket as `ProductMedia` exactly as a seller's
+upload would be, so the demo exercises the same storage path as production rather
+than pointing at a static asset only the seeder knows about.
+
+### Notes
+
+- Product imagery is the one anonymously-readable store in the system. It is a
+  separate bucket rather than a public prefix inside the private one: bucket-level
+  anonymous read is a single auditable setting, whereas a public prefix is one
+  careless policy edit away from serving tax certificates.
+- SVG is refused despite being an image. It is a document format that can carry
+  script, and it would be served from that bucket.
+- Basket and checkout are Phase 6. The product page says so rather than showing a
+  button that does nothing.
+
+### Verdict
+
+**PHASE 3 GATE: PASS** — proceed to Phase 4.
+
+`WEB_RELEASE_APPROVED`: **NOT GRANTED** (19 phases remaining).

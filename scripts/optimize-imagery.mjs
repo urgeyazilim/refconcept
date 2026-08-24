@@ -1,4 +1,4 @@
-import { readdirSync, statSync, unlinkSync } from 'node:fs'
+import { existsSync, readdirSync, statSync, unlinkSync } from 'node:fs'
 import { join, parse, resolve } from 'node:path'
 import sharp from 'sharp'
 
@@ -13,7 +13,18 @@ import sharp from 'sharp'
  *   node scripts/optimize-imagery.mjs --keep-png
  */
 
-const DIR = 'apps/storefront/public/images'
+/*
+ * Two directories, because two kinds of image live in this repository: the
+ * storefront's own chrome, and the catalogue photography the demo seeder uploads on
+ * a seller's behalf. Both come out of the generator as large lossless PNGs and both
+ * want the same treatment, so the script takes a directory rather than owning one.
+ */
+const DIRS = [
+  'apps/storefront/public/images',
+  'apps/api/database/seeders/assets/products',
+]
+
+const DIR = process.argv.find((a) => !a.startsWith('--') && a.includes('/')) ?? null
 
 /** Widths chosen from how each image is used in the layout, not from the source size. */
 const WIDTHS = {
@@ -34,34 +45,40 @@ function widthFor(name) {
 }
 
 const keepPng = process.argv.includes('--keep-png')
-const dir = resolve(process.cwd(), DIR)
-const files = readdirSync(dir).filter((file) => file.endsWith('.png'))
 
 let before = 0
 let after = 0
 
-for (const file of files) {
-  const source = join(dir, file)
-  const { name } = parse(file)
-  const target = join(dir, `${name}.webp`)
+for (const directory of DIR ? [DIR] : DIRS) {
+  const dir = resolve(process.cwd(), directory)
 
-  const sourceSize = statSync(source).size
-  before += sourceSize
+  if (!existsSync(dir)) continue
 
-  await sharp(source)
-    .resize({ width: widthFor(name), withoutEnlargement: true })
-    .webp({ quality: 82, effort: 6 })
-    .toFile(target)
+  const files = readdirSync(dir).filter((file) => file.endsWith('.png'))
 
-  const targetSize = statSync(target).size
-  after += targetSize
+  for (const file of files) {
+    const source = join(dir, file)
+    const { name } = parse(file)
+    const target = join(dir, `${name}.webp`)
 
-  if (!keepPng) unlinkSync(source)
+    const sourceSize = statSync(source).size
+    before += sourceSize
 
-  console.log(
-    `${name.padEnd(20)} ${(sourceSize / 1024).toFixed(0).padStart(5)} KB -> `
-    + `${(targetSize / 1024).toFixed(0).padStart(4)} KB webp @${widthFor(name)}px`,
-  )
+    await sharp(source)
+      .resize({ width: widthFor(name), withoutEnlargement: true })
+      .webp({ quality: 82, effort: 6 })
+      .toFile(target)
+
+    const targetSize = statSync(target).size
+    after += targetSize
+
+    if (!keepPng) unlinkSync(source)
+
+    console.log(
+      `${name.padEnd(20)} ${(sourceSize / 1024).toFixed(0).padStart(5)} KB -> `
+      + `${(targetSize / 1024).toFixed(0).padStart(4)} KB webp @${widthFor(name)}px`,
+    )
+  }
 }
 
 console.log(

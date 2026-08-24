@@ -115,3 +115,72 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Database status defaults were not reflected on freshly created models.
 - `Artisan::starting()` does not exist in Laravel 13 and broke every artisan command;
   commands are now registered through `withCommands()`.
+
+### Added — Phase 3 (Catalog / PIM and the product lifecycle)
+
+- Catalogue taxonomy on UUIDv7 keys: categories with materialised paths and room
+  types, brands, styles, colours, materials, and attributes whose "required" flag
+  lives on the category pivot — so the seller's form and the submission gate read the
+  same source and cannot disagree about what is mandatory.
+- `CatalogTaxonomySeeder` — reference data, not demo data, so it runs in production
+  too: 40 categories, 8 attributes, 19 colours, 18 materials, 8 styles and 6 brands,
+  idempotent by natural key.
+- Products separated from offers: a `Product` is what the thing *is*, a `ProductSku`
+  is one seller's commercial terms for it. Two sellers can list the same sofa without
+  the matching engine seeing two different sofas.
+- **Money as integer minor units from the form field to the database column.** Prices
+  cross the wire as integers, tax and discounts are basis points, and the single
+  conversion between what a seller types and what is stored lives in one place.
+- Product dimensions in millimetres, with width and depth required: they are what
+  decide whether the piece fits the wall the design engine wants to put it against.
+- `ProductCompleteness` — the readiness of a listing is derived from its data, never
+  from a stored flag that a partial save could set.
+- `ProductModerationWorkflow` — the only place a moderation status changes. Every
+  transition is checked against the state machine, recorded in history, and audited,
+  and every decision carries a mandatory reason enforced by both the application and a
+  database constraint.
+- Product imagery on its own anonymously-readable bucket: random object keys, the file
+  extension derived from the decoded image type rather than the uploaded filename, and
+  a partial unique index guaranteeing exactly one cover image per product.
+- Public catalogue: category-branch, room, style, budget and trigram search filters,
+  four sort orders, and a scalar subquery for price sorting so pagination does not lie
+  about how many products exist. Every query runs through one `publiclyVisible()`
+  scope; nothing builds its own visibility condition.
+- Seller portal: product list, creation, and a full editor with a live completeness
+  checklist, gallery management with cover selection and reordering, and per-offer
+  pricing, stock and dimensions.
+- Super admin: the moderation queue, and a review screen that shows the reviewer what
+  a customer would see, with approve, reject (naming the fields at fault) and recall.
+- Storefront: the catalogue with URL-backed filters, and a product page organised
+  around choosing between sellers' offers.
+- `DemoCatalogSeeder` — twelve published listings with real photography, uploaded to
+  the public bucket exactly as a seller's upload would be.
+- `RcStatusPill` and `useMoney` in the shared package, so lifecycle colours and money
+  formatting cannot drift between the three apps.
+
+### Fixed — Phase 3
+
+- **A seller could not upload a product image at all.** There was no endpoint and no
+  screen, so the completeness gate demanded a photograph that could not be supplied
+  and no listing could ever be submitted.
+- **An approved listing was approved, complete, and invisible.** Approval left the
+  product's status and its offers at `draft`, so it satisfied moderation and still
+  failed the visibility scope. The unit tests passed because they set the status by
+  hand; only the end-to-end run went through the door a seller actually uses.
+- **An approved listing could never be edited again** — no typo fix, no better
+  photograph, ever. Approved listings are now editable, and any edit sends the listing
+  back to the review queue and clears `published_at`, so what a customer sees is
+  always something a reviewer looked at.
+- The seller's product list returned 500 whenever a listing had an offer: the "from"
+  price asks each offer whether its seller may trade, and the relation was not eager
+  loaded. Lazy loading is disabled outside production, which turned an N+1 into an
+  error — the right trade, and the reason this surfaced at all.
+- `attributes` and `dimensions` were passed to `fill()` although neither is a column,
+  so any request carrying them raised a mass-assignment error.
+- The attribute *label* was serialised where the value belonged, so the seller's form
+  matched none of its own options and silently cleared every attribute on save.
+- Categories were ordered by position across all depths, which interleaved branches in
+  the category select; they are now ordered by the materialised path.
+- Demo seller accounts had an organization and a role grant but no trading account, so
+  a demo seller reached the product form and was refused at the last step for a reason
+  nothing on screen explained.

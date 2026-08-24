@@ -27,3 +27,22 @@ export async function waitForHydration(page: Page): Promise<void> {
     { timeout: 60_000 },
   )
 }
+
+/**
+ * Navigates and waits until the page is actually interactive, not merely mounted.
+ *
+ * `__vue_app__` appears when `app.mount()` is called, which happens *before* an
+ * async `<script setup>` resolves. Pages that fetch in setup are wrapped in Suspense,
+ * so between mount and that fetch resolving the markup on screen is still the
+ * server's — buttons are painted but carry no listeners. A click in that window is
+ * swallowed silently: no request, no error, and a test that fails 15 seconds later
+ * complaining the success message never appeared.
+ *
+ * Waiting for the network to go quiet closes it, because the thing being waited on is
+ * exactly the client-side fetch that Suspense is blocked on.
+ */
+export async function gotoInteractive(page: Page, path: string): Promise<void> {
+  await page.goto(path)
+  await waitForHydration(page)
+  await page.waitForLoadState('networkidle')
+}

@@ -14,6 +14,8 @@ use App\Domains\Identity\Services\EmailVerificationService;
 use App\Domains\Identity\Services\PasswordResetService;
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Organizations\Policies\OrganizationPolicy;
+use App\Domains\Products\Models\Product;
+use App\Domains\Products\Policies\ProductPolicy;
 use App\Domains\Sellers\Models\Seller;
 use App\Domains\Sellers\Models\SellerApplication;
 use App\Domains\Sellers\Policies\SellerApplicationPolicy;
@@ -132,6 +134,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Organization::class, OrganizationPolicy::class);
         Gate::policy(SellerApplication::class, SellerApplicationPolicy::class);
         Gate::policy(Seller::class, SellerPolicy::class);
+        Gate::policy(Product::class, ProductPolicy::class);
 
         /*
          * Super admin bypass. Returning null (not false) lets every other check run

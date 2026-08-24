@@ -23,22 +23,41 @@ export function uniqueEmail(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1e4)}@refconcept.local`
 }
 
+/**
+ * Posts to the API, waiting out the rate limiter rather than working around it.
+ *
+ * Registration is throttled to a handful of attempts per minute, which is the correct
+ * production behaviour and exactly what a suite that creates a dozen accounts in a row
+ * runs into. Raising the limit for tests would mean the suite no longer exercises the
+ * configuration that ships; honouring `Retry-After` costs a minute at worst and keeps
+ * the throttle real.
+ */
 async function post<T>(path: string, body: unknown, token?: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(body),
-  })
+  for (let attempt = 0; ; attempt++) {
+    const response = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    })
 
-  if (!response.ok) {
+    if (response.ok) {
+      return (await response.json()) as T
+    }
+
+    if (response.status === 429 && attempt < 3) {
+      const retryAfter = Number(response.headers.get('Retry-After') ?? '60')
+
+      await new Promise(resolve => setTimeout(resolve, (retryAfter + 1) * 1000))
+
+      continue
+    }
+
     throw new Error(`${path} failed: ${response.status} ${await response.text()}`)
   }
-
-  return (await response.json()) as T
 }
 
 export async function createVerifiedAccount(prefix = 'seller'): Promise<VerifiedAccount> {

@@ -15,6 +15,8 @@ use App\Domains\Organizations\Enums\OrganizationStatus;
 use App\Domains\Organizations\Enums\OrganizationType;
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Organizations\Models\OrganizationUser;
+use App\Domains\Sellers\Enums\SellerStatus;
+use App\Domains\Sellers\Models\Seller;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -135,6 +137,26 @@ final class DemoAccountsSeeder extends Seeder
                 'organization_id' => $organization->getKey(),
             ],
             ['granted_at' => now()],
+        );
+
+        /*
+         * The trading account, not just the organization.
+         *
+         * An organization with a membership and a role grant looks complete until the
+         * owner tries to list something: every offer belongs to a seller, so without
+         * this row the demo seller can sign in, reach the product form and then be
+         * refused at the last step for a reason nothing on screen explains.
+         */
+        Seller::query()->updateOrCreate(
+            ['organization_id' => $organization->getKey()],
+            [
+                'seller_code' => 'RC-'.strtoupper(substr(md5($slug), 0, 6)),
+                'display_name' => $name,
+                'status' => SellerStatus::Active,
+                'onboarding_status' => 'completed',
+                'risk_status' => 'clear',
+                'approved_at' => now(),
+            ],
         );
     }
 }

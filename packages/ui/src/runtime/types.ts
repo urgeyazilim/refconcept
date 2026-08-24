@@ -184,3 +184,160 @@ export interface SellerAgreementSummary {
   effective_from: string
   accepted: boolean
 }
+
+// --- catalogue and products ---------------------------------------------------
+
+/**
+ * A monetary amount.
+ *
+ * `amount_minor` is the integer of minor units and is the only field arithmetic may
+ * touch; `formatted` is the server's rendering, used for display so that one screen
+ * cannot format a price differently from another.
+ */
+export interface MoneyValue {
+  amount_minor: number
+  currency: string
+  formatted: string
+}
+
+export type ProductStatus = 'draft' | 'active' | 'archived'
+
+export type ModerationStatus =
+  | 'draft'
+  | 'pending_review'
+  | 'in_review'
+  | 'approved'
+  | 'rejected'
+
+export interface ProductMediaItem {
+  id: string
+  type: string
+  url: string
+  alt_text: string | null
+  position: number
+  is_cover: boolean
+}
+
+export interface ProductDimensions {
+  width_mm: number | null
+  height_mm: number | null
+  depth_mm: number | null
+  weight_g: number | null
+  display: string | null
+  assembly_required: boolean
+}
+
+export interface ProductSkuItem {
+  id: string
+  sku: string
+  variant_label: string | null
+  status: 'draft' | 'active' | 'paused' | 'out_of_stock' | 'archived'
+  status_label: string
+  list_price: MoneyValue
+  sale_price: MoneyValue | null
+  effective_price: MoneyValue
+  discount_bps: number
+  tax_rate_bps: number
+  stock_policy: 'track' | 'always_available' | 'made_to_order'
+  stock_quantity: number | null
+  lead_time_days: number
+  is_available: boolean
+  dimensions: ProductDimensions | null
+  seller: { id: string, display_name: string, seller_code: string } | null
+}
+
+export interface ProductAttributeValueItem {
+  code: string | null
+  name: string | null
+  unit: string | null
+  /** The stored code — what a form posts back. */
+  value: string | number | boolean | null
+  /** The human label — what a customer reads. */
+  display: string | number | boolean | null
+}
+
+export interface ProductSummaryRef {
+  id: string
+  name: string
+  slug: string
+}
+
+export interface Product {
+  id: string
+  name: string
+  slug: string
+  description: string | null
+  product_type: string
+  status: ProductStatus
+  status_label: string
+  moderation_status: ModerationStatus
+  moderation_status_label: string
+  is_editable: boolean
+  published_at: string | null
+  brand?: ProductSummaryRef | null
+  category?: (ProductSummaryRef & { path: string, room_type: string | null }) | null
+  style?: { id: string, code: string, name: string } | null
+  media?: ProductMediaItem[]
+  attributes?: ProductAttributeValueItem[]
+  skus?: ProductSkuItem[]
+  /** Cheapest purchasable offer — null when nothing is on sale. */
+  from_price: MoneyValue | null
+  /** Cheapest offer regardless of availability, for seller and moderation screens. */
+  lowest_price?: MoneyValue | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+/** What the seller still has to supply before a listing can be reviewed. */
+export interface ProductCompletenessMeta {
+  missing_requirements: string[]
+  completion_percent: number
+  can_submit: boolean
+}
+
+export interface ModerationDecision {
+  decision: string
+  reason: string | null
+  flagged_fields: string[] | null
+  decided_by: string | null
+  decided_at: string
+}
+
+export interface CatalogCategory {
+  id: string
+  parent_id: string | null
+  name: string
+  slug: string
+  path: string
+  depth: number
+  room_type: string | null
+}
+
+export interface CatalogAttribute {
+  code: string
+  name: string
+  data_type: string
+  unit: string | null
+  is_required: boolean
+  is_variant_defining: boolean
+  values: Array<{ value: string, label: string }>
+}
+
+export interface CatalogVocabulary {
+  colors: Array<{ code: string, name: string, hex: string | null, family: string | null }>
+  materials: Array<{ code: string, name: string, family: string | null }>
+  styles: Array<{ code: string, name: string, description: string | null }>
+}
+
+/** Laravel's paginator envelope, as the resource collections emit it. */
+export interface Paginated<T> {
+  data: T[]
+  meta: {
+    current_page: number
+    last_page: number
+    per_page: number
+    total: number
+    from: number | null
+    to: number | null
+  }
+}
