@@ -98,7 +98,7 @@ final class DocumentStorage
         // The local driver cannot sign URLs, so tests and bare local setups fall back
         // to a route-signed download rather than silently exposing a public path.
         if (! method_exists(Storage::disk($disk), 'temporaryUrl')) {
-            return route('api.v1.seller.documents.download', ['document' => $document->getKey()]);
+            return route('v1.seller.documents.download', ['document' => $document->getKey()]);
         }
 
         try {
@@ -107,7 +107,7 @@ final class DocumentStorage
                 now()->addMinutes(self::SIGNED_URL_TTL_MINUTES),
             );
         } catch (RuntimeException) {
-            return route('api.v1.seller.documents.download', ['document' => $document->getKey()]);
+            return route('v1.seller.documents.download', ['document' => $document->getKey()]);
         }
     }
 

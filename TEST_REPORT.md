@@ -470,3 +470,120 @@ live hold for one reference.
 **PHASE 4 GATE: PASS** — proceed to Phase 5.
 
 `WEB_RELEASE_APPROVED`: **NOT GRANTED** (18 phases remaining).
+
+---
+
+## Phase 5 — Projects, rooms and design versions
+
+**Date:** 2026-08-24
+**Scope:** a customer's home — projects, rooms, private photographs, the things a
+design has to work around, sharing, and the design version tree.
+
+### Gate criteria
+
+| # | Criterion | Method | Result |
+|---|---|---|---|
+| 1 | A project is visible only to its owner and invited members | Pest + Playwright | **PASS** — asserted from the list, from a direct id, and from a nested room |
+| 2 | **Platform staff cannot open a customer project** | Pest | **PASS** — the super-admin `Gate::before` bypass is excluded for these models, and the exclusion is asserted rather than assumed |
+| 3 | The bypass still applies everywhere else | Pest | **PASS** — an operator can still work the moderation queue |
+| 4 | A verified e-mail is required before a project can exist | Pest | **PASS** |
+| 5 | A viewer may look and nothing more | Pest + Playwright | **PASS** |
+| 6 | An editor may change but not delete, and not invite | Pest | **PASS** |
+| 7 | Revoking access closes the door immediately | Pest + Playwright | **PASS** |
+| 8 | A revoked membership stays on the record | Pest | **PASS** — who had access and when is worth being able to answer |
+| 9 | The invitation token is returned exactly once | Pest | **PASS** — hashed at rest, absent from every later response |
+| 10 | A forwarded invitation does not work | Pest | **PASS** — the signed-in address must match the invited one |
+| 11 | An expired or wrong token is refused with one message | Pest | **PASS** — distinguishing them would tell a stranger which projects exist |
+| 12 | The token is burned on use | Pest | **PASS** |
+| 13 | Inviting twice is a resend, not a second seat | Pest + partial unique index | **PASS** |
+| 14 | **Room photographs are on the private disk under random keys** | Pest | **PASS** — never on the public bucket, whatever the configuration |
+| 15 | **No response ever carries a URL or a storage path** | Pest + Playwright | **PASS** — a link is a separate request that checks ownership and expires in five minutes |
+| 16 | The bytes are behind the same policy as the metadata | Pest + Playwright | **PASS** — owner 200, stranger 403, anonymous 401, `no-store` |
+| 17 | Download route names actually resolve | Pest | **PASS** — the assertion that catches a fallback nothing else exercises |
+| 18 | Non-photographs and unusably small photographs refused | Pest | **PASS** — below 640 px on the longest edge is a design of a blur |
+| 19 | The first photograph becomes the one the engine works from | Pest + Playwright | **PASS** |
+| 20 | Deleting the primary promotes another | Pest | **PASS** |
+| 21 | Deleting a photograph removes the bytes | Pest | **PASS** — keeping a picture of somebody's home after they asked for it gone is indefensible |
+| 22 | A floor plan cannot become the design source | Pest | **PASS** |
+| 23 | The filename never reaches the audit log | Pest | **PASS** — "bebek-odasi-yatak.jpg" tells staff something they have no business knowing |
+| 24 | **Version numbers never repeat, even after a failure** | Pest + unique index | **PASS** — picked under a row lock, so a double click cannot collide |
+| 25 | **A refinement is a child, not a replacement** | Pest | **PASS** — and two refinements may branch from the same version |
+| 26 | Only a finished version may be branched from | Pest | **PASS** — pending and failed both refused |
+| 27 | A parent from another design is refused | Pest | **PASS** |
+| 28 | **A finished version never changes** | Pest | **PASS** — at the service, and `ready`/`failed` invariants at the storage layer |
+| 29 | A version cannot be its own parent | CHECK constraint | **PASS** |
+| 30 | A customer can go back to an earlier version | Pest + Playwright | **PASS** |
+| 31 | A failed refinement does not make a working design look broken | Pest | **PASS** |
+| 32 | The whole tree loads in one query | Pest | **PASS** — ≤ 3 queries for a four-version tree |
+| 33 | Every prompt that shaped an image is recoverable | Pest | **PASS** |
+| 34 | A design cannot start on a room with no photograph | Pest + Playwright | **PASS** |
+| 35 | A viewer cannot spend the owner's credits | Pest | **PASS** |
+| 36 | Measured rooms must carry measurements | Pest + CHECK constraint | **PASS** — at the form and at the storage layer |
+| 37 | Backend suite | `php artisan test` | **PASS** — 353 tests, 1045 assertions |
+| 38 | Static analysis / style | PHPStan L6, Pint | **PASS** |
+| 39 | Frontend gates | ESLint, vue-tsc, token guard | **PASS** |
+| 40 | **End-to-end** | Playwright, live stack | **PASS** — 18 journeys |
+
+### End-to-end journeys added
+
+```text
+project journey   customer creates a project -> adds a room ->
+                  "waiting for a photograph" said plainly ->
+                  uploads one -> it becomes the design source ->
+                  enters measurements in centimetres, sees 23.52 m² ->
+                  places a window on a wall ->
+                  starts a design, v1 appears in the tree
+
+privacy           the listing carries no URL and no storage path ->
+                  a link is a separate request, owner only, expires in 5 minutes ->
+                  the bytes: owner 200, stranger 403, anonymous 401, no-store ->
+                  the browser still renders the photograph
+
+sharing           owner invites by e-mail -> the partner is refused until they accept ->
+                  accepting grants read access ->
+                  a viewer cannot edit ->
+                  revoking closes the door immediately
+```
+
+### Defects found and fixed during this phase
+
+| ID | Severity | Finding | Resolution |
+|---|---|---|---|
+| P5-D001 | **P2** | The super-admin `Gate::before` bypass would have let platform staff open any customer's project and look at photographs of their home. It was correct for operational tables and silently wrong for this one. | The bypass now skips `Project`, `Room`, `RoomMedia`, `Design` and `DesignVersion`, matched on class rather than on ability name so a model added later is not silently excluded from the exclusion. Asserted in both directions. |
+| P5-D002 | **P3** | *(carried from Phase 2)* `DocumentStorage::temporaryUrl()` fell back to `route('api.v1.seller.documents.download')` — a name the router never registers, because the `api.` prefix is not applied. Every environment RefConcept is tested in can sign a URL, so it would have surfaced only in production on a deployment without object storage, as a 500 on every "view document". | Corrected, and a test now asserts that all three download route names resolve. |
+| P5-D003 | P3 | `DesignVersionRefused` declared a readonly `$code`, which PHP refuses to redeclare over `Exception::$code` — a fatal error at class load rather than a warning. | Renamed to `$reason`. |
+
+### Design decisions worth recording
+
+- **The original is immutable, structurally.** AI renders live in `design_assets`, room
+  photographs in `room_media`, with different writers. There is no code path that
+  could write a render over a customer's own photograph, which is a stronger guarantee
+  than everybody remembering not to.
+- **`room_dimensions` was not built as a separate table.** The specification lists it
+  in §9.6 and then puts width/length/height on `rooms` in §10.6; the two contradict
+  each other. Every room has exactly one envelope, so a join for three integers buys
+  nothing. What genuinely varies in number — windows, doors, columns — is
+  `room_constraints`.
+- **`room_scans` is deferred to Phase 17** with the rest of the RoomPlan/ARCore work.
+  `measurement_quality` already has a `scanned` value waiting for it.
+- **Room types are one vocabulary shared with the product catalogue.** A bedroom design
+  offers bedroom furniture because both sides agree what a bedroom is; two lists that
+  drift produce a matching engine that finds nothing and no error to explain it.
+- **Generation is not implemented here, and the UI says so.** A version is honestly
+  reported as queued rather than dressed in a fake progress bar. The tree, its
+  numbering and its branching rules are real and fully tested; the AI gateway (Phase 6)
+  and the design engine (Phase 8) fill them in.
+
+### Notes
+
+- Invitation e-mails are Phase 12. Until then the owner copies the invitation link
+  themselves, and the screen says that plainly rather than implying a mail was sent.
+- Room photographs accept HEIC, because that is what an iPhone produces. Dimensions
+  cannot be read from one without a PHP extension that may be absent, so the upload is
+  accepted with unknown dimensions rather than refused.
+
+### Verdict
+
+**PHASE 5 GATE: PASS** — proceed to Phase 6.
+
+`WEB_RELEASE_APPROVED`: **NOT GRANTED** (17 phases remaining).

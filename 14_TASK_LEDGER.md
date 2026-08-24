@@ -37,6 +37,13 @@
 | P4-T005 | 4 | BACKEND_AGENT | P4-T004 | DONE | partner API tests | Scoped key/secret credentials, per-credential rate limits, request log |
 | P4-T006 | 4 | SELLER_PORTAL_AGENT | P4-T002..005 | DONE | portal E2E | Prices, stock, bulk import and integrations screens |
 | P4-T007 | 4 | INDEPENDENT_TEST_AGENT | P4-T001..006 | DONE | Phase 4 gate | 290 backend tests, 15 E2E journeys (see TEST_REPORT.md) |
+| P5-T001 | 5 | ARCHITECT_AGENT | P4-T007 | DONE | schema review | Projects, members, rooms, private media, constraints, designs and the version tree |
+| P5-T002 | 5 | BACKEND_AGENT | P5-T001 | DONE | ownership tests | Owner and invited members only; the super-admin bypass excluded for customer projects |
+| P5-T003 | 5 | BACKEND_AGENT | P5-T001 | DONE | media tests | Private disk, random keys, no URL in any response, short-lived signed links |
+| P5-T004 | 5 | BACKEND_AGENT | P5-T001 | DONE | version tests | Tree with locked numbering, branch-from-finished-only, immutable once ready |
+| P5-T005 | 5 | BACKEND_AGENT | P5-T002 | DONE | sharing tests | Hashed one-time invitations bound to the invited address, revocable and recorded |
+| P5-T006 | 5 | STOREFRONT_AGENT | P5-T002..004 | DONE | storefront E2E | Projects, rooms, photograph gallery, measurements, constraints and the version tree |
+| P5-T007 | 5 | INDEPENDENT_TEST_AGENT | P5-T001..006 | DONE | Phase 5 gate | 353 backend tests, 18 E2E journeys (see TEST_REPORT.md) |
 
 ## Scope notes
 

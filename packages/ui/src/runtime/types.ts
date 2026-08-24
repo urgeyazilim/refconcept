@@ -503,3 +503,162 @@ export interface ApiUsageEntry {
   duration_ms: number
   created_at: string
 }
+
+// --- projects, rooms and designs ------------------------------------------------
+
+export type ProjectStatus = 'draft' | 'active' | 'completed' | 'archived'
+export type ProjectRole = 'editor' | 'viewer'
+
+export type MeasurementQuality = 'unknown' | 'estimated' | 'manual' | 'scanned' | 'verified'
+
+export interface Option {
+  value: string
+  label: string
+}
+
+export interface ProjectSummary {
+  id: string
+  name: string
+  project_type: string
+  project_type_label: string
+  status: ProjectStatus
+  status_label: string
+  budget: MoneyValue | null
+  room_count: number
+  /** Whether any room has a photograph — deliberately not a link to one. */
+  has_cover: boolean
+  is_owner: boolean
+  can_edit: boolean
+  member_count: number
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface ProjectRoomSummary {
+  id: string
+  name: string
+  room_type: string
+  room_type_label: string
+  measurement_quality: MeasurementQuality
+  measurement_quality_label: string
+  width_mm: number | null
+  length_mm: number | null
+  height_mm: number | null
+  floor_area_m2: number | null
+  has_photo: boolean
+  constraint_count: number
+  is_ready_for_design: boolean
+}
+
+export interface ProjectMemberSummary {
+  id: string
+  email: string
+  name: string | null
+  role: ProjectRole
+  role_label: string
+  status: 'invited' | 'active' | 'revoked'
+  accepted_at: string | null
+}
+
+export interface ProjectDetail extends ProjectSummary {
+  notes: string | null
+  address: { id: string, label: string | null, city: string, district: string | null } | null
+  rooms: ProjectRoomSummary[]
+  members: ProjectMemberSummary[]
+}
+
+export interface RoomConstraintItem {
+  id: string
+  type: string
+  type_label: string
+  label: string | null
+  wall: string | null
+  offset_mm: number | null
+  width_mm: number | null
+  height_mm: number | null
+  sill_height_mm: number | null
+  is_blocking: boolean
+  must_stay_visible: boolean
+  /** Whether the engine can reason about it, or it is only a note to the customer. */
+  is_placed: boolean
+  description: string
+  notes: string | null
+}
+
+export interface RoomDetail {
+  id: string
+  project_id: string
+  name: string
+  room_type: string
+  room_type_label: string
+  measurement_quality: MeasurementQuality
+  measurement_quality_label: string
+  measurement_confidence_bps: number
+  width_mm: number | null
+  length_mm: number | null
+  height_mm: number | null
+  floor_area_m2: number | null
+  notes: string | null
+  primary_media_id: string | null
+  is_ready_for_design: boolean
+  missing_for_design: string[]
+  photo_count: number
+  design_count: number
+  constraints: RoomConstraintItem[]
+}
+
+/**
+ * A room photograph.
+ *
+ * Deliberately carries no URL: a link is a separate request that checks ownership and
+ * expires in five minutes.
+ */
+export interface RoomMediaItem {
+  id: string
+  type: 'photo' | 'floor_plan' | 'inspiration' | 'document'
+  original_name: string
+  mime_type: string
+  size_bytes: number
+  width: number | null
+  height: number | null
+  caption: string | null
+  position: number
+  is_primary: boolean
+  uploaded_at: string | null
+}
+
+export type DesignVersionStatus = 'pending' | 'generating' | 'ready' | 'failed'
+
+export interface DesignTreeNode {
+  id: string
+  version_number: number
+  status: DesignVersionStatus
+  status_label: string
+  user_prompt: string | null
+  style_code: string | null
+  credit_cost: number
+  is_current: boolean
+  created_at: string | null
+  children: DesignTreeNode[]
+}
+
+export interface DesignSummary {
+  id: string
+  name: string
+  status: 'draft' | 'generating' | 'ready' | 'failed' | 'archived'
+  status_label: string
+  version_count: number
+  current_version_number: number | null
+  total_credit_cost: number
+  created_at: string | null
+}
+
+export interface DesignDetail extends DesignSummary {
+  current_version: {
+    id: string
+    version_number: number
+    status: DesignVersionStatus
+    user_prompt: string | null
+  } | null
+  tree: DesignTreeNode[]
+}

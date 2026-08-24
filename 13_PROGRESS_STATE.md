@@ -12,19 +12,19 @@ WEB
 IN_PROGRESS
 
 ## Current Phase
-PHASE_5
+PHASE_6
 
 ## Current Task
-Not started — Phase 4 is closed and Phase 5 has not begun.
+Not started — Phase 5 is closed and Phase 6 has not begun.
 
 ## Last Completed Task
-P4-T007 — Phase 4 gate verified end to end (see `TEST_REPORT.md`).
+P5-T007 — Phase 5 gate verified end to end (see `TEST_REPORT.md`).
 
 ## Next Task
-Phase 5 — Projects / Rooms / Design Versions, shipping its own UI slice alongside its API.
+Phase 6 — AI Gateway Foundation, shipping its own UI slice alongside its API.
 
 ## Test State
-PASS — 290 backend tests / 878 assertions, 15 Playwright E2E journeys across all three
+PASS — 353 backend tests / 1045 assertions, 18 Playwright E2E journeys across all three
 apps, PHPStan level 6, Pint, ESLint, vue-tsc and the design token guard all clean.
 
 ## Release State
@@ -281,6 +281,64 @@ overwrote them — there is no "put it back" step for anybody to forget.
 **Partner credentials are not user tokens.** A key/secret pair belongs to a system,
 carries its own scopes, is rate-limited per credential, and is revocable without
 logging anybody out. The secret is hashed and shown exactly once.
+
+### PHASE_5_PROJECTS_ROOMS_DESIGNS — DONE (2026-08-24)
+
+```text
+UPDATED_AT: 2026-08-24
+COMMIT_OR_SNAPSHOT: phase-5-projects
+PHASE: 5 — Projects / Rooms / Design Versions
+TASK: P5-T001 .. P5-T007
+STATUS: DONE
+FILES_CHANGED:
+  apps/api/app/Domains/Projects/**  (Project, ProjectMember, ProjectStatusHistory,
+    Room, RoomMedia, RoomConstraint, Design, DesignVersion, DesignAsset, six enums,
+    ProjectPolicy, RoomPhotoStorage, DesignVersionTree, DesignVersionRefused,
+    ProjectController, ProjectMemberController, RoomController, RoomMediaController,
+    DesignController, three test suites)
+  apps/api/app/Domains/Catalog/Enums/RoomType.php   (vocabulary shared with the catalogue)
+  apps/api/app/Providers/AppServiceProvider.php     (super-admin bypass excluded for
+    customer projects)
+  apps/api/app/Domains/Sellers/Services/DocumentStorage.php  (Phase 2 route-name fix)
+  apps/api/routes/domains/projects.php, routes/api.php
+  apps/api/database/migrations/0001_01_01_000015_create_project_and_room_tables.php
+  apps/api/database/factories/ProjectFactory.php
+  packages/ui/src/runtime/types.ts
+  apps/storefront/app/pages/projects/**  (list, project, room, design tree, invitation)
+  apps/storefront/app/components/RoomPhotoGallery.vue
+  apps/storefront/app/layouts/{default,account}.vue
+  tests/e2e/project-journey.spec.ts, tests/e2e/support/sellers.ts (PNG fixture encoder)
+MIGRATIONS: 1 (projects, members, status history, rooms, room media, constraints,
+  designs, versions, assets) — CHECK constraints tying a measured room to its
+  measurements and a finished version to its completion time or its failure reason;
+  partial unique indexes for one live membership per person and one render per version
+TESTS_RUN: php artisan test · phpstan level 6 · pint · npm run lint/typecheck
+  · check-design-tokens.mjs · playwright (18 journeys)
+TEST_RESULT: PASS (353 tests, 1045 assertions; 18 E2E)
+BLOCKERS: none
+NEXT_ACTION: Phase 6 — AI Gateway Foundation
+```
+
+**The privacy tier this phase introduces.** A room photograph shows what somebody owns,
+how they live and often who they live with. It goes on the private disk under a random
+key, no response ever carries a URL or a path, and a link is a separate request that
+runs the ownership check and expires in five minutes. The models have no `url()` method
+at all, because there is nowhere to point one.
+
+**Platform staff are excluded from the super-admin bypass here.** RefConcept has exactly
+one blanket authorization override, which is right for operational tables and would have
+been silently wrong for this one. It now skips customer projects, and both directions
+are asserted — staff cannot open a project, and can still work the moderation queue.
+
+**The original is immutable, structurally.** Renders live in `design_assets` and
+photographs in `room_media`, with different writers. No code path could write an AI
+render over a customer's own photograph, which is a stronger guarantee than everybody
+remembering not to.
+
+**Designs are a tree.** Every version records the one it came from, numbers are chosen
+under a row lock and never reused, only a finished version may be branched from, and a
+finished version never changes. Generation itself is Phase 6 and Phase 8; the shape
+they fill in is real and fully tested now.
 
 ---
 

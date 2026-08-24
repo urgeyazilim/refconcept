@@ -237,3 +237,55 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The demo catalogue set stock quantities on SKUs with no ledger rows behind them, so
   a demo product page claimed six in stock while the stock screen was empty. Opening
   stock is now booked as a receipt through the ledger.
+
+### Added — Phase 5 (Projects, rooms and design versions)
+
+- **Projects**: a customer's home, or the part of it they are working on. Owner,
+  status history, an optional budget in minor units, and an address reused from their
+  own address book rather than duplicated.
+- **Rooms** carrying their envelope and an honest `measurement_quality` — estimated,
+  measured by hand, scanned, verified — because the difference changes what a design
+  *means*: a sofa against a guessed wall is a suggestion, one against a measured wall
+  is close to a promise. A database constraint refuses a room that claims to be
+  measured while leaving the numbers empty.
+- **Room constraints**: windows, doors, radiators, columns, placed against a wall at an
+  offset. "There is a window" decides nothing; where it is and how wide it is decides
+  whether a 220 cm sofa fits under it.
+- **The strictest privacy tier in the system.** Room photographs go on the private disk
+  under random object keys. No response ever contains a URL or a storage path — a link
+  is a separate request that runs the ownership check and expires in five minutes — and
+  the models have no `url()` method at all, because there is nowhere to point one. The
+  filename is deliberately kept out of the audit log.
+- **Platform staff excluded from the super-admin bypass** for customer projects. That
+  bypass is right for operational tables and would have been silently wrong here; the
+  exclusion is matched on model class rather than ability name, and both directions are
+  asserted.
+- **Designs as a tree, not a list.** Every version records the version it came from, so
+  "make the sofa darker" branches rather than overwrites and the version somebody liked
+  is always still there. Numbers are chosen under a row lock and never reused even after
+  a failure, only a finished version may be branched from, and a finished version never
+  changes.
+- **The original is immutable, structurally**: AI renders live in `design_assets` and
+  the customer's own photographs in `room_media`, with different writers, so there is no
+  code path that could write one over the other.
+- **Project sharing** for the ordinary case — a partner, an interior designer. Invited by
+  e-mail because the person you want to show your living room to usually has no account
+  yet; the invitation token is hashed, returned once, bound to the invited address,
+  expires in two weeks and is burned on use. Revoking is recorded rather than deleted.
+- Storefront: projects, rooms with a photograph gallery, measurements in centimetres,
+  constraints, and the design version tree drawn as a tree.
+- `RoomType` is now one vocabulary shared with the product catalogue, which is what
+  makes matching possible: a bedroom design offers bedroom furniture because both sides
+  agree what a bedroom is.
+
+### Fixed — Phase 5
+
+- **The super-admin authorization bypass would have let platform staff open any
+  customer's project** and look at photographs of their home. Correct for operational
+  tables, silently wrong for this one.
+- *(Carried from Phase 2)* `DocumentStorage` fell back to a route name the router never
+  registers, so a deployment without object storage would have returned 500 on every
+  "view document". Every environment RefConcept is tested in can sign a URL, so nothing
+  exercised it; a test now asserts all three download route names resolve.
+- `DesignVersionRefused` declared a readonly `$code`, which PHP refuses to redeclare
+  over `Exception::$code` — a fatal error at class load.

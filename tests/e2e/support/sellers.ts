@@ -1,4 +1,5 @@
 import type { APIRequestContext } from '@playwright/test'
+import { deflateSync } from 'node:zlib'
 import { createVerifiedAccount, grantOperatorRole } from './accounts'
 import type { VerifiedAccount } from './accounts'
 
@@ -147,10 +148,69 @@ export async function createApprovedSeller(
 /** The leaf category slug the product tests list against, seeded by CatalogTaxonomySeeder. */
 export const TEST_CATEGORY_SLUG = 'kanepe'
 
-/** A small but genuinely decodable PNG, for image uploads that must pass getimagesize(). */
-export function pngBuffer(): Buffer {
-  return Buffer.from(
-    'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAIAQMAAAD+wSzIAAAABlBMVEX///+/v7+jQ3Y5AAAADklEQVQI12P4AIX8EAgALgAD/aNpbtEAAAAASUVORK5CYII=',
-    'base64',
-  )
+/**
+ * A genuinely decodable PNG at whatever size the test needs.
+ *
+ * Built rather than base64-pasted because size matters to more than one endpoint: room
+ * photographs are refused below 640 pixels on the longest edge, so a fixture that is
+ * always 8×8 can only ever test the rejection path.
+ */
+export function pngBuffer(width = 8, height = 8): Buffer {
+  const chunk = (type: string, data: Buffer): Buffer => {
+    const length = Buffer.alloc(4)
+    length.writeUInt32BE(data.length)
+
+    const body = Buffer.concat([Buffer.from(type, 'ascii'), data])
+    const crc = Buffer.alloc(4)
+    crc.writeUInt32BE(crc32(body))
+
+    return Buffer.concat([length, body, crc])
+  }
+
+  const header = Buffer.alloc(13)
+  header.writeUInt32BE(width, 0)
+  header.writeUInt32BE(height, 4)
+  header[8] = 8   // bit depth
+  header[9] = 2   // truecolour
+  header[10] = 0  // deflate
+  header[11] = 0  // no filter
+  header[12] = 0  // no interlace
+
+  // One filter byte per scanline, then three bytes per pixel. A flat warm grey: the
+  // content is irrelevant, only that it decodes and reports its real dimensions.
+  const raw = Buffer.alloc(height * (1 + width * 3))
+
+  for (let y = 0; y < height; y++) {
+    const rowStart = y * (1 + width * 3)
+    raw[rowStart] = 0
+
+    for (let x = 0; x < width; x++) {
+      const at = rowStart + 1 + x * 3
+      raw[at] = 0xE8
+      raw[at + 1] = 0xE2
+      raw[at + 2] = 0xD9
+    }
+  }
+
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0)),
+  ])
+}
+
+/** PNG's CRC-32, computed rather than tabled: it runs four times per fixture. */
+function crc32(buffer: Buffer): number {
+  let crc = 0xFFFFFFFF
+
+  for (const byte of buffer) {
+    crc ^= byte
+
+    for (let bit = 0; bit < 8; bit++) {
+      crc = (crc >>> 1) ^ (0xEDB88320 & -(crc & 1))
+    }
+  }
+
+  return (crc ^ 0xFFFFFFFF) >>> 0
 }

@@ -63,6 +63,13 @@ watch(() => route.fullPath, () => {
             role="menu"
           >
             <NuxtLink
+              to="/projects"
+              class="block rounded-sm px-3 py-2 text-sm text-ink-secondary hover:bg-bg-muted hover:text-ink"
+              role="menuitem"
+            >
+              Projelerim
+            </NuxtLink>
+            <NuxtLink
               to="/account"
               class="block rounded-sm px-3 py-2 text-sm text-ink-secondary hover:bg-bg-muted hover:text-ink"
               role="menuitem"

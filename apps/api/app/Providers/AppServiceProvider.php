@@ -16,6 +16,12 @@ use App\Domains\Organizations\Models\Organization;
 use App\Domains\Organizations\Policies\OrganizationPolicy;
 use App\Domains\Products\Models\Product;
 use App\Domains\Products\Policies\ProductPolicy;
+use App\Domains\Projects\Models\Design;
+use App\Domains\Projects\Models\DesignVersion;
+use App\Domains\Projects\Models\Project;
+use App\Domains\Projects\Models\Room;
+use App\Domains\Projects\Models\RoomMedia;
+use App\Domains\Projects\Policies\ProjectPolicy;
 use App\Domains\Sellers\Models\Seller;
 use App\Domains\Sellers\Models\SellerApplication;
 use App\Domains\Sellers\Policies\SellerApplicationPolicy;
@@ -135,14 +141,59 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(SellerApplication::class, SellerApplicationPolicy::class);
         Gate::policy(Seller::class, SellerPolicy::class);
         Gate::policy(Product::class, ProductPolicy::class);
+        Gate::policy(Project::class, ProjectPolicy::class);
 
         /*
          * Super admin bypass. Returning null (not false) lets every other check run
          * normally; returning true short-circuits. Deliberately the only blanket
-         * override in the system.
+         * override in the system — and deliberately not blanket over everything.
+         *
+         * A customer's project is their home: room photographs, the layout of their
+         * flat, sometimes their family. Platform staff have no operational reason to
+         * open one, and "a super admin can see everything" is exactly how a support
+         * tool becomes the thing that leaks. So these models are excluded, and the
+         * exclusion lives here rather than as a `false` inside each policy — a policy
+         * that has to remember to refuse is a policy that will eventually forget.
+         *
+         * If a genuine support need appears later, the answer is an audited,
+         * time-boxed, customer-consented access grant, not this line.
          */
-        Gate::before(function (User $user, string $ability): ?bool {
+        Gate::before(function (User $user, string $ability, array $arguments = []): ?bool {
+            if ($this->touchesPrivateCustomerData($arguments)) {
+                return null;
+            }
+
             return app(AccessControl::class)->isSuperAdmin($user) ? true : null;
         });
+    }
+
+    /**
+     * Whether this authorization check is about a customer's own home.
+     *
+     * Matched on the class rather than on the ability name: ability strings are shared
+     * across domains ("view", "update"), and a list of names would silently stop
+     * covering a model somebody added later.
+     *
+     * @param  array<int, mixed>  $arguments
+     */
+    private function touchesPrivateCustomerData(array $arguments): bool
+    {
+        $private = [
+            Project::class,
+            Room::class,
+            RoomMedia::class,
+            Design::class,
+            DesignVersion::class,
+        ];
+
+        foreach ($arguments as $argument) {
+            $class = is_object($argument) ? $argument::class : (is_string($argument) ? $argument : null);
+
+            if ($class !== null && in_array($class, $private, true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -2,6 +2,7 @@
 const { logout, displayName } = useAuth()
 
 const nav = [
+  { label: 'Projelerim', to: '/projects' },
   { label: 'Hesabım', to: '/account' },
   { label: 'Adreslerim', to: '/account/addresses' },
 ]
