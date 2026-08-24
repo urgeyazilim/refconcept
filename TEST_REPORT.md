@@ -140,3 +140,44 @@ source · production cloud/DNS/storage · legal/KVKK review · accounting/tax re
 **PHASE 1 GATE: PASS** — proceed to Phase 2 (Seller Onboarding).
 
 `WEB_RELEASE_APPROVED`: **NOT GRANTED** (21 phases remaining).
+
+---
+
+## Phase 1b — Storefront identity screens + first E2E suite
+
+- **Run date:** 2026-08-24
+- **Scope change:** every phase from here ships its own UI instead of deferring all
+  screens to Phase 20. This entry covers Phase 1's screens, backfilled.
+
+### Results
+
+| # | Check | Method | Result |
+|---|---|---|---|
+| 1 | Register → verify → sign in → profile → address → sign out | Playwright, live stack | **PASS** |
+| 2 | Unverified account is gated out of the address book | Playwright | **PASS** |
+| 3 | Registration blocked without both mandatory consents | Playwright | **PASS** |
+| 4 | Login error identical for known and unknown accounts | Playwright | **PASS** |
+| 5 | Password reset link works, old password dies | Playwright | **PASS** |
+| 6 | Backend suite | `php artisan test` | **PASS** — 80 tests, 242 assertions |
+| 7 | PHPStan level 6 / Pint / ESLint / vue-tsc / token guard | CI gates | **PASS** |
+
+The E2E suite is genuinely end to end: the verification and reset links are read out
+of the message the queue worker actually delivered to the SMTP server, so a broken
+worker, mailer, database or API fails the test.
+
+### Defects found and fixed
+
+| ID | Severity | Finding | Resolution |
+|---|---|---|---|
+| P1b-D001 | **P2** | The first address was not becoming the customer's default. The server used `?? $isFirst`, which only applies when the field is absent, but a browser form posts unchecked boxes as `false` — so an account with exactly one address had no default and would reach checkout with an empty address selector. The Pest test missed it because its payload omitted the flags. | Forced for the first address; two feature tests added (explicit `false` payload, and later addresses staying non-default). |
+
+### Known constraints
+
+- **Hydration input race.** Nuxt accepts typing before Vue hydrates and then patches
+  the DOM from empty reactive state, discarding the first field filled. On a fast
+  local connection the window is tens of milliseconds; on a slow one a real user can
+  lose a keystroke. The E2E helpers verify and re-fill rather than hide it. Reducing
+  the window (smaller hydration payload, deferred non-critical components) is a
+  Phase 21 hardening item.
+- Legal pages are placeholders pending legal review — already tracked as an external
+  go-live dependency.

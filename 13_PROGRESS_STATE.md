@@ -25,8 +25,8 @@ Seller onboarding workflow: application, legal entity, contacts, bank details,
 documents, versioned agreement acceptance, approval/rejection/suspension.
 
 ## Test State
-PASS — 78 tests / 235 assertions, PHPStan level 6 clean, Pint clean, ESLint clean,
-vue-tsc clean, design token guard clean, live end-to-end verified.
+PASS — 80 backend tests / 242 assertions, 5 Playwright E2E journeys, PHPStan level 6,
+Pint, ESLint, vue-tsc and the design token guard all clean.
 
 ## Release State
 NOT_APPROVED
@@ -41,6 +41,18 @@ None.
 - production cloud/DNS/storage
 - legal/KVKK/e-commerce review
 - accounting/tax/settlement review
+
+## Plan Amendment (2026-08-24)
+
+The phase plan deferred every screen to Phase 20, which would leave the product
+looking like a shell through eighteen phases and hide integration problems until the
+end. **From now on each phase ships its own UI slice** alongside its API. Phase 1's
+screens were backfilled: registration, sign-in, e-mail verification, password reset,
+account profile, address book and the legal pages.
+
+Phase 20 keeps its original job — the full storefront experience, approved-design
+parity and the complete customer journey — but it will polish real screens rather
+than build them from nothing.
 
 ## Immutable Rule
 Flutter/mobile/AR work must not start before `WEB_RELEASE_APPROVED`.
