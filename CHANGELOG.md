@@ -76,3 +76,42 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (`Factory::guessFactoryNamesUsing`).
 - `email:rfc,dns` performed a live MX lookup on every registration, breaking the test
   suite and blocking `*.local` development accounts; extracted to configuration.
+
+### Added — Phase 2 (Seller Onboarding)
+
+- Seller applications kept separate from approved sellers, so a rejection stays on
+  record with its reason and an approval preserves what was reviewed. One open
+  application per applicant, enforced by a partial unique index.
+- `Iban` value object: constructs only from a value passing the ISO 13616 mod-97
+  check, stored encrypted with a masked display value and a keyed fingerprint for
+  duplicate detection.
+- Onboarding checklist derived from the data rather than stored as flags, driving both
+  the portal's progress bar and the server-side submission guard from one
+  implementation.
+- Required documents follow the taxpayer type, so a sole proprietor is not asked for a
+  trade registry gazette.
+- Versioned agreements with immutable, checksummed acceptances — enforced by a
+  database trigger as well as in PHP.
+- `ApplicationWorkflow` as the single place status changes. Approval creates the
+  organization, seller, membership and role grant in one transaction.
+- Suspension, reactivation and commission changes demand a reason and are recorded in
+  both `seller_status_history` and the audit log.
+- Onboarding documents on the private disk under random keys, served by short-lived
+  signed URL after a policy check.
+- Seller portal: sign-in, dashboard and the full onboarding wizard.
+- Super admin: review queue, application review with document decisions, and seller
+  administration.
+- `refconcept:grant-role` console command for bootstrapping the first operator; there
+  is deliberately no HTTP endpoint that grants platform roles.
+- Shared API and auth composables moved into `@refconcept/ui` so all three apps talk
+  to the backend identically.
+
+### Fixed — Phase 2
+
+- **Every primary call to action on the storefront navigated nowhere.** `RcButton`
+  rendered `<component is="NuxtLink">` by string name, which only resolves against
+  locally registered components — and the component lives in a shared package. Found
+  by an end-to-end click; screenshots looked perfect.
+- Database status defaults were not reflected on freshly created models.
+- `Artisan::starting()` does not exist in Laravel 13 and broke every artisan command;
+  commands are now registered through `withCommands()`.

@@ -181,3 +181,81 @@ worker, mailer, database or API fails the test.
   Phase 21 hardening item.
 - Legal pages are placeholders pending legal review — already tracked as an external
   go-live dependency.
+
+---
+
+## Phase 2 — Seller Onboarding
+
+- **Run date:** 2026-08-24
+- **Environment:** Docker (PHP 8.3, Laravel 13.26.1, PostgreSQL 16 + pgvector, Redis 7, MinIO, Mailpit)
+
+### Gate definition (04_WEB_PHASE_PLAN.md)
+
+> Complete workflow + audit + isolation.
+
+### Results
+
+| # | Check | Method | Result |
+|---|---|---|---|
+| 1 | Seller schema migrates | `migrate:fresh` | **PASS** — 10 tables, CHECK constraints, partial unique indexes, immutability trigger |
+| 2 | Application creation | Pest | **PASS** — one open application per applicant enforced |
+| 3 | Verified e-mail required to apply | Pest | **PASS** |
+| 4 | Section saves | Pest | **PASS** — legal entity, tax profile, contacts, address, bank account |
+| 5 | Turkish identifier validation | Pest | **PASS** — VKN 10 digits, TCKN 11, MERSİS 16 |
+| 6 | **IBAN mod-97 validation** | Pest unit + feature | **PASS** — 12 cases; mistyped digit, transposition and truncation all rejected |
+| 7 | IBAN encryption | Pest | **PASS** — plaintext absent from the column and from every response; only last four returned |
+| 8 | Checklist derivation | Pest | **PASS** — completion computed from data, never a stored flag |
+| 9 | Document requirements by taxpayer type | Pest | **PASS** — a sole proprietor is not asked for a trade registry gazette |
+| 10 | Submission guard | Pest | **PASS** — incomplete application refused, missing steps named |
+| 11 | Application locked after submission | Pest | **PASS** |
+| 12 | Agreement acceptance | Pest | **PASS** — text checksum recorded; repeat accept is a no-op, not a 500 |
+| 13 | Acceptance immutability | Pest + DB trigger | **PASS** |
+| 14 | **Approval creates the tenant** | Pest | **PASS** — organization, seller, membership and role grant in one transaction |
+| 15 | Decision requires a reason | Pest + CHECK constraint | **PASS** |
+| 16 | Applicant cannot decide their own application | Pest | **PASS** |
+| 17 | Double decision refused | Pest | **PASS** — one seller, not two |
+| 18 | Suspension / reactivation | Pest | **PASS** — reason mandatory, status history recorded, self-service refused |
+| 19 | Commission change audited | Pest | **PASS** — before/after values in the audit log |
+| 20 | **Tenant isolation** | Pest | **PASS** — 9 cases; documents, IBANs, admin routes and seller records all refused across tenants |
+| 21 | Storage path never exposed | Pest | **PASS** |
+| 22 | Backend suite | `php artisan test` | **PASS** — 135 tests, 389 assertions |
+| 23 | Static analysis / style | PHPStan L6, Pint | **PASS** — 148 files |
+| 24 | Frontend gates | ESLint, vue-tsc, build, token guard | **PASS** |
+| 25 | **End-to-end** | Playwright, live stack | **PASS** — 9 journeys across storefront and seller portal |
+
+### End-to-end journeys
+
+```text
+customer identity        register → verify by e-mail → sign in → profile → address → sign out
+                         unverified account gated out of the address book
+                         consent enforcement
+                         account-enumeration resistance
+                         password reset invalidates the old password
+
+seller onboarding        sign in → create application → tax profile → legal entity →
+                         contact → address → IBAN (rejected then accepted) →
+                         three documents → three agreements → submit → locked
+                         submit disabled while steps are outstanding
+                         individual seller asked for TCKN, not VKN
+seller review            operator approves → seller code issued → applicant sees a live account
+```
+
+### Defects found and fixed during this phase
+
+| ID | Severity | Finding | Resolution |
+|---|---|---|---|
+| P2-D001 | **P2** | `RcButton` rendered `<component is="NuxtLink">` by string name. That only resolves against locally registered components, and the component lives in `@refconcept/ui` — so **every primary call to action on the storefront rendered correctly and navigated nowhere**. Screenshots could not reveal it; only a click could. | `resolveComponent('NuxtLink')`. |
+| P2-D002 | P3 | Database status defaults were not reflected on freshly created models, so a new application reported a null status until reloaded. | Model-side `$attributes` defaults for application, seller and document. |
+| P2-D003 | P3 | `Artisan::starting()` does not exist in Laravel 13; the console route file broke every artisan command. | Commands registered through `withCommands()` in `bootstrap/app.php`. |
+
+### Notes
+
+- `refconcept:grant-role` bootstraps the first operator from the console. There is
+  deliberately no HTTP endpoint that grants platform roles.
+- Agreement bodies are drafts pending legal review — an external go-live dependency.
+
+### Verdict
+
+**PHASE 2 GATE: PASS** — proceed to Phase 3 (Catalog / PIM).
+
+`WEB_RELEASE_APPROVED`: **NOT GRANTED** (20 phases remaining).

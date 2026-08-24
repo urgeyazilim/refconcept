@@ -16,12 +16,20 @@
 | P1-T004 | 1 | BACKEND_AGENT | P1-T003 | DONE | audit tests | Append-only `audit_logs` with DB trigger, redacting `AuditLogger` |
 | P1-T005 | 1 | BACKEND_AGENT | P1-T002 | DONE | isolation tests | Profile and address book, ownership policies, verified-e-mail gate |
 | P1-T006 | 1 | INDEPENDENT_TEST_AGENT | P1-T001..005 | PASS | Phase 1 gate | 78 tests / 235 assertions; 15 tenant isolation cases; 5 defects found and fixed |
-| P2-T001 | 2 | ARCHITECT_AGENT | P1-T006 | TODO | schema review | Seller application, legal entity, contacts, addresses, bank accounts, tax profile |
-| P2-T002 | 2 | BACKEND_AGENT | P2-T001 | TODO | workflow tests | Application intake, document upload to private storage, state machine |
-| P2-T003 | 2 | BACKEND_AGENT | P2-T002 | TODO | agreement tests | Versioned agreements and acceptance records |
-| P2-T004 | 2 | BACKEND_AGENT | P2-T003 | TODO | admin action tests | Approval / rejection / suspension with reason + audit |
-| P2-T005 | 2 | SELLER_PORTAL_AGENT | P2-T002 | TODO | portal E2E | Seller onboarding UI in the seller portal |
-| P2-T006 | 2 | INDEPENDENT_TEST_AGENT | P2-T001..005 | TODO | Phase 2 gate | Complete workflow + audit + isolation |
+| P2-T001 | 2 | ARCHITECT_AGENT | P1-T006 | DONE | schema review | 10 tables; CHECK constraints, partial unique indexes, acceptance immutability trigger |
+| P2-T002 | 2 | BACKEND_AGENT | P2-T001 | DONE | workflow tests | Application intake, derived checklist, private document storage, state machine |
+| P2-T003 | 2 | BACKEND_AGENT | P2-T002 | DONE | agreement tests | Versioned agreements, checksummed immutable acceptances |
+| P2-T004 | 2 | BACKEND_AGENT | P2-T003 | DONE | admin action tests | Approval creates the tenant; rejection, suspension and commission changes audited |
+| P2-T005 | 2 | SELLER_PORTAL_AGENT | P2-T002 | DONE | portal E2E | Onboarding wizard with live checklist progress |
+| P2-T006 | 2 | ADMIN_AGENT | P2-T004 | DONE | admin E2E | Review queue, application review, seller administration |
+| P2-T007 | 2 | INDEPENDENT_TEST_AGENT | P2-T001..006 | PASS | Phase 2 gate | 135 tests / 389 assertions, 9 E2E journeys, 3 defects found and fixed |
+| P3-T001 | 3 | ARCHITECT_AGENT | P2-T007 | TODO | schema review | Categories, brands, attributes, styles, colours, materials, room taxonomy |
+| P3-T002 | 3 | BACKEND_AGENT | P3-T001 | TODO | catalog tests | Products, seller listings, SKUs, variants, dimensions |
+| P3-T003 | 3 | BACKEND_AGENT | P3-T002 | TODO | media tests | Product media and document metadata on private/public storage |
+| P3-T004 | 3 | BACKEND_AGENT | P3-T003 | TODO | moderation tests | Seller product → admin approve → public product |
+| P3-T005 | 3 | SELLER_PORTAL_AGENT | P3-T002 | TODO | portal E2E | Product creation and management in the seller portal |
+| P3-T006 | 3 | ADMIN_AGENT | P3-T004 | TODO | admin E2E | Product moderation queue |
+| P3-T007 | 3 | INDEPENDENT_TEST_AGENT | P3-T001..006 | TODO | Phase 3 gate | Seller product → admin approve → public product |
 
 ## Scope notes
 

@@ -12,21 +12,21 @@ WEB
 IN_PROGRESS
 
 ## Current Phase
-PHASE_2_SELLER_ONBOARDING
+PHASE_3_CATALOG_PIM
 
 ## Current Task
-P2-T001 — seller application intake: company/legal info, contacts, IBAN, documents.
+P3-T001 — catalog schema: categories, brands, attributes, styles, colours, materials.
 
 ## Last Completed Task
-P1-T006 — Phase 1 gate verified by the Independent Test Agent (see `TEST_REPORT.md`).
+P2-T006 — Phase 2 gate verified by the Independent Test Agent (see `TEST_REPORT.md`).
 
 ## Next Task
-Seller onboarding workflow: application, legal entity, contacts, bank details,
-documents, versioned agreement acceptance, approval/rejection/suspension.
+Catalog and PIM: categories, brands, products, seller listings, SKUs, variants,
+attributes, dimensions, media and the moderation workflow.
 
 ## Test State
-PASS — 80 backend tests / 242 assertions, 5 Playwright E2E journeys, PHPStan level 6,
-Pint, ESLint, vue-tsc and the design token guard all clean.
+PASS — 135 backend tests / 389 assertions, 9 Playwright E2E journeys across two apps,
+PHPStan level 6, Pint, ESLint, vue-tsc and the design token guard all clean.
 
 ## Release State
 NOT_APPROVED
@@ -131,6 +131,42 @@ email/verify,email/resend,password/forgot,password/reset}`, `GET /api/v1/auth/me
 password reset and token redemption; hashed single-use tokens; immediate effect of
 suspension on live tokens; session revocation on password reset; append-only audit
 log enforced by a database trigger; complete seller-to-seller isolation.
+
+### PHASE_2_SELLER_ONBOARDING — DONE (2026-08-24)
+
+```text
+UPDATED_AT: 2026-08-24
+COMMIT_OR_SNAPSHOT: phase-2-seller-onboarding
+PHASE: 2 — Seller Onboarding
+TASK: P2-T001 .. P2-T006
+STATUS: DONE
+FILES_CHANGED:
+  apps/api/database/migrations/*seller* (applications, sellers, profile detail,
+    documents, agreements, acceptances, status history, onboarding steps)
+  apps/api/app/Domains/Sellers/** (11 models, 6 enums, workflow, checklist,
+    document storage, policies, controllers, requests, resources, notifications, tests)
+  apps/api/app/Support/ValueObjects/Iban.php
+  apps/api/app/Domains/Identity/Console/GrantRoleCommand.php
+  apps/api/database/seeders/SellerAgreementsSeeder.php
+  apps/seller-portal/** (login, dashboard, onboarding wizard)
+  apps/admin-panel/** (login, review queue, application review, seller administration)
+  packages/ui/src/runtime/** (shared API and auth composables, typed API contracts)
+  tests/e2e/seller-onboarding.spec.ts
+MIGRATIONS: 10 seller tables with CHECK constraints, partial unique indexes and an
+  immutability trigger on agreement acceptances
+TESTS_RUN: php artisan test · phpstan level 6 · pint --test · npm run build/lint/typecheck
+  · playwright (9 journeys)
+TEST_RESULT: PASS (135 tests, 389 assertions; 9 E2E)
+BLOCKERS: none
+NEXT_ACTION: Phase 3 — Catalog / PIM
+```
+
+**Security properties proven by tests:** IBANs validated by mod-97 and encrypted at
+rest with only the last four digits ever returned; onboarding documents on the private
+disk under random keys, served by short-lived signed URL after a policy check;
+agreement acceptances immutable and checksummed; every decision carrying a mandatory
+reason enforced by both the application and a database constraint; complete
+seller-to-seller isolation across applications, documents and seller records.
 
 ---
 
