@@ -46,15 +46,20 @@ final class AddressController
         $address = DB::transaction(function () use ($user, $validated): UserAddress {
             $this->clearConflictingDefaults($user, $validated);
 
-            // The very first address becomes the default for both purposes, so a
-            // customer who added exactly one address never sees an empty checkout.
+            /*
+             * A customer's only address is necessarily their default, so the first one
+             * is forced rather than defaulted. Using `?? $isFirst` would depend on the
+             * caller omitting the field, and a form that sends unchecked boxes as
+             * `false` — which is what a browser form does — would leave the account with
+             * no default at all and an empty address selector at checkout.
+             */
             $isFirst = ! $user->addresses()->exists();
 
             return UserAddress::query()->create([
                 ...$validated,
                 'user_id' => $user->getKey(),
-                'is_default_shipping' => (bool) ($validated['is_default_shipping'] ?? $isFirst),
-                'is_default_billing' => (bool) ($validated['is_default_billing'] ?? $isFirst),
+                'is_default_shipping' => $isFirst || (bool) ($validated['is_default_shipping'] ?? false),
+                'is_default_billing' => $isFirst || (bool) ($validated['is_default_billing'] ?? false),
             ]);
         });
 

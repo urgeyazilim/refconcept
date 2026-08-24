@@ -1,4 +1,6 @@
 <script setup lang="ts">
+const { isAuthenticated, displayName, logout } = useAuth()
+
 const nav = [
   { label: 'Platform', to: '/' },
   { label: 'Nasıl çalışır', to: '/' },
@@ -6,10 +8,19 @@ const nav = [
   { label: 'Profesyoneller', to: '/' },
   { label: 'Krediler', to: '/' },
 ]
+
+const menuOpen = ref(false)
+
+// Close the account menu on navigation; a menu left hanging over the next page
+// reads as a stuck overlay.
+const route = useRoute()
+watch(() => route.fullPath, () => {
+  menuOpen.value = false
+})
 </script>
 
 <template>
-  <div class="min-h-screen bg-bg text-ink flex flex-col">
+  <div class="flex min-h-screen flex-col bg-bg text-ink">
     <header class="sticky top-0 z-50 border-b border-line/70 bg-bg/85 backdrop-blur">
       <div class="rc-container flex h-18 items-center justify-between gap-8 py-4">
         <NuxtLink to="/" class="flex items-center gap-2.5">
@@ -32,12 +43,59 @@ const nav = [
           </NuxtLink>
         </nav>
 
-        <div class="flex items-center gap-3">
-          <NuxtLink to="/" class="hidden text-sm text-ink-secondary hover:text-ink sm:block">
+        <div v-if="isAuthenticated" class="relative flex items-center gap-3">
+          <button
+            type="button"
+            class="flex items-center gap-2.5 rounded-pill border border-line px-3 py-1.5 text-sm transition-colors hover:bg-bg-muted"
+            :aria-expanded="menuOpen"
+            aria-haspopup="menu"
+            @click="menuOpen = !menuOpen"
+          >
+            <span class="grid size-6 place-items-center rounded-pill bg-accent-100 text-[11px] font-medium text-accent-800">
+              {{ (displayName || '?').charAt(0).toUpperCase() }}
+            </span>
+            <span class="hidden max-w-[140px] truncate sm:block">{{ displayName }}</span>
+          </button>
+
+          <div
+            v-if="menuOpen"
+            class="rc-card absolute top-full right-0 mt-2 w-52 overflow-hidden p-1.5 shadow-md"
+            role="menu"
+          >
+            <NuxtLink
+              to="/account"
+              class="block rounded-sm px-3 py-2 text-sm text-ink-secondary hover:bg-bg-muted hover:text-ink"
+              role="menuitem"
+            >
+              Hesabım
+            </NuxtLink>
+            <NuxtLink
+              to="/account/addresses"
+              class="block rounded-sm px-3 py-2 text-sm text-ink-secondary hover:bg-bg-muted hover:text-ink"
+              role="menuitem"
+            >
+              Adreslerim
+            </NuxtLink>
+            <button
+              type="button"
+              class="mt-1 block w-full rounded-sm border-t border-line px-3 pt-2.5 pb-2 text-left text-sm text-muted hover:bg-bg-muted hover:text-ink"
+              role="menuitem"
+              @click="logout"
+            >
+              Çıkış yap
+            </button>
+          </div>
+        </div>
+
+        <div v-else class="flex items-center gap-3">
+          <NuxtLink
+            to="/auth/login"
+            class="hidden text-sm text-ink-secondary hover:text-ink sm:block"
+          >
             Giriş yap
           </NuxtLink>
           <NuxtLink
-            to="/"
+            to="/auth/register"
             class="rounded-pill bg-charcoal px-5 py-2.5 text-sm font-medium text-inverse transition-colors hover:bg-neutral-800"
           >
             Başla

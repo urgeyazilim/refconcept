@@ -79,6 +79,41 @@ it('creates an address and makes the first one the default', function (): void {
         ->and($response->json('data.is_default_billing'))->toBeTrue();
 });
 
+it('makes the first address the default even when the client sends the flags as false', function (): void {
+    // A browser form posts unchecked boxes as false rather than omitting them. An
+    // earlier implementation defaulted with `?? $isFirst`, which that payload skipped
+    // entirely — leaving the account with no default address and an empty selector at
+    // checkout. Found by the end-to-end suite, so it is pinned here.
+    $user = User::factory()->create();
+
+    $response = $this->actingAs($user)
+        ->postJson('/api/v1/addresses', addressPayload([
+            'is_default_shipping' => false,
+            'is_default_billing' => false,
+        ]))
+        ->assertCreated();
+
+    expect($response->json('data.is_default_shipping'))->toBeTrue()
+        ->and($response->json('data.is_default_billing'))->toBeTrue();
+});
+
+it('does not force defaults onto later addresses', function (): void {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)->postJson('/api/v1/addresses', addressPayload())->assertCreated();
+
+    $second = $this->actingAs($user)
+        ->postJson('/api/v1/addresses', addressPayload([
+            'label' => 'İş',
+            'is_default_shipping' => false,
+            'is_default_billing' => false,
+        ]))
+        ->assertCreated();
+
+    expect($second->json('data.is_default_shipping'))->toBeFalse()
+        ->and($second->json('data.is_default_billing'))->toBeFalse();
+});
+
 it('moves the default flag rather than allowing two defaults', function (): void {
     $user = User::factory()->create();
 

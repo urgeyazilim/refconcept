@@ -60,7 +60,7 @@ const pillars = [
 
         <div class="mt-9 flex flex-wrap items-center gap-3">
           <NuxtLink
-            to="/"
+            to="/auth/register"
             class="rounded-pill bg-charcoal px-7 py-3.5 text-sm font-medium text-inverse transition-colors hover:bg-neutral-800"
           >
             Projeni başlat
