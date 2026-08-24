@@ -13,18 +13,18 @@
 
   /* --- warm neutral ramp --- */
   --rc-neutral-0: #ffffff;
-  --rc-neutral-25: #fdfcfb;
-  --rc-neutral-50: #f9f7f5;
+  --rc-neutral-25: #fcfbfa;
+  --rc-neutral-50: #f8f6f3;
   --rc-neutral-100: #f5f3f0;
-  --rc-neutral-150: #efece7;
-  --rc-neutral-200: #e6e2db;
-  --rc-neutral-300: #d5cfc5;
-  --rc-neutral-400: #b9b2a6;
+  --rc-neutral-150: #eeebe6;
+  --rc-neutral-200: #e5e1da;
+  --rc-neutral-300: #d4cec5;
+  --rc-neutral-400: #b7b0a5;
   --rc-neutral-500: #a89e8e;
-  --rc-neutral-600: #857c6e;
-  --rc-neutral-700: #5f594f;
-  --rc-neutral-800: #3a3630;
-  --rc-neutral-900: #211f1c;
+  --rc-neutral-600: #8a8175;
+  --rc-neutral-700: #605a52;
+  --rc-neutral-800: #3b3733;
+  --rc-neutral-900: #22201e;
   --rc-neutral-950: #111111;
 
   /* --- gold accent ramp --- */
@@ -54,7 +54,7 @@
   --rc-info-strong: #3a3630;
 
   /* --- surfaces & text roles --- */
-  --rc-bg: var(--rc-neutral-0);
+  --rc-bg: var(--rc-neutral-50);
   --rc-bg-muted: var(--rc-neutral-100);
   --rc-surface: var(--rc-neutral-0);
   --rc-surface-raised: var(--rc-neutral-25);

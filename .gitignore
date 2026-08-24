@@ -37,6 +37,7 @@ apps/api/.phpunit.cache/
 coverage/
 playwright-report/
 test-results/
+.shots*/
 .playwright/
 
 # --- tooling ---

@@ -2,12 +2,17 @@
 /**
  * The one button in RefConcept.
  *
- * Dark CTA on light surfaces is the approved primary treatment (design spec §4);
- * every other variant is a step down in emphasis, never a different colour family.
+ * A dark call to action on a light surface is the approved primary treatment
+ * (design spec §4). Everything else is a step down in emphasis, never a different
+ * colour family.
+ *
+ * Radius is deliberately soft-rectangular rather than a full pill: the approved
+ * reference uses compact rounded rectangles for actions and reserves pills for status
+ * chips and filters, which keeps the two readable apart at a glance.
  */
 withDefaults(
   defineProps<{
-    variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
+    variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'inverse' | 'onDark'
     size?: 'sm' | 'md' | 'lg'
     type?: 'button' | 'submit' | 'reset'
     loading?: boolean
@@ -27,16 +32,20 @@ withDefaults(
 )
 
 const variants = {
-  primary: 'bg-charcoal text-inverse hover:bg-neutral-800',
+  primary: 'bg-charcoal text-white hover:bg-neutral-800',
   secondary: 'border border-line-strong text-ink hover:bg-bg-muted',
   ghost: 'text-ink-secondary hover:bg-bg-muted hover:text-ink',
   danger: 'bg-danger text-white hover:bg-danger-strong',
+
+  // For dark panels: a light button on charcoal, and its quieter outlined sibling.
+  inverse: 'bg-white text-ink hover:bg-neutral-100',
+  onDark: 'border border-neutral-700 text-white hover:bg-neutral-800',
 } as const
 
 const sizes = {
   sm: 'px-4 py-2 text-sm',
-  md: 'px-6 py-3 text-sm',
-  lg: 'px-7 py-3.5 text-base',
+  md: 'px-5 py-2.5 text-sm',
+  lg: 'px-7 py-3.5 text-[15px]',
 } as const
 </script>
 
@@ -46,7 +55,7 @@ const sizes = {
     :to="to"
     :type="to ? undefined : type"
     :disabled="to ? undefined : (disabled || loading)"
-    class="inline-flex items-center justify-center gap-2 rounded-pill font-medium transition-colors duration-[--rc-duration-fast] disabled:cursor-not-allowed disabled:opacity-50"
+    class="inline-flex items-center justify-center gap-2 rounded-sm font-medium transition-colors duration-[--rc-duration-fast] disabled:cursor-not-allowed disabled:opacity-50"
     :class="[variants[variant], sizes[size], block ? 'w-full' : '']"
   >
     <svg

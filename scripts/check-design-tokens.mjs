@@ -26,8 +26,8 @@ const IGNORED_DIRS = new Set(['node_modules', '.nuxt', '.output', 'dist', '.git'
 const ALLOWED_HEX = new Set(
   [
     '#111111', '#f5f3f0', '#dcce86', '#a89e8e', '#c9a86a',
-    '#ffffff', '#fdfcfb', '#f9f7f5', '#efece7', '#e6e2db', '#d5cfc5',
-    '#b9b2a6', '#857c6e', '#5f594f', '#3a3630', '#211f1c',
+    '#ffffff', '#fcfbfa', '#f8f6f3', '#eeebe6', '#e5e1da', '#d4cec5',
+    '#b7b0a5', '#8a8175', '#605a52', '#3b3733', '#22201e',
     '#fbf7ef', '#f4ebd8', '#e9d8b4', '#dcc48d', '#d0b478', '#b08f52',
     '#8c7141', '#665231', '#463823',
     '#eef2e6', '#6e8c4b', '#4e6634',

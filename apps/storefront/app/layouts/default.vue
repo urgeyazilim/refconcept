@@ -94,12 +94,7 @@ watch(() => route.fullPath, () => {
           >
             Giriş yap
           </NuxtLink>
-          <NuxtLink
-            to="/auth/register"
-            class="rounded-pill bg-charcoal px-5 py-2.5 text-sm font-medium text-inverse transition-colors hover:bg-neutral-800"
-          >
-            Başla
-          </NuxtLink>
+          <RcButton to="/auth/register" size="md">Başla</RcButton>
         </div>
       </div>
     </header>

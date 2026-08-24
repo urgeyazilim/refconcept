@@ -18,18 +18,18 @@ export const brand = {
 /** Warm neutral ramp derived from Charcoal → Warm Gray. Used for text, lines, surfaces. */
 export const neutral = {
   0: '#FFFFFF',
-  25: '#FDFCFB',
-  50: '#F9F7F5',
+  25: '#FCFBFA',
+  50: '#F8F6F3',
   100: '#F5F3F0',
-  150: '#EFECE7',
-  200: '#E6E2DB',
-  300: '#D5CFC5',
-  400: '#B9B2A6',
+  150: '#EEEBE6',
+  200: '#E5E1DA',
+  300: '#D4CEC5',
+  400: '#B7B0A5',
   500: '#A89E8E',
-  600: '#857C6E',
-  700: '#5F594F',
-  800: '#3A3630',
-  900: '#211F1C',
+  600: '#8A8175',
+  700: '#605A52',
+  800: '#3B3733',
+  900: '#22201E',
   950: '#111111',
 } as const
 
@@ -55,7 +55,7 @@ export const semantic = {
   success: { subtle: '#EEF2E6', base: '#6E8C4B', strong: '#4E6634', on: '#FFFFFF' },
   warning: { subtle: '#FBF1E2', base: '#C08A3E', strong: '#8E6427', on: '#FFFFFF' },
   danger: { subtle: '#F9EBE7', base: '#B4573F', strong: '#8A3F2C', on: '#FFFFFF' },
-  info: { subtle: '#F0EFEC', base: '#5F594F', strong: '#3A3630', on: '#FFFFFF' },
+  info: { subtle: '#F0EFEC', base: '#605A52', strong: '#3B3733', on: '#FFFFFF' },
 } as const
 
 /** Spacing rhythm: 4 / 8 / 12 / 16 / 24 / 32 / 48 / 64 (spec §7.1). */
