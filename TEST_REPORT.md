@@ -587,3 +587,127 @@ sharing           owner invites by e-mail -> the partner is refused until they a
 **PHASE 5 GATE: PASS** — proceed to Phase 6.
 
 `WEB_RELEASE_APPROVED`: **NOT GRANTED** (17 phases remaining).
+
+---
+
+## Phase 6 — AI gateway foundation
+
+**Date:** 2026-08-25
+**Scope:** the one place RefConcept talks to a model — providers, credentials, models,
+prices, prompt versions, routing, retries, fallback, cost ceilings, the kill switch, and
+the record of every attempt.
+
+### Gate criteria
+
+| # | Criterion | Method | Result |
+|---|---|---|---|
+| 1 | **Nothing in the application names a model** | code review + Pest | **PASS** — provider, model, prompt version, timeout, retries, credits and cost ceiling are all rows in `ai_task_routes` |
+| 2 | A task with no route fails without contacting a provider | Pest | **PASS** — and writes a failure row, so the omission is visible on the dashboard that exists to show it |
+| 3 | **The kill switch stops a task before anything is spent** | Pest + Playwright | **PASS** — refused at the gateway *and* at the dispatcher, so no queue of doomed jobs accumulates |
+| 4 | Pausing demands a written reason | Pest + Playwright | **PASS** — and the reason is shown on the console, not only in a log |
+| 5 | A transient failure is retried on the same model | Pest | **PASS** — three attempts, every one recorded |
+| 6 | A failure that would repeat identically is not retried | Pest | **PASS** — one call for an invalid request, not three |
+| 7 | **A persistent failure falls back to a second provider** | Pest | **PASS** — the fallback attempt is marked as one |
+| 8 | A safety refusal goes straight to the fallback | Pest | **PASS** — not retryable, but worth a different provider; providers draw the line in different places |
+| 9 | A failure the fallback would share does not reach it | Pest | **PASS** |
+| 10 | **The cost ceiling is checked before the call** | Pest | **PASS** — zero provider calls when the estimate exceeds it |
+| 11 | Cost comes from the rate table, never from the provider | Pest | **PASS** — a provider cannot misreport what we believe we spent |
+| 12 | A rate may only start after the one it replaces | Pest + CHECK constraint | **PASS** — refused by the endpoint with a sentence, before the constraint has to |
+| 13 | A price change closes the old row rather than editing it | Pest | **PASS** — a March job keeps reporting March's price |
+| 14 | Failed attempts are still charged for | Pest | **PASS** — a provider that read the input and then refused still billed for reading it |
+| 15 | Credits are charged once per job, not per attempt | Pest | **PASS** — a customer must not pay three times for a flaky provider |
+| 16 | **Structured output is validated before it is called a success** | Pest | **PASS** — prose where an object was asked for is a retryable failure, not a mystery two steps downstream |
+| 17 | A missing key is named in the failure | Pest | **PASS** |
+| 18 | A wrong type is caught | Pest | **PASS** — including a decimal string where minor units were expected |
+| 19 | A fenced code block is unwrapped, not rejected | Pest | **PASS** — the model answered correctly and added decoration |
+| 20 | The routed prompt version is what gets sent | Pest | **PASS** — rendered with the job's own input |
+| 21 | **An image URL never enters the prompt text** | Pest | **PASS** — it travels as an attachment; a URL in a prompt is a URL a model can repeat back |
+| 22 | The API key is absent from the call fingerprint | Pest | **PASS** |
+| 23 | **A published prompt version cannot be edited** | Pest + PostgreSQL trigger | **PASS** — refused through the API *and* against the table directly |
+| 24 | Version numbers are assigned under a lock | Pest | **PASS** — two people saving at once cannot collide |
+| 25 | Publishing retires the previous version and repoints the route | Pest | **PASS** — half of either would be a change nothing uses |
+| 26 | A prompt can be previewed without calling anything | Pest | **PASS** — and names the variables the input did not supply |
+| 27 | **An API key is stored encrypted and never returned** | Pest | **PASS** — not in the response, not readable in the table, not in the audit log |
+| 28 | Only one credential is active at a time | Pest | **PASS** — two would be an ambiguity discovered while reading a bill |
+| 29 | A driver with no adapter is refused on the form | Pest | **PASS** |
+| 30 | An image task cannot be pointed at a text model | Pest | **PASS** — caught where the person who made the change is looking |
+| 31 | One route per task, however many times it is saved | Pest | **PASS** |
+| 32 | **A customer's job payload is theirs alone** | Pest | **PASS** — owner 200, stranger 403, **super admin 403** |
+| 33 | The super-admin bypass excludes `AiJob` | Pest | **PASS** — a job is a second door into the room projects already lock |
+| 34 | Platform staff keep the operational view | Pest | **PASS** — task, model, timings, cost, failure kind; no input, no output, no photograph |
+| 35 | The customer view carries no provider or model detail | Pest | **PASS** — of no use to a customer and of considerable use to a competitor |
+| 36 | A repeated idempotency key returns the same job | Pest | **PASS** — a double tap must not be charged twice |
+| 37 | Concurrency is limited per user, not globally | Pest | **PASS** — one person's queue does not lock anybody else out |
+| 38 | An adapter that throws does not strand a job | Pest | **PASS** — recorded as a provider error rather than leaving a spinner forever |
+| 39 | A crashed worker does not leave a job at `running` | code review (`RunAiJob::failed`) | **PASS** |
+| 40 | The queue does not retry on top of the gateway | code review (`$tries = 1`) | **PASS** — nine calls to a provider that is rate-limiting us, all charged, is the failure this avoids |
+| 41 | Provider failures are classified, not thrown | Pest | **PASS** — 429 retryable, 400 not, a 400 that is a content-policy refusal treated as a refusal |
+| 42 | **Google's 200-with-`finishReason: SAFETY` is caught** | Pest | **PASS** — the trap that would otherwise report an empty answer as a success |
+| 43 | A blocked prompt with no candidates is caught | Pest | **PASS** |
+| 44 | The Google key goes in a header, not the query string | Pest | **PASS** — query strings reach access logs; headers do not |
+| 45 | An inline image is re-hosted, not linked | Pest | **PASS** — the provider's URL expires within the hour |
+| 46 | Continuous integration spends nothing | Pest | **PASS** — `FakeAiProvider` is deterministic and scriptable; no test reaches a network |
+| 47 | Every task ships routed and prompted out of the box | seeder + Pest | **PASS** — twelve routes, twelve published prompts; falls back to the simulator when no key is on file |
+| 48 | Backend suite | `php artisan test` | **PASS** — 413 tests, 1250 assertions |
+| 49 | Static analysis / style | PHPStan L6, Pint | **PASS** |
+| 50 | Frontend gates | ESLint, vue-tsc, token guard | **PASS** |
+| 51 | **End-to-end** | Playwright, live stack | **PASS** — 20 journeys |
+
+### End-to-end journeys added
+
+```text
+ai console   operator signs in -> AI control room lists all twelve tasks ->
+             pauses "Destek asistanı" with a written reason ->
+             the reason appears on the screen ->
+             the API reports the route as paused ->
+             resumes it
+
+ai console   a customer's token gets 403 from every /admin/ai endpoint
+```
+
+### What this phase deliberately did not do
+
+- **No endpoint starts a job.** Jobs are created by the feature that needs one — a design
+  version, a room analysis — because only that feature knows what to do with the answer.
+  A generic "run this prompt" endpoint would let anybody with an account spend the
+  provider budget on prompts of their own choosing.
+- **No credits are debited.** That is Phase 7. A half-written version of it here would
+  mean two places debiting a balance by the time the real one exists. `credit_cost` is
+  recorded on the job; nothing spends it yet.
+- **`AiTask` is an enum, not a table** — a documented deviation from the specification's
+  table list. A task type is code: each value has a prompt written for it, a schema the
+  application parses and a call site that reads the answer. A row in a table would add
+  none of those. What genuinely belongs in the database is the *routing*, and that is
+  exactly what `ai_task_routes` holds.
+
+### Honest limitations
+
+- **The adapters are tested against a faked HTTP layer.** These tests assert that *given*
+  a response of a certain shape the adapter classifies it correctly — not that OpenAI or
+  Google still produce that shape. The second is not knowable from a test suite, and a
+  recorded fixture pretending otherwise would only assert that it still matches itself.
+  The mitigation is that a misclassification degrades rather than breaks: an unrecognised
+  failure falls into `ProviderError`, which is retryable and warrants a fallback.
+- **Cost estimation is deliberately pessimistic and therefore approximate.** Input tokens
+  are estimated at four characters each, which is the usual approximation for Latin text
+  and is wrong for Turkish in the safe direction. A ceiling that occasionally refuses a
+  call it could have afforded is a better failure than one that lets a runaway through.
+- **`GeneratedImageStore` writes to the public bucket.** A render is something a customer
+  shares with a partner and a contractor; the room photograph that produced it is not, and
+  stays private. Keys are random, so a render is not discoverable without its link — but
+  it is not access-controlled either, and that is a deliberate trade rather than an
+  oversight.
+
+### Notes
+
+- The Google key is read from `GOOGLE_AI_API_KEY` in `apps/api/.env` (gitignored), placed
+  on file by the seeder, and encrypted at rest by the model's cast. With no key present
+  the seeder routes every task to the local simulator and says so, so a fresh clone boots
+  with a working — if artificial — AI path rather than twelve broken features.
+- The key used during development should be rotated before anything ships.
+
+### Verdict
+
+**PHASE 6 GATE: PASS** — proceed to Phase 7.
+
+`WEB_RELEASE_APPROVED`: **NOT GRANTED** (16 phases remaining).

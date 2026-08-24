@@ -44,6 +44,14 @@
 | P5-T005 | 5 | BACKEND_AGENT | P5-T002 | DONE | sharing tests | Hashed one-time invitations bound to the invited address, revocable and recorded |
 | P5-T006 | 5 | STOREFRONT_AGENT | P5-T002..004 | DONE | storefront E2E | Projects, rooms, photograph gallery, measurements, constraints and the version tree |
 | P5-T007 | 5 | INDEPENDENT_TEST_AGENT | P5-T001..006 | DONE | Phase 5 gate | 353 backend tests, 18 E2E journeys (see TEST_REPORT.md) |
+| P6-T001 | 6 | ARCHITECT_AGENT | P5-T007 | DONE | schema review | Providers, credentials, models, cost rates, prompt versions, task routes, jobs, requests, usage, failures |
+| P6-T002 | 6 | BACKEND_AGENT | P6-T001 | DONE | gateway tests | One gateway owns routing, retries, fallback, cost ceilings and recording; adapters only translate |
+| P6-T003 | 6 | BACKEND_AGENT | P6-T002 | DONE | adapter tests | OpenAI and Google adapters, plus a deterministic fake so CI never spends money |
+| P6-T004 | 6 | BACKEND_AGENT | P6-T002 | DONE | prompt tests | Versioned prompts, immutable once published (database trigger), rendered previews |
+| P6-T005 | 6 | BACKEND_AGENT | P6-T002 | DONE | privacy tests | Job payloads are the customer’s alone; AiJob excluded from the super-admin bypass |
+| P6-T006 | 6 | BACKEND_AGENT | P6-T002 | DONE | console tests | Routing, key rotation, cost rates and the kill switch, all audited |
+| P6-T007 | 6 | ADMIN_PANEL_AGENT | P6-T006 | DONE | admin E2E | AI control room: routes, spend, failures and the kill switch |
+| P6-T008 | 6 | INDEPENDENT_TEST_AGENT | P6-T001..007 | DONE | Phase 6 gate | 413 backend tests, 20 E2E journeys (see TEST_REPORT.md) |
 
 ## Scope notes
 

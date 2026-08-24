@@ -37,4 +37,17 @@ return [
         ],
     ],
 
+    /*
+     * Model providers. Read by the AI gateway's seeder to place a key on file; the
+     * gateway itself always reads the credential from the database, so a key rotated
+     * from the admin console takes effect without a deploy or a restart.
+     */
+    'google_ai' => [
+        'key' => env('GOOGLE_AI_API_KEY'),
+    ],
+
+    'openai' => [
+        'key' => env('OPENAI_API_KEY'),
+    ],
+
 ];

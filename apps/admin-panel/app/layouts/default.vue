@@ -9,6 +9,7 @@ const nav = [
   { label: 'Başvurular', to: '/', icon: 'M8 4h8a1 1 0 0 1 1 1v15l-5-3-5 3V5a1 1 0 0 1 1-1Zm2 5h4m-4 4h4' },
   { label: 'Satıcılar', to: '/sellers', icon: 'M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20M10 11.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z' },
   { label: 'Ürünler', to: '/products', icon: 'M20.5 7.5 12 3 3.5 7.5m17 0L12 12m8.5-4.5v9L12 21m0-9L3.5 7.5m8.5 4.5v9' },
+  { label: 'AI', to: '/ai', icon: 'M12 3v2m0 14v2m9-9h-2M5 12H3m14.5-6.5-1.4 1.4M7.9 16.1l-1.4 1.4m11.6 0-1.4-1.4M7.9 7.9 6.5 6.5M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z' },
 ]
 </script>
 

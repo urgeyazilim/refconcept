@@ -2,6 +2,11 @@
 
 declare(strict_types=1);
 
+use App\Domains\Ai\Enums\AiTask;
+use App\Domains\Ai\Models\AiJob;
+use App\Domains\Ai\Models\AiModel;
+use App\Domains\Ai\Models\AiProvider;
+use App\Domains\Ai\Models\AiTaskRoute;
 use App\Domains\Identity\Enums\SystemRole;
 use App\Domains\Identity\Models\Role;
 use App\Domains\Identity\Models\User;
@@ -97,5 +102,100 @@ if (! function_exists('makeApprovedSeller')) {
         ]);
 
         return [$seller, $owner];
+    }
+}
+
+if (! function_exists('makeAiRoute')) {
+    /**
+     * Builds a complete, working route for one task.
+     *
+     * Written out rather than reached for through the seeder on purpose. The seeder
+     * points routes at whichever provider has a key on file, which makes it a fine way
+     * to start a development database and a terrible one to build a test on: the same
+     * assertions would exercise a different provider depending on whose `.env` ran them.
+     *
+     * Everything here goes through the fake provider, and the numbers — the cost
+     * ceiling, the attempt count — are arguments so that a test about a cost ceiling
+     * says what ceiling it means.
+     *
+     * @param  array<string, mixed>  $attributes  overrides for the route row
+     * @return array{0: AiTaskRoute, 1: AiModel}
+     */
+    function makeAiRoute(AiTask $task, array $attributes = [], bool $withFallback = false): array
+    {
+        $provider = AiProvider::query()->firstOrCreate(
+            ['code' => 'fake'],
+            ['name' => 'Test sağlayıcı', 'driver' => 'fake', 'is_active' => true],
+        );
+
+        // A credential, because a real adapter refuses without one and a test route that
+        // only works for the fake would hide that the moment somebody swaps the driver.
+        $provider->credentials()->firstOrCreate(
+            ['label' => 'test'],
+            ['secret_encrypted' => 'test-key-0000000000', 'secret_hint' => '0000', 'is_active' => true],
+        );
+
+        $modality = $task->modality();
+
+        $primary = AiModel::query()->firstOrCreate(
+            ['provider_id' => $provider->getKey(), 'code' => 'fake-primary-'.$modality->value],
+            [
+                'name' => 'Fake birincil',
+                'modality' => $modality,
+                'max_output_tokens' => 1_000,
+                'supports_structured_output' => true,
+                'supports_image_input' => true,
+                'is_active' => true,
+            ],
+        );
+
+        $fallback = null;
+
+        if ($withFallback) {
+            $fallback = AiModel::query()->firstOrCreate(
+                ['provider_id' => $provider->getKey(), 'code' => 'fake-fallback-'.$modality->value],
+                [
+                    'name' => 'Fake yedek',
+                    'modality' => $modality,
+                    'max_output_tokens' => 1_000,
+                    'supports_structured_output' => true,
+                    'supports_image_input' => true,
+                    'is_active' => true,
+                ],
+            );
+        }
+
+        $route = AiTaskRoute::query()->updateOrCreate(
+            ['task' => $task->value],
+            [
+                'primary_model_id' => $primary->getKey(),
+                'fallback_model_id' => $fallback?->getKey(),
+                'timeout_seconds' => 30,
+                'max_attempts' => 2,
+                'credit_cost' => 1,
+                'max_cost_micros' => 500_000,
+                'max_concurrency' => 5,
+                'is_active' => true,
+                ...$attributes,
+            ],
+        );
+
+        return [$route, $primary];
+    }
+}
+
+if (! function_exists('makeAiJob')) {
+    /**
+     * A queued job, ready for the gateway to pick up.
+     *
+     * @param  array<string, mixed>  $input
+     */
+    function makeAiJob(AiTask $task, array $input = [], ?User $user = null): AiJob
+    {
+        return AiJob::query()->create([
+            'task' => $task,
+            'input' => $input === [] ? ['prompt' => 'Test istemi'] : $input,
+            'user_id' => $user?->getKey(),
+        ]);
     }
 }

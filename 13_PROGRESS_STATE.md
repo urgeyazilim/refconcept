@@ -12,19 +12,19 @@ WEB
 IN_PROGRESS
 
 ## Current Phase
-PHASE_6
+PHASE_7
 
 ## Current Task
-Not started — Phase 5 is closed and Phase 6 has not begun.
+Not started — Phase 6 is closed and Phase 7 has not begun.
 
 ## Last Completed Task
-P5-T007 — Phase 5 gate verified end to end (see `TEST_REPORT.md`).
+P6-T008 — Phase 6 gate verified end to end (see `TEST_REPORT.md`).
 
 ## Next Task
-Phase 6 — AI Gateway Foundation, shipping its own UI slice alongside its API.
+Phase 7 — Credit Economy, shipping its own UI slice alongside its API.
 
 ## Test State
-PASS — 353 backend tests / 1045 assertions, 18 Playwright E2E journeys across all three
+PASS — 413 backend tests / 1250 assertions, 20 Playwright E2E journeys across all three
 apps, PHPStan level 6, Pint, ESLint, vue-tsc and the design token guard all clean.
 
 ## Release State
@@ -339,6 +339,88 @@ remembering not to.
 under a row lock and never reused, only a finished version may be branched from, and a
 finished version never changes. Generation itself is Phase 6 and Phase 8; the shape
 they fill in is real and fully tested now.
+
+### PHASE_6_AI_GATEWAY_FOUNDATION — DONE (2026-08-25)
+
+```text
+UPDATED_AT: 2026-08-25
+COMMIT_OR_SNAPSHOT: phase-6-ai-gateway
+PHASE: 6 — AI Gateway Foundation
+TASK: P6-T001 .. P6-T008
+STATUS: DONE
+FILES_CHANGED:
+  apps/api/database/migrations/0001_01_01_000016_create_ai_gateway_tables.php
+  apps/api/app/Domains/Ai/Enums/**            (AiTask, AiModality, AiJobStatus, AiFailureKind)
+  apps/api/app/Domains/Ai/Models/**           (AiProvider, AiProviderCredential, AiModel,
+    AiCostRate, PromptTemplate, PromptVersion, AiTaskRoute, AiJob, AiRequest, AiUsage, AiFailure)
+  apps/api/app/Domains/Ai/Contracts/AiProvider.php
+  apps/api/app/Domains/Ai/Services/**         (AiGateway, AiCall, AiResult, AiJobDispatcher,
+    PromptRenderer, StructuredOutputValidator, ProviderRegistry, GeneratedImageStore)
+  apps/api/app/Domains/Ai/Providers/**        (FakeAiProvider, OpenAiProvider, GoogleAiProvider)
+  apps/api/app/Domains/Ai/Jobs/RunAiJob.php
+  apps/api/app/Domains/Ai/Exceptions/AiJobRefused.php
+  apps/api/app/Domains/Ai/Policies/**         (AiTaskRoutePolicy, AiJobPolicy)
+  apps/api/app/Domains/Ai/Http/**             (AiJobController, AdminAiConfigController,
+    AdminAiPromptController, AdminAiObservabilityController, AiJobResource)
+  apps/api/app/Domains/Ai/Tests/**            (AiGatewayTest, AiAdminConsoleTest,
+    AiJobPrivacyTest, ProviderAdapterTest)
+  apps/api/tests/Unit/Ai/StructuredOutputValidatorTest.php
+  apps/api/app/Providers/AppServiceProvider.php  (AI policies; AiJob excluded from the bypass)
+  apps/api/routes/domains/ai.php, routes/api.php
+  apps/api/config/services.php, apps/api/.env.example
+  apps/api/database/seeders/{AiGatewaySeeder,DatabaseSeeder}.php
+  apps/api/tests/Helpers.php                  (makeAiRoute, makeAiJob)
+  apps/admin-panel/app/pages/ai/index.vue, apps/admin-panel/app/layouts/default.vue
+  tests/e2e/ai-console.spec.ts, tests/e2e/support/accounts.ts
+MIGRATIONS: 11 tables — ai_providers, ai_provider_credentials, ai_models, ai_cost_rates,
+  prompt_templates, prompt_versions (immutability trigger), ai_task_routes (one active
+  per task, kill switch), ai_jobs, ai_requests, ai_usage, ai_failures
+TESTS_RUN: php artisan test · phpstan level 6 · pint --test · eslint · vue-tsc
+  · check-design-tokens.mjs · playwright (full suite)
+TEST_RESULT: PASS (413 backend tests / 1250 assertions; 20 E2E journeys)
+BLOCKERS: none
+NEXT_ACTION: Phase 7 — Credit Economy
+```
+
+**Nothing in the application names a model.** Which provider, which model, which prompt
+version, what timeout, how many retries, what a call may cost and whether the feature
+runs at all are all rows in `ai_task_routes`. Moving a task onto a cheaper model, or
+taking it off the site entirely, is configuration — no deploy, and it is audited.
+
+**All the policy is in one place.** Adapters translate one call into one answer and
+classify what came back; retries, fallback, cost ceilings, recording and structured-output
+validation are the gateway's. An adapter that also retried would be a second home for the
+retry rule, and the second home is always the one that drifts.
+
+**Failures are values, not exceptions.** A timeout, a rate limit and a safety refusal
+mean three different things: retry the same model, retry the same model, and go straight
+to a different provider. An exception would carry the message and throw away the
+classification that decides all three. A safety refusal warrants a fallback and not a
+retry — providers draw the line in different places.
+
+**The cost ceiling is checked before the call.** An estimate that passes and then
+overshoots has protected nothing. Prices live in `ai_cost_rates` with a validity window,
+so a job run in March keeps reporting March's price; a rate may only start after the one
+it replaces, refused by the endpoint before the CHECK constraint has to.
+
+**A published prompt cannot be edited.** A PostgreSQL trigger refuses the UPDATE, and the
+test asserts it both through the API and directly against the table. Improving a prompt
+means version 2, which leaves version 1 readable beside every job that ran against it.
+
+**An AI job is a second door into a customer's home,** so it is excluded from the
+super-admin bypass alongside projects and rooms. Platform staff get the operational view —
+task, model, timings, cost, failure kind, the rendered prompt — and never the payload.
+Asserted in both directions: an admin reading a customer's job gets a 403, and the same
+admin can still see that renders are failing this morning.
+
+**An image URL never enters the prompt text.** It travels as an attachment, because a URL
+pasted into a prompt is a URL a model can repeat back inside an answer somebody else
+reads — and this one points at a photograph of somebody's living room.
+
+**Continuous integration never spends a lira.** `FakeAiProvider` answers deterministically
+from the call fingerprint and can be scripted to produce any failure on demand, so the
+retry, fallback, cost-cap and kill-switch paths are provoked exactly rather than hoped
+about.
 
 ---
 

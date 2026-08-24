@@ -238,6 +238,70 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a demo product page claimed six in stock while the stock screen was empty. Opening
   stock is now booked as a receipt through the ledger.
 
+### Added — Phase 6 (AI gateway foundation)
+
+- **One gateway between RefConcept and every model.** Which provider, which model, which
+  prompt version, what timeout, how many retries, what a call may cost, how many a
+  customer may run at once, and whether the feature runs at all are rows in
+  `ai_task_routes`. Nothing in the application writes a model name in a string literal,
+  so moving a task onto a cheaper model — or off the site entirely — is configuration
+  rather than a deploy, and every change is audited.
+- **All the policy in one place.** Adapters translate one call into one answer and
+  classify what came back; retries, fallback, cost ceilings, recording and structured
+  output validation belong to the gateway. An adapter that also retried would be a second
+  home for the retry rule, and the second home is always the one that drifts.
+- **Failures are values, not exceptions.** A timeout, a rate limit, a malformed answer and
+  a safety refusal mean four different things, and the classification is what decides
+  whether to try again, try somebody else, or stop. A safety refusal is not retried — the
+  same provider will refuse identically — but it *does* warrant a fallback, because
+  providers draw the line in different places.
+- **Cost is checked before the call, not after.** An estimate that passes a ceiling and
+  then overshoots it has protected nothing. Prices live in `ai_cost_rates` in **micros**
+  (millionths of a currency unit, the one documented exception to minor units, because a
+  thousand tokens can cost a fraction of a cent) with a validity window, so a job run in
+  March keeps reporting March's price however often the rate has moved since.
+- **Prompts are versioned and, once published, immutable** — enforced by a PostgreSQL
+  trigger rather than by convention, because one UPDATE would silently rewrite the history
+  of every job that ever ran against that wording. Improving a prompt means the next
+  version, which leaves the old one readable beside the jobs that used it. Version numbers
+  are assigned under a row lock, and a version can be previewed against sample input
+  without calling anything.
+- **Every attempt is recorded** — `ai_requests`, `ai_usage`, `ai_failures` — including the
+  ones that failed, because a provider that read the input and then refused still charged
+  for reading it. Credits are counted once per job, never per attempt: a customer must not
+  pay three times because a provider was flaky.
+- **A kill switch per task**, with a mandatory written reason that appears on the console
+  rather than only in a log. It refuses at the dispatcher as well as at the gateway, so a
+  paused feature does not quietly accumulate a queue of jobs that will all fail.
+- **A customer's AI job is as private as the room it describes.** Its input holds the link
+  to a photograph of their home and whatever they typed about how they live in it, so
+  `AiJob` joins projects and rooms in the exclusion from the super-admin bypass. Platform
+  staff get the operational view — task, model, timings, cost, failure kind, the rendered
+  prompt — and never the payload. An image URL travels as an attachment and never as
+  prompt text, because a URL in a prompt is a URL a model can repeat back into an answer
+  somebody else reads.
+- **Adapters for Google Generative AI and OpenAI**, each translating that provider's own
+  vocabulary of failure into ours. Two traps are handled explicitly: Google reports a
+  safety refusal as an ordinary `200` with a `finishReason`, and OpenAI reports both a
+  genuine bad request and a content-policy refusal as a `400`. The Google key travels in a
+  header rather than the query string, because query strings reach access logs.
+- **A deterministic fake provider** so continuous integration exercises the whole AI path
+  on every commit without spending a lira. Its answers derive from the call's fingerprint,
+  and it can be scripted to produce any failure on demand — which is how the retry,
+  fallback, cost-cap and kill-switch paths are provoked exactly rather than hoped about.
+- **Idempotent dispatch and per-user concurrency limits.** A customer who taps "render"
+  twice, or a client retrying a request whose response it never saw, gets the same job
+  back rather than a second charge. The limit is per user per task, so one person queueing
+  forty renders neither delays nor locks out anybody else.
+- **The AI control room** in the admin panel: every task with its model, prompt version,
+  credit cost, success rate, average latency and spend over a chosen window; the failure
+  breakdown; provider keys shown as a four-character hint and never in full; and the pause
+  and resume buttons. Tasks with no route are highlighted, because an unrouted task is a
+  feature that fails the first time a customer touches it and is silent until then.
+- **A seeder that ships all twelve tasks routed and prompted**, so the gateway works the
+  moment the database exists. With no provider key on file it routes everything to the
+  local simulator and says so, rather than shipping twelve features that fail on first use.
+
 ### Added — Phase 5 (Projects, rooms and design versions)
 
 - **Projects**: a customer's home, or the part of it they are working on. Owner,

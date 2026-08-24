@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Domains\Ai\Models\AiJob;
+use App\Domains\Ai\Models\AiTaskRoute;
+use App\Domains\Ai\Policies\AiJobPolicy;
+use App\Domains\Ai\Policies\AiTaskRoutePolicy;
 use App\Domains\Identity\Actions\AuthenticateUser;
 use App\Domains\Identity\Models\PersonalAccessToken;
 use App\Domains\Identity\Models\User;
@@ -142,6 +146,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Seller::class, SellerPolicy::class);
         Gate::policy(Product::class, ProductPolicy::class);
         Gate::policy(Project::class, ProjectPolicy::class);
+        Gate::policy(AiTaskRoute::class, AiTaskRoutePolicy::class);
+        Gate::policy(AiJob::class, AiJobPolicy::class);
 
         /*
          * Super admin bypass. Returning null (not false) lets every other check run
@@ -184,6 +190,18 @@ class AppServiceProvider extends ServiceProvider
             RoomMedia::class,
             Design::class,
             DesignVersion::class,
+
+            /*
+             * An AI job carries the same material one step further along: its input
+             * holds the link to the photograph and whatever the customer typed about
+             * how they live. A bypass here would have made the exclusion above
+             * decorative, because the job is a second door into the same room.
+             *
+             * Platform staff keep the operational view — timings, costs, failure
+             * kinds — which AiJobPolicy::viewOperations() grants through the ordinary
+             * permission table rather than through this bypass.
+             */
+            AiJob::class,
         ];
 
         foreach ($arguments as $argument) {

@@ -21,6 +21,10 @@ final class DatabaseSeeder extends Seeder
         $this->call(SellerAgreementsSeeder::class);
         $this->call(CatalogTaxonomySeeder::class);
 
+        // Routes, models and prompts for all twelve AI tasks. Not demo data: a task
+        // with no route is a feature that fails the first time somebody uses it.
+        $this->call(AiGatewaySeeder::class);
+
         if (app()->environment('production')) {
             $this->command?->info('Production environment: demo data skipped.');
 

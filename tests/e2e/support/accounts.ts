@@ -111,3 +111,22 @@ export async function grantOperatorRole(email: string): Promise<void> {
     'php', 'artisan', 'refconcept:grant-role', email, 'operator',
   ])
 }
+
+/**
+ * Grants a platform role through the console command.
+ *
+ * There is no HTTP endpoint that grants a role, deliberately — the ability to make
+ * somebody a super admin is not something a compromised session should have. The test
+ * therefore takes the same route an administrator would, which also keeps this suite
+ * honest about the fact that the endpoint does not exist.
+ */
+export async function grantPlatformRole(email: string, role: string): Promise<void> {
+  const { execFile } = await import('node:child_process')
+  const { promisify } = await import('node:util')
+  const run = promisify(execFile)
+
+  await run('docker', [
+    'compose', 'exec', '-T', 'api',
+    'php', 'artisan', 'refconcept:grant-role', email, role,
+  ])
+}
