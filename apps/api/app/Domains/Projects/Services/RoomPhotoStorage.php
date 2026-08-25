@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Domains\Projects\Services;
 
+use App\Domains\Ai\Services\GeneratedImageStore;
 use App\Domains\Identity\Models\User;
 use App\Domains\Projects\Models\DesignAsset;
 use App\Domains\Projects\Models\Room;
 use App\Domains\Projects\Models\RoomMedia;
+use finfo;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -136,6 +139,122 @@ final class RoomPhotoStorage
             'height' => $height,
             'checksum_sha256' => hash_file('sha256', $sourcePath) ?: '',
         ]);
+    }
+
+    /**
+     * Takes an image the gateway already staged on the private disk.
+     *
+     * The ordinary path. An adapter that received inline bytes wrote them here rather
+     * than putting a megabyte of base64 into a database column, so all that is left is a
+     * copy within one filesystem — no network, and no moment where a render of somebody's
+     * home is readable by anybody holding a link.
+     *
+     * The staged copy is discarded afterwards. It is scratch space, and a scratch space
+     * nobody empties becomes an archive of every render ever produced.
+     *
+     * @throws RuntimeException when the staged image has gone
+     */
+    public function storeRenderFromRef(
+        string $designVersionId,
+        string $reference,
+        string $type = 'render',
+    ): DesignAsset {
+        $store = app(GeneratedImageStore::class);
+
+        $stream = $store->read($reference);
+
+        if ($stream === null) {
+            throw new RuntimeException('Üretilen görsel bulunamadı.');
+        }
+
+        $temporary = tempnam(sys_get_temp_dir(), 'rc-render-');
+
+        if ($temporary === false) {
+            fclose($stream);
+
+            throw new RuntimeException('Geçici dosya oluşturulamadı.');
+        }
+
+        try {
+            $handle = fopen($temporary, 'wb');
+
+            if ($handle === false) {
+                throw new RuntimeException('Geçici dosya yazılamadı.');
+            }
+
+            stream_copy_to_stream($stream, $handle);
+            fclose($handle);
+
+            $asset = $this->storeRender(
+                $designVersionId,
+                $temporary,
+                $store->mimeTypeOf($reference),
+                $type,
+            );
+
+            $store->discard($reference);
+
+            return $asset;
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+
+            // Removed whether or not the store succeeded: a failed render must not leave
+            // a picture of somebody's home in the system temp directory.
+            @unlink($temporary);
+        }
+    }
+
+    /**
+     * Fetches an image a provider produced and stores it as a design asset.
+     *
+     * Downloaded rather than linked, and that is the whole point. A provider's URL
+     * expires within the hour and lives on somebody else's infrastructure; a design a
+     * customer opens next month must not depend on either. The bytes land on the private
+     * disk beside the photograph that produced them, because a render of somebody's
+     * living room is every bit as revealing as the original.
+     *
+     * The MIME type is read from the decoded bytes, never from the response header. A
+     * remote system's claim about what it sent is an input, not a fact.
+     *
+     * @throws RuntimeException when the image cannot be fetched or is not an image
+     */
+    public function storeRenderFromUrl(
+        string $designVersionId,
+        string $url,
+        string $type = 'render',
+    ): DesignAsset {
+        $response = Http::timeout(60)->get($url);
+
+        if ($response->failed()) {
+            throw new RuntimeException(sprintf(
+                'Üretilen görsel indirilemedi (HTTP %d).',
+                $response->status(),
+            ));
+        }
+
+        $temporary = tempnam(sys_get_temp_dir(), 'rc-render-');
+
+        if ($temporary === false) {
+            throw new RuntimeException('Geçici dosya oluşturulamadı.');
+        }
+
+        try {
+            file_put_contents($temporary, $response->body());
+
+            $mime = (new finfo(FILEINFO_MIME_TYPE))->file($temporary);
+
+            if ($mime === false || ! str_starts_with($mime, 'image/')) {
+                throw new RuntimeException('Sağlayıcıdan gelen dosya bir görsel değil.');
+            }
+
+            return $this->storeRender($designVersionId, $temporary, $mime, $type);
+        } finally {
+            // Removed whether or not the store succeeded: a failed render must not leave
+            // a picture of somebody's home in the system temp directory.
+            @unlink($temporary);
+        }
     }
 
     /**

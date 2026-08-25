@@ -163,32 +163,36 @@ final class OpenAiProvider implements AiProvider
         }
 
         $urls = [];
+        $refs = [];
 
         /** @var array<int, array<string, mixed>> $items */
         $items = (array) data_get($response->json() ?? [], 'data', []);
 
         foreach ($items as $item) {
             /*
-             * Inline bytes are re-hosted rather than passed through, because the URL
-             * form this provider offers expires within the hour and a design a customer
-             * opens next month must not depend on a link that lived for one.
+             * Inline bytes are written to the private disk here and carried onward as a
+             * reference. They cannot travel in the job row — a megabyte of base64 in a
+             * JSON column is a table nobody can read — and they must not be staged
+             * publicly, because what passes through is a picture of somebody's home.
              */
             if (isset($item['b64_json']) && is_string($item['b64_json'])) {
-                $stored = $this->images->putBase64($item['b64_json']);
+                $stashed = $this->images->stashBase64($item['b64_json']);
 
-                if ($stored !== null) {
-                    $urls[] = $stored;
+                if ($stashed !== null) {
+                    $refs[] = $stashed;
                 }
 
                 continue;
             }
 
+            // The URL form this provider offers expires within the hour, so it is passed
+            // on for the caller to fetch promptly rather than stored as if it were durable.
             if (isset($item['url']) && is_string($item['url'])) {
                 $urls[] = $item['url'];
             }
         }
 
-        if ($urls === []) {
+        if ($urls === [] && $refs === []) {
             return AiResult::failure(
                 AiFailureKind::MalformedOutput,
                 'OpenAI yanıtında kullanılabilir bir görsel yok.',
@@ -198,7 +202,8 @@ final class OpenAiProvider implements AiProvider
 
         return AiResult::success(
             imageUrls: $urls,
-            imageCount: count($urls),
+            imageRefs: $refs,
+            imageCount: count($urls) + count($refs),
             httpStatus: $response->status(),
         );
     }

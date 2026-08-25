@@ -145,9 +145,9 @@ describe('OpenAI adapter', function (): void {
             ->and($result->inputTokens)->toBe(90);
     });
 
-    it('re-hosts an image the provider returned inline', function (): void {
-        Storage::fake('s3-public');
-        config()->set('refconcept.storage.public_disk', 's3-public');
+    it('stages an inline image privately rather than on the open bucket', function (): void {
+        Storage::fake('s3');
+        config()->set('refconcept.storage.private_disk', 's3');
 
         Http::fake([
             '*/images/generations' => Http::response([
@@ -160,13 +160,17 @@ describe('OpenAI adapter', function (): void {
         );
 
         /*
-         * Stored rather than passed through. The URL form this provider offers expires
-         * within the hour, and a design a customer opens next month must not depend on a
-         * link that lived for one.
+         * On the private disk, and carried onward as a path rather than a URL. The bytes
+         * cannot travel in the job row, and staging a render of somebody's living room on
+         * an anonymously-readable bucket is not made acceptable by the key being random.
+         *
+         * The pipeline copies it to the design's own storage and discards the staged copy.
          */
         expect($result->successful)->toBeTrue()
             ->and($result->imageCount)->toBe(1)
-            ->and(Storage::disk('s3-public')->allFiles())->toHaveCount(1);
+            ->and($result->imageUrls)->toBe([])
+            ->and($result->imageRefs[0] ?? '')->toStartWith('ai-staging/')
+            ->and(Storage::disk('s3')->allFiles())->toHaveCount(1);
     });
 
     it('refuses to call anything without a key', function (): void {
@@ -250,9 +254,9 @@ describe('Google adapter', function (): void {
         expect($result->failureKind)->toBe(AiFailureKind::SafetyRefusal);
     });
 
-    it('stores an inline image and reports it as one', function (): void {
-        Storage::fake('s3-public');
-        config()->set('refconcept.storage.public_disk', 's3-public');
+    it('stores an inline image privately and reports it as one', function (): void {
+        Storage::fake('s3');
+        config()->set('refconcept.storage.private_disk', 's3');
 
         Http::fake(['*' => Http::response([
             'candidates' => [['content' => ['parts' => [
@@ -266,7 +270,7 @@ describe('Google adapter', function (): void {
 
         expect($result->successful)->toBeTrue()
             ->and($result->imageCount)->toBe(1)
-            ->and($result->imageUrls[0] ?? '')->toContain('ai-renders/');
+            ->and($result->imageRefs[0] ?? '')->toStartWith('ai-staging/');
     });
 
     it('reports an empty response as malformed rather than as an empty answer', function (): void {

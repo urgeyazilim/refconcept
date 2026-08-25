@@ -45,18 +45,25 @@ final class AiJobDispatcher
     ) {}
 
     /**
-     * Queues one job, or hands back the one this key already made.
+     * Accepts one job, or hands back the one this key already made.
+     *
+     * Everything a job needs before anything runs it: the route resolved, the kill switch
+     * checked, the concurrency limit applied and the credits held. What it deliberately
+     * does not do is decide *where* it runs — {@see dispatch()} sends it to a worker and
+     * {@see runInline()} runs it here.
      *
      * @param  array<string, mixed>  $input
+     * @param  int|null  $creditCostOverride  when the cost is borne somewhere else
      *
      * @throws AiJobRefused when the task is unavailable or the caller is at their limit
      */
-    public function dispatch(
+    public function accept(
         AiTask $task,
         array $input,
         ?User $user = null,
         ?Model $subject = null,
         ?string $idempotencyKey = null,
+        ?int $creditCostOverride = null,
     ): AiJob {
         if ($idempotencyKey !== null) {
             $existing = AiJob::query()
@@ -102,7 +109,13 @@ final class AiJobDispatcher
 
         $job->forceFill([
             'route_id' => $route->getKey(),
-            'credit_cost' => $route->credit_cost,
+            /*
+             * The route says what this task costs; a caller may say it is billed
+             * elsewhere. The design pipeline uses that: a customer pays for a design
+             * version, not for the three model calls inside one, so the steps run at
+             * zero and the version holds the total.
+             */
+            'credit_cost' => $creditCostOverride ?? $route->credit_cost,
             'status' => AiJobStatus::Queued,
         ])->save();
 
@@ -126,6 +139,32 @@ final class AiJobDispatcher
             throw $e;
         }
 
+        return $job;
+    }
+
+    /**
+     * Accepts a job and hands it to a worker.
+     *
+     * @param  array<string, mixed>  $input
+     *
+     * @throws AiJobRefused
+     */
+    public function dispatch(
+        AiTask $task,
+        array $input,
+        ?User $user = null,
+        ?Model $subject = null,
+        ?string $idempotencyKey = null,
+        ?int $creditCostOverride = null,
+    ): AiJob {
+        $job = $this->accept($task, $input, $user, $subject, $idempotencyKey, $creditCostOverride);
+
+        if ($job->status->isTerminal()) {
+            // An idempotency key found a job that has already run. Queueing it again
+            // would re-run finished work and charge for it a second time.
+            return $job;
+        }
+
         /*
          * Dispatched after the transaction commits, not inside it. A worker is a
          * separate process and can pick the job up within milliseconds — before an
@@ -137,6 +176,35 @@ final class AiJobDispatcher
         });
 
         return $job;
+    }
+
+    /**
+     * Accepts a job and runs it here and now, never touching the queue.
+     *
+     * For a caller that is already on a worker and needs the answer before it can take
+     * its next step — the design pipeline, which has to read the room before it can plan
+     * the layout. Queueing a nested job and then waiting for it would be a worker waiting
+     * on a worker, and under a synchronous queue driver it would run the job twice.
+     *
+     * @param  array<string, mixed>  $input
+     *
+     * @throws AiJobRefused
+     */
+    public function runInline(
+        AiTask $task,
+        array $input,
+        ?User $user = null,
+        ?Model $subject = null,
+        ?string $idempotencyKey = null,
+        ?int $creditCostOverride = null,
+    ): AiJob {
+        $job = $this->accept($task, $input, $user, $subject, $idempotencyKey, $creditCostOverride);
+
+        if ($job->status->isTerminal()) {
+            return $job;
+        }
+
+        return $this->runNow($job);
     }
 
     /**

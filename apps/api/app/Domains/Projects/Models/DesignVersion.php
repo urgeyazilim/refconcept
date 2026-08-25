@@ -6,11 +6,13 @@ namespace App\Domains\Projects\Models;
 
 use App\Domains\Identity\Models\User;
 use App\Domains\Projects\Enums\DesignVersionStatus;
+use App\Domains\Projects\Enums\RenderQuality;
 use App\Support\Concerns\HasUuidV7;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -32,9 +34,11 @@ use Illuminate\Support\Carbon;
  * @property DesignVersionStatus $status
  * @property string|null $style_code
  * @property string|null $style_prompt
+ * @property RenderQuality $render_quality
  * @property string|null $user_prompt
  * @property string|null $ai_job_id
  * @property int $credit_cost
+ * @property string|null $credit_reservation_id
  * @property string|null $failure_reason
  * @property string|null $created_by
  * @property Carbon|null $completed_at
@@ -50,6 +54,7 @@ class DesignVersion extends Model
     /** @var array<string, mixed> */
     protected $attributes = [
         'status' => 'pending',
+        'render_quality' => 'draft',
         'credit_cost' => 0,
     ];
 
@@ -60,6 +65,7 @@ class DesignVersion extends Model
         'version_number',
         'style_code',
         'style_prompt',
+        'render_quality',
         'user_prompt',
         'credit_cost',
         'created_by',
@@ -72,6 +78,7 @@ class DesignVersion extends Model
     {
         return [
             'status' => DesignVersionStatus::class,
+            'render_quality' => RenderQuality::class,
             'version_number' => 'integer',
             'credit_cost' => 'integer',
             'completed_at' => 'datetime',
@@ -100,6 +107,26 @@ class DesignVersion extends Model
     public function assets(): HasMany
     {
         return $this->hasMany(DesignAsset::class);
+    }
+
+    /**
+     * The layout this version was drawn from.
+     *
+     * @return HasOne<DesignPlan, $this>
+     */
+    public function plan(): HasOne
+    {
+        return $this->hasOne(DesignPlan::class, 'design_version_id');
+    }
+
+    /**
+     * Progress, oldest first.
+     *
+     * @return HasMany<DesignVersionEvent, $this>
+     */
+    public function events(): HasMany
+    {
+        return $this->hasMany(DesignVersionEvent::class, 'design_version_id')->orderBy('created_at');
     }
 
     /** @return BelongsTo<User, $this> */

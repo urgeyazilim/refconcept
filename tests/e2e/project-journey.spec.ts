@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
-import type { Page } from '@playwright/test'
-import { createVerifiedAccount, DEFAULT_PASSWORD } from './support/accounts'
+import type { APIRequestContext, Page } from '@playwright/test'
+import { createVerifiedAccount, DEFAULT_PASSWORD, grantPlatformRole } from './support/accounts'
 import { pngBuffer } from './support/sellers'
 import { fillStable } from './support/forms'
 import { gotoInteractive, waitForHydration } from './support/hydration'
@@ -33,6 +33,31 @@ async function signIn(page: Page, email: string): Promise<void> {
 
   // The storefront lands a signed-in customer on their account, not the home page.
   await expect(page).toHaveURL(/\/account$/)
+}
+
+/**
+ * Puts credits in a customer's wallet, the way a member of staff would.
+ *
+ * There is no endpoint a customer can call to give themselves credits — deliberately —
+ * so the test takes the operator's route, which also keeps it honest about the fact that
+ * the only other way in is a purchase.
+ */
+async function grantCredits(request: APIRequestContext, customerToken: string): Promise<void> {
+  const operator = await createVerifiedAccount('project-credit-operator')
+  await grantPlatformRole(operator.email, 'super-admin')
+
+  const me = await request.get(`${API}/api/v1/auth/me`, {
+    headers: { Authorization: `Bearer ${customerToken}`, Accept: 'application/json' },
+  })
+
+  const customerId = (await me.json()).data.id
+
+  const granted = await request.post(`${API}/api/v1/admin/credits/wallets/${customerId}/adjust`, {
+    headers: { Authorization: `Bearer ${operator.token}`, Accept: 'application/json' },
+    data: { delta: 40, reason: 'E2E proje yolculuğu için tasarım bakiyesi.' },
+  })
+
+  expect(granted.ok()).toBeTruthy()
 }
 
 test.describe('project journey', () => {
@@ -107,16 +132,34 @@ test.describe('project journey', () => {
 
     await expect(page.getByText(/Pencere · 180 cm/)).toBeVisible()
 
-    // --- a design ---------------------------------------------------------------------
+    /*
+     * --- a design ---------------------------------------------------------------------
+     *
+     * A design costs credits from Phase 7, and this customer has never bought any. Told
+     * before anything runs rather than queued and failed, with the two numbers somebody
+     * needs to act on — which is the behaviour worth asserting here, because this journey
+     * is about a customer arriving with nothing.
+     */
     await page.getByRole('button', { name: 'Tasarım oluştur' }).click()
     await page.locator('#prompt').fill('İskandinav, açık renkler')
+    await page.getByRole('button', { name: 'Başlat' }).click()
+
+    await expect(page.getByText(/kredi gerektiriyor/)).toBeVisible()
+
+    // Funded through the console an operator would use, and then it goes through.
+    await grantCredits(request, account.token)
+
     await page.getByRole('button', { name: 'Başlat' }).click()
 
     await expect(page.getByRole('heading', { name: /Salon tasarımı/ })).toBeVisible()
     await expect(page.getByText('v1')).toBeVisible()
 
-    // Honest about where the product is: the tree works, the engine is Phase 8.
-    await expect(page.getByText(/Tasarım motoru henüz devrede değil/)).toBeVisible()
+    /*
+     * The engine is live from Phase 8, and this suite deliberately does not wait for it —
+     * design generation has its own journey in design-generation.spec.ts, which repoints
+     * the AI routes at the simulator first. What matters here is that the version exists
+     * and the tree renders.
+     */
 
     // --- the API agrees ----------------------------------------------------------------
     const detail = await request.get(`${API}/api/v1/projects/${projectId}`, {

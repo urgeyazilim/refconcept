@@ -59,6 +59,13 @@
 | P7-T005 | 7 | BACKEND_AGENT | P7-T002 | DONE | promotion tests | Locked budget, per-user limits, one identical refusal for every unusable code |
 | P7-T006 | 7 | BACKEND_AGENT | P7-T002 | DONE | AI integration tests | Hold on queue, consume on success, release on failure — a failed render costs nothing |
 | P7-T007 | 7 | INDEPENDENT_TEST_AGENT | P7-T001..006 | DONE | Phase 7 gate | 473 backend tests, 24 E2E journeys (see TEST_REPORT.md) |
+| P8-T001 | 8 | ARCHITECT_AGENT | P7-T007 | DONE | schema review | Room analyses cached per photograph, immutable plans, append-only progress events |
+| P8-T002 | 8 | BACKEND_AGENT | P8-T001 | DONE | analysis tests | One reading per photograph, reused across designs, confidence in basis points |
+| P8-T003 | 8 | BACKEND_AGENT | P8-T001 | DONE | planning tests | Structured plan validated against the room; what does not fit is recorded, not dropped |
+| P8-T004 | 8 | BACKEND_AGENT | P8-T002..003 | DONE | pipeline tests | Analyse, plan, render, save — with progress a customer can watch |
+| P8-T005 | 8 | BACKEND_AGENT | P8-T004 | DONE | credit tests | One hold for the whole version; every failure path returns it in full |
+| P8-T006 | 8 | STOREFRONT_AGENT | P8-T004 | DONE | storefront E2E | Live progress, render quality, the plan beside the image |
+| P8-T007 | 8 | INDEPENDENT_TEST_AGENT | P8-T001..006 | DONE | Phase 8 gate | 493 backend tests, 26 E2E journeys (see TEST_REPORT.md) |
 
 ## Scope notes
 

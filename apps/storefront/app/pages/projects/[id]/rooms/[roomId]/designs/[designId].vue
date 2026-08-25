@@ -9,9 +9,10 @@ import type { DesignDetail, DesignTreeNode } from '@refconcept/ui/types'
  * the version they liked and take a different direction from it. A list of five images
  * in date order tells you nothing about how they relate.
  *
- * Generation itself arrives with the AI gateway in Phase 6 and the design engine in
- * Phase 8. Until then a version is honestly reported as queued rather than dressed up
- * with a fake progress bar.
+ * Progress is polled while anything is running, and the bar is driven by which stage the
+ * engine last announced rather than by elapsed time. A bar fed by real durations jumps
+ * about as providers vary; one fed by stage boundaries moves predictably, which is what
+ * somebody watching a render for fifty seconds actually wants from it.
  */
 definePageMeta({ middleware: ['auth', 'verified'], layout: 'account' })
 
@@ -30,6 +31,22 @@ const working = ref(false)
 
 const branchingFrom = ref<DesignTreeNode | null>(null)
 const branchPrompt = ref('')
+const branchQuality = ref<'draft' | 'premium'>('draft')
+
+interface VersionProgress {
+  status: string
+  is_finished: boolean
+  stage: string | null
+  stage_label: string | null
+  progress_bps: number
+  failure_reason: string | null
+  events: Array<{ stage: string, label: string, status: string, message: string, at: string }>
+}
+
+const progress = ref<Record<string, VersionProgress>>({})
+const pollFailures = ref(0)
+const pollStalled = ref(false)
+let poller: ReturnType<typeof setInterval> | undefined
 
 const base = `/api/v1/projects/${projectId}/rooms/${roomId}/designs/${designId}`
 
@@ -53,6 +70,77 @@ await load()
 
 useHead(() => ({ title: design.value?.name ?? 'Tasarım' }))
 
+/** Versions the engine is still working on. */
+const running = computed(() => rows.value
+  .filter(row => ['pending', 'generating'].includes(row.node.status))
+  .map(row => row.node.id))
+
+/**
+ * Asks after each unfinished version.
+ *
+ * One request per running version rather than one for the whole design: the endpoint is
+ * deliberately small, and a customer normally has exactly one render in flight.
+ *
+ * A single failed poll is ignored — a dropped request while a laptop wakes up is not
+ * worth an error message. A run of them is not ignored: polling stops and the page says
+ * so, because a spinner that has quietly stopped asking is worse than one that admits it.
+ */
+async function pollProgress() {
+  const ids = running.value
+
+  if (ids.length === 0) return
+
+  const answers = await Promise.all(ids.map(id =>
+    api.get<{ data: VersionProgress }>(`${base}/versions/${id}/progress`)
+      .then(response => [id, response.data] as const)
+      .catch(() => null),
+  ))
+
+  if (answers.every(answer => answer === null)) {
+    pollFailures.value += 1
+
+    if (pollFailures.value >= 5) {
+      stopPolling()
+      pollStalled.value = true
+    }
+
+    return
+  }
+
+  pollFailures.value = 0
+
+  let anyFinished = false
+
+  for (const answer of answers) {
+    if (answer === null) continue
+
+    progress.value[answer[0]] = answer[1]
+
+    if (answer[1].is_finished) anyFinished = true
+  }
+
+  // A finished version changes the tree — its status, its image, possibly which one is
+  // current — so the page is reloaded rather than patched in place.
+  if (anyFinished) await load()
+}
+
+function stopPolling() {
+  if (poller) {
+    clearInterval(poller)
+    poller = undefined
+  }
+}
+
+onMounted(() => {
+  void pollProgress()
+
+  // Two seconds: fast enough that a stage change feels immediate, slow enough that a
+  // minute-long render is thirty requests rather than three hundred.
+  poller = setInterval(() => { void pollProgress() }, 2_000)
+})
+
+onBeforeUnmount(stopPolling)
+
 /** Flattens the tree for rendering while keeping each node's depth. */
 function flatten(nodes: DesignTreeNode[], depth = 0): Array<{ node: DesignTreeNode, depth: number }> {
   return nodes.flatMap(node => [
@@ -73,6 +161,7 @@ async function branch() {
     await api.post(`${base}/branch`, {
       parent_version_id: branchingFrom.value.id,
       user_prompt: branchPrompt.value,
+      render_quality: branchQuality.value,
     })
 
     branchingFrom.value = null
@@ -141,11 +230,11 @@ const statusTone: Record<string, string> = {
 
       <RcAlert v-if="actionError" tone="danger">{{ actionError }}</RcAlert>
 
-      <RcAlert v-if="design.status === 'generating'" tone="info">
-        Tasarım motoru henüz devrede değil — sürümleriniz sırada bekliyor ve motor
-        açıldığında işlenecek. Bu ekranda ağacın kendisi ve sürümler arasında gezinme
-        şimdiden çalışıyor.
+      <RcAlert v-if="pollStalled" tone="warning">
+        Durum bilgisi alınamıyor. Tasarımınız arka planda çalışmaya devam ediyor;
+        sayfayı yenileyerek son durumu görebilirsiniz.
       </RcAlert>
+
 
       <!-- The tree -->
       <section class="rc-card p-6 sm:p-8">
@@ -183,6 +272,28 @@ const statusTone: Record<string, string> = {
                 <p class="mt-1 text-xs text-muted">
                   {{ row.node.created_at ? new Date(row.node.created_at).toLocaleString('tr-TR') : '' }}
                   <span v-if="row.node.credit_cost > 0"> · {{ row.node.credit_cost }} kredi</span>
+                </p>
+
+                <!--
+                  Progress, while there is any. The bar is driven by which stage the engine
+                  last announced rather than by elapsed time, so it moves predictably
+                  instead of jumping about as providers vary.
+                -->
+                <div v-if="progress[row.node.id] && !progress[row.node.id]!.is_finished" class="mt-3 max-w-sm">
+                  <div class="flex items-center justify-between gap-3 text-xs text-ink-secondary">
+                    <span>{{ progress[row.node.id]!.stage_label ?? 'Hazırlanıyor' }}</span>
+                    <span class="tabular-nums text-muted">%{{ Math.round(progress[row.node.id]!.progress_bps / 100) }}</span>
+                  </div>
+                  <div class="mt-1.5 h-1 overflow-hidden rounded-full bg-bg-muted">
+                    <div
+                      class="h-full bg-charcoal transition-all duration-500"
+                      :style="{ width: `${progress[row.node.id]!.progress_bps / 100}%` }"
+                    />
+                  </div>
+                </div>
+
+                <p v-if="row.node.status === 'failed' && row.node.failure_reason" class="mt-2 max-w-[60ch] text-xs text-danger">
+                  {{ row.node.failure_reason }}
                 </p>
               </div>
 
@@ -225,6 +336,23 @@ const statusTone: Record<string, string> = {
                 placeholder="Örn. Kanepeyi daha koyu yap, halıyı değiştir"
                 class="w-full rounded-sm border border-line bg-surface px-3 py-2 text-sm"
               />
+              <fieldset class="flex flex-wrap gap-3">
+                <legend class="sr-only">Görsel kalitesi</legend>
+                <!--
+                  Two levels rather than a slider: the difference somebody can actually
+                  perceive is "quick look" versus "the one I show people", and a third
+                  option in between would be a choice nobody can make confidently.
+                -->
+                <label class="flex items-center gap-2 text-sm">
+                  <input v-model="branchQuality" type="radio" value="draft" class="accent-charcoal">
+                  Hızlı önizleme
+                </label>
+                <label class="flex items-center gap-2 text-sm">
+                  <input v-model="branchQuality" type="radio" value="premium" class="accent-charcoal">
+                  Yüksek kalite
+                </label>
+              </fieldset>
+
               <div class="flex items-center gap-3">
                 <RcButton
                   type="submit"

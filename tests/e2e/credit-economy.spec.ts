@@ -45,10 +45,16 @@ async function signIn(page: Page, base: string, email: string): Promise<void> {
 test.describe.configure({ timeout: 300_000 })
 
 test.describe('credit economy', () => {
-  test('a customer redeems a code, sees the balance move and cannot claim it twice', async ({ page, request }) => {
-    const admin = await createVerifiedAccount('credit-admin')
-    await grantPlatformRole(admin.email, 'super-admin')
+  // One operator for the whole file, for the reason given in design-generation.spec.ts:
+  // every avoidable registration is a minute of the shared rate limit.
+  let admin: Awaited<ReturnType<typeof createVerifiedAccount>>
 
+  test.beforeAll(async () => {
+    admin = await createVerifiedAccount('credit-admin')
+    await grantPlatformRole(admin.email, 'super-admin')
+  })
+
+  test('a customer redeems a code, sees the balance move and cannot claim it twice', async ({ page, request }) => {
     const code = `E2E${Date.now()}`
 
     // The campaign is created through the API a member of staff would use, not inserted
@@ -112,9 +118,6 @@ test.describe('credit economy', () => {
   })
 
   test('staff correct a balance with a reason and the customer sees why', async ({ page, request }) => {
-    const admin = await createVerifiedAccount('credit-fixer')
-    await grantPlatformRole(admin.email, 'super-admin')
-
     const customer = await createVerifiedAccount('credit-fixed')
 
     const headers = { Authorization: `Bearer ${admin.token}`, Accept: 'application/json' }
@@ -157,9 +160,6 @@ test.describe('credit economy', () => {
   })
 
   test('an operator sees packages and can close one', async ({ page }) => {
-    const admin = await createVerifiedAccount('credit-operator')
-    await grantPlatformRole(admin.email, 'super-admin')
-
     await signIn(page, ADMIN, admin.email)
     await gotoInteractive(page, `${ADMIN}/credits`)
 

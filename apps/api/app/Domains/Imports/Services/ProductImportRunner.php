@@ -16,6 +16,7 @@ use App\Domains\Pricing\Services\PriceBook;
 use App\Domains\Products\Models\Product;
 use App\Domains\Products\Models\ProductSku;
 use App\Domains\Sellers\Models\Seller;
+use App\Support\Text\TurkishText;
 use App\Support\ValueObjects\Money;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -675,13 +676,9 @@ final class ProductImportRunner
     /** Case- and accent-insensitive key for matching a seller's spelling. */
     private function key(string $value): string
     {
-        $value = mb_strtolower(trim($value), 'UTF-8');
-
-        $value = strtr($value, [
-            'ı' => 'i', 'ğ' => 'g', 'ü' => 'u', 'ş' => 's', 'ö' => 'o', 'ç' => 'c',
-        ]);
-
-        return trim(preg_replace('/[^a-z0-9]+/u', '-', $value) ?? $value, '-');
+        // One folding rule for the whole system: see TurkishText for why the order of
+        // lowercasing and folding is not interchangeable.
+        return app(TurkishText::class)->fold($value, '-');
     }
 
     private function uniqueSlug(string $name): string

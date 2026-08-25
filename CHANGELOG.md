@@ -238,6 +238,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a demo product page claimed six in stock while the stock screen was empty. Opening
   stock is now booked as a receipt through the ledger.
 
+### Added — Phase 8 (AI room analysis and design generation)
+
+- **The design engine**: a room photograph becomes a finished render in three model calls —
+  read the room, decide the layout, draw it — with the arithmetic in between that stops the
+  layout asking for furniture the room cannot take.
+- **A room is read once.** The analysis is cached against the photograph rather than the
+  design, because a room does not change when somebody tries a second style. The second
+  render of the same room reuses the first reading, and the quote drops the step so nobody
+  is billed for a call that will not happen.
+- **The plan is kept, and it is what the shopping list will be built from.** "A sofa up to
+  2200mm against the south wall, in oak and cream" is a product search; the picture is not.
+  A plan is immutable once written, by a database trigger, because it is the row that
+  answers "why is there a sideboard there".
+- **Placements are checked against the room.** A model will cheerfully put a 2600mm sofa
+  against a 2200mm wall, and the render will look fine because an image is not to scale —
+  the customer discovers the problem when a delivery van arrives. What does not fit is
+  recorded with its reason rather than silently dropped, because a plan that quietly loses a
+  piece of furniture produces an image and a shopping list that disagree.
+- **One charge for a design, not one per step.** Credits are held when the version is
+  created and settled when it finishes; the three model calls underneath run at zero
+  customer cost. Every failure — a provider refusal, a render with no image, a dead worker —
+  returns the whole hold.
+- **Progress a customer can watch.** Each step writes an append-only event, the page polls,
+  and the bar is driven by which stage the engine announced rather than by elapsed time. A
+  bar fed by real durations jumps about as providers vary; one fed by stage boundaries moves
+  predictably. Polling that keeps failing stops and says so, rather than leaving a spinner
+  that has quietly given up.
+- **Two render qualities** — a quick preview and the one you show people — chosen by the
+  customer, priced from the AI routes, and stored on the version so a route repointed next
+  month cannot rewrite what a version already in the tree was.
+- **Provider images are staged on the private disk.** They cannot travel in a job row, and
+  they must not sit on an anonymously-readable bucket: what passes through is a render of
+  the inside of somebody's home. The pipeline copies the bytes to the design's own storage
+  and discards the staged copy.
+- **Turkish case-folding, in one place.** `mb_strtolower('İ')` produces an i followed by a
+  combining dot rather than a plain i — so a spreadsheet column headed "İndirimli fiyat"
+  folded to "i ndirimli fiyat", matched no alias, and the discount prices silently never
+  arrived. `TurkishText` folds before lowercasing and is now used by every place that
+  compares Turkish text.
+- **Running out of credits is a 422 and a paused feature is a 503**, rendered once at the
+  application boundary rather than caught in each controller — so a new caller cannot forget
+  to, and the customer gets the two numbers they need.
+
 ### Added — Phase 7 (Credit economy)
 
 - **An immutable credit ledger, and a wallet that is only ever a snapshot of it.** Every

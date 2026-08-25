@@ -12,19 +12,19 @@ WEB
 IN_PROGRESS
 
 ## Current Phase
-PHASE_8
+PHASE_9
 
 ## Current Task
-Not started — Phase 7 is closed and Phase 8 has not begun.
+Not started — Phase 8 is closed and Phase 9 has not begun.
 
 ## Last Completed Task
-P7-T007 — Phase 7 gate verified end to end (see `TEST_REPORT.md`).
+P8-T007 — Phase 8 gate verified end to end (see `TEST_REPORT.md`).
 
 ## Next Task
-Phase 8 — AI Room & Design, shipping its own UI slice alongside its API.
+Phase 9 — Product Matching, shipping its own UI slice alongside its API.
 
 ## Test State
-PASS — 473 backend tests / 1455 assertions, 24 Playwright E2E journeys across all three
+PASS — 493 backend tests / 1528 assertions, 26 Playwright E2E journeys across all three
 apps, PHPStan level 6, Pint, ESLint, vue-tsc and the design token guard all clean.
 
 ## Release State
@@ -508,6 +508,75 @@ willing to type a different address each time.
 account it belonged to, which is also what tax retention requires. Erasing an account
 therefore means anonymising the person and keeping the money — an explicit, audited
 procedure that belongs to Phase 21 rather than a side effect of a foreign key.
+
+### PHASE_8_AI_ROOM_AND_DESIGN — DONE (2026-08-25)
+
+```text
+UPDATED_AT: 2026-08-25
+COMMIT_OR_SNAPSHOT: phase-8-design-engine
+PHASE: 8 — AI Room & Design
+TASK: P8-T001 .. P8-T007
+STATUS: DONE
+FILES_CHANGED:
+  apps/api/database/migrations/0001_01_01_000018_create_design_generation_tables.php
+  apps/api/app/Domains/Projects/Enums/{GenerationStage,RenderQuality}.php
+  apps/api/app/Domains/Projects/Models/{RoomAnalysis,DesignPlan,DesignVersionEvent}.php
+  apps/api/app/Domains/Projects/Services/{DesignGenerationPipeline,RoomAnalyser,
+    PlacementValidator,DesignVersionLauncher}.php
+  apps/api/app/Domains/Projects/Jobs/GenerateDesignVersion.php
+  apps/api/app/Domains/Projects/Exceptions/DesignGenerationFailed.php
+  apps/api/app/Domains/Projects/Services/RoomPhotoStorage.php  (storeRenderFromRef/Url)
+  apps/api/app/Domains/Projects/Http/Controllers/DesignController.php  (+ progress)
+  apps/api/app/Domains/Ai/Services/{AiJobDispatcher,AiResult,GeneratedImageStore,
+    AiGateway,StructuredOutputValidator}.php
+  apps/api/app/Domains/Ai/Providers/{OpenAiProvider,GoogleAiProvider,FakeAiProvider}.php
+  apps/api/app/Support/Text/TurkishText.php   (+ the three import services)
+  apps/api/bootstrap/app.php                  (credit and gateway refusals rendered)
+  apps/api/app/Domains/Projects/Tests/DesignGenerationTest.php
+  apps/api/tests/Unit/Support/TurkishTextTest.php
+  apps/storefront/app/pages/projects/[id]/rooms/[roomId]/designs/[designId].vue
+  packages/ui/src/runtime/types.ts
+  tests/e2e/design-generation.spec.ts, tests/e2e/project-journey.spec.ts
+MIGRATIONS: 3 tables — room_analyses (one current per room), design_plans (immutable by
+  trigger), design_version_events; design_versions gains render_quality and
+  credit_reservation_id
+TESTS_RUN: php artisan test · phpstan level 6 · pint --test · eslint · vue-tsc
+  · check-design-tokens.mjs · playwright (full suite)
+TEST_RESULT: PASS (493 backend tests / 1528 assertions; 26 E2E journeys)
+BLOCKERS: none
+NEXT_ACTION: Phase 9 — Product Matching
+```
+
+**Three steps, one charge.** Read the room, decide the layout, draw it — and the credits
+are held once when the version is created and settled once when it finishes. Charging per
+step would mean somebody paying for an analysis and a plan and then getting nothing
+because the render failed, which is indefensible however defensible each charge looks.
+
+**The analysis is cached against the photograph, not the design.** A room does not change
+because somebody tried a second style, so the second render reuses the first reading — one
+fewer provider call, and the quote drops the step so nobody is billed for a call that will
+not happen.
+
+**The model is good at style and bad at arithmetic.** `PlacementValidator` refuses a
+2600mm sofa against a 2200mm wall and records why. The render would have looked fine — an
+image is not to scale — while the shopping list contained furniture that does not fit
+through the customer's living room.
+
+**Every step announces itself.** A render takes the better part of a minute and a spinner
+that says nothing is indistinguishable from one that has hung. `design_version_events` is
+append-only, carries nothing sensitive, and turns "it is slow" into "it is slow at the
+render step".
+
+**Provider images are staged privately, not publicly.** The first form of
+`GeneratedImageStore` wrote to the public bucket; that was wrong, and it is fixed here.
+What passes through it is a render of the inside of somebody's home, and a random key does
+not make an anonymously-readable copy acceptable. Images now land on the private disk, the
+pipeline copies what it wants and discards the staged copy.
+
+**A real Turkish bug, found and fixed.** `mb_strtolower('İ')` produces an i plus a
+combining dot, not a plain i. A spreadsheet column headed "İndirimli fiyat" folded to
+"i ndirimli fiyat", matched no alias, and the discount prices silently never arrived.
+`TurkishText` now folds before lowercasing, in one place, with tests.
 
 ---
 

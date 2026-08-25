@@ -840,3 +840,116 @@ credit economy   an operator closes a package and reopens it
 **PHASE 7 GATE: PASS** — proceed to Phase 8.
 
 `WEB_RELEASE_APPROVED`: **NOT GRANTED** (15 phases remaining).
+
+---
+
+## Phase 8 — AI room analysis and design generation
+
+**Date:** 2026-08-25
+**Scope:** the pipeline that turns a customer's photograph into a design — analysis,
+planning, validation, rendering, progress, and what happens to the credits when any of it
+fails.
+
+### Gate criteria (04_WEB_PHASE_PLAN.md: AI E2E with fake + sandbox contract tests)
+
+| # | Criterion | Method | Result |
+|---|---|---|---|
+| 1 | **A photograph becomes a finished render** | Pest + Playwright | **PASS** — analysis, plan and image, with the design pointing at the new version |
+| 2 | Each step leaves something worth keeping | Pest | **PASS** — `room_analyses`, `design_plans`, `design_assets` |
+| 3 | **One charge for the whole version** | Pest + Playwright | **PASS** — 1 + 1 + 2 credits held once and consumed once; the three AI jobs cost the customer nothing of their own |
+| 4 | A room is read once and reused | Pest | **PASS** — the second design of the same room skips the analysis and is quoted 3 rather than 4 |
+| 5 | The skip is visible rather than silent | Pest | **PASS** — recorded as a `skipped` event |
+| 6 | A premium render is priced above a draft | Pest | **PASS** — both read from the routes, so an operator reprices without a deploy |
+| 7 | **Every stage announces itself** | Pest + Playwright | **PASS** — queued, analysis, plan, render, save, done |
+| 8 | Progress is polled and the page updates | Playwright | **PASS** |
+| 9 | Polling that keeps failing stops and says so | code review | **PASS** — five consecutive failures, then a message rather than a silent spinner |
+| 10 | **A placement the room cannot take is refused** | Pest | **PASS** — a 6000mm sideboard in a 5000mm room |
+| 11 | The refusal is recorded, not dropped | Pest | **PASS** — with its reason, and the count reaches the customer |
+| 12 | A room with no measurements refuses nothing | code review | **PASS** — arithmetic on a guessed number would reject real furniture |
+| 13 | Blocking constraints reduce the usable wall | code review | **PASS** — a window that must stay visible takes its width plus clearance |
+| 14 | **A failed step returns every credit** | Pest + Playwright | **PASS** — provider refusal, no-image render, cancel and a dead worker all release the hold |
+| 15 | A render that produced no image fails honestly | Pest | **PASS** — distinct from a provider failure: the call worked and the money was spent |
+| 16 | **The provider's own words never reach the customer** | Pest | **PASS** — "gpt-image-1 in org-abc123" becomes "İstek sınırı" |
+| 17 | A paused task is explained, not reported as a crash | Pest | **PASS** — the gateway's refusal is passed through |
+| 18 | A customer who cannot pay is told before anything runs | Pest + Playwright | **PASS** — 422 with the two numbers, and the version says why |
+| 19 | A duplicate queue delivery does not run twice | Pest | **PASS** — no second set of provider calls, no second charge |
+| 20 | A refinement branches from a finished version | Pest | **PASS** — and is quoted without the analysis |
+| 21 | A failed refinement leaves the earlier version alone | Pest | **PASS** — a design with a good image does not look broken |
+| 22 | **The plan is immutable once written** | PostgreSQL trigger | **PASS** |
+| 23 | A room has exactly one current analysis | partial unique index | **PASS** |
+| 24 | Confidence is stored in basis points | Pest | **PASS** — and clamped, because a model answering 1.4 has not become more certain than certain |
+| 25 | **Provider images are staged privately** | Pest | **PASS** — `ai-staging/` on the private disk, never the public bucket |
+| 26 | The staged copy is discarded after it is claimed | code review | **PASS** — scratch space nobody empties becomes an archive of every render |
+| 27 | The image is copied without an HTTP round trip | code review | **PASS** — a reference is preferred over a URL |
+| 28 | An event message longer than the column is truncated | code review | **PASS** — an event is a status line, not a log, and a failed insert loses the very event explaining the failure |
+| 29 | **Turkish folding does not mangle İ** | Pest | **PASS** — a real defect: "İndirimli fiyat" matched no column alias, and discount prices silently never arrived |
+| 30 | Backend suite | `php artisan test` | **PASS** — 493 tests, 1528 assertions |
+| 31 | Static analysis / style | PHPStan L6, Pint | **PASS** |
+| 32 | Frontend gates | ESLint, vue-tsc, token guard | **PASS** |
+| 33 | **End-to-end** | Playwright, live stack | **PASS** — 26 journeys |
+
+### End-to-end journeys added
+
+```text
+design generation   an operator repoints the three pipeline tasks at the simulator ->
+                    a customer is funded -> a room with a photograph ->
+                    the design is started in the browser -> progress runs to "Hazır" ->
+                    the API confirms a plan, an image and one charge ->
+                    the statement shows "Tasarım üretimi"
+
+design generation   a customer with no credits is refused before anything runs
+```
+
+### Defects found and fixed during this phase
+
+- **The gateway overwrote a job's credit cost from its route** when it started, so the
+  pipeline's zero-cost steps would have been charged a second time. The dispatcher owns the
+  cost; the gateway now records only which route ran.
+- **Nested AI jobs ran twice under a synchronous queue driver.** `dispatch()` queues, and
+  the pipeline then awaited the answer — which under the sync driver meant the job ran on
+  dispatch and again on await. Split into `accept`, `dispatch` and `runInline`: a caller
+  already on a worker never queues a nested job.
+- **`GeneratedImageStore` wrote renders to the public bucket.** Fixed to the private disk;
+  see criterion 25.
+- **Turkish `İ` folding**; see criterion 29.
+- **A route saved with its own fallback as primary hit a CHECK constraint and 500'd.** The
+  console now clears the stale fallback, which is the operator's unambiguous intention.
+- **An event message built from an exception exceeded its column** and lost the event that
+  was explaining the failure.
+
+### Honest limitations
+
+- **The simulator is not a model.** Every assertion in this phase is against a fake provider
+  that answers deterministically. That is the right way to test a pipeline — a suite that
+  called a real model would fail for reasons that have nothing to do with the code — but it
+  means nothing here tells us whether the *prompts* produce good designs. That question
+  needs people looking at renders, and it is not one a test suite can answer.
+- **Placement validation is arithmetic, not judgement.** It refuses what does not fit and
+  says nothing about whether a sideboard belongs on that wall. A plan can be dimensionally
+  valid and still ugly.
+- **A room with no measurements is not checked at all.** A customer who never measured gets
+  whatever the model proposes, because refusing furniture on the strength of a guessed wall
+  length would be worse than not refusing it. The measurement quality is recorded and shown;
+  acting on it is a product decision nobody has made yet.
+- **The render prompt names the elements to preserve, and nothing verifies that it did.**
+  The analysis says "keep the window" and the prompt says so too, but whether the produced
+  image kept it is unchecked — that needs a second vision call, and Phase 9's object
+  extraction is the natural place for it.
+- **Two hours is still a chosen number** for the credit hold, as in Phase 7. A pipeline of
+  three calls with retries stays far inside it today.
+
+### Notes
+
+- The E2E journey repoints the three pipeline tasks at the local simulator through the same
+  console endpoints an operator would use, and puts the routing back afterwards. Running a
+  real provider here would make the suite slow, expensive and dependent on somebody else's
+  uptime.
+- The queue worker holds compiled code in memory between jobs, so `scripts/sync.sh` alone
+  does not update it — `docker compose restart queue` is needed after changing anything a
+  queued job runs. This cost a debugging session and is worth writing down.
+
+### Verdict
+
+**PHASE 8 GATE: PASS** — proceed to Phase 9.
+
+`WEB_RELEASE_APPROVED`: **NOT GRANTED** (14 phases remaining).

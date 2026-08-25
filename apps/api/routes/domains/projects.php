@@ -88,6 +88,11 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, EnsureEmailIsVerif
             ->name('designs.current');
         Route::get('{project}/rooms/{room}/designs/{design}/versions/{version}', [DesignController::class, 'version'])
             ->name('designs.version');
+
+        // Polled every couple of seconds while a render runs, so it is its own endpoint
+        // returning the smallest useful thing rather than a field on the whole design.
+        Route::get('{project}/rooms/{room}/designs/{design}/versions/{version}/progress', [DesignController::class, 'progress'])
+            ->name('designs.version.progress');
         Route::delete('{project}/rooms/{room}/designs/{design}', [DesignController::class, 'destroy'])
             ->name('designs.destroy');
     });

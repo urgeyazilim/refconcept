@@ -22,13 +22,15 @@ final readonly class AiResult
 {
     /**
      * @param  array<string, mixed>|null  $structured  the parsed answer, for schema tasks
-     * @param  array<int, string>  $imageUrls  images the provider produced
+     * @param  array<int, string>  $imageUrls  images the provider produced, by URL
+     * @param  array<int, string>  $imageRefs  images already stashed on the private disk
      */
     private function __construct(
         public bool $successful,
         public ?string $text = null,
         public ?array $structured = null,
         public array $imageUrls = [],
+        public array $imageRefs = [],
         public int $inputTokens = 0,
         public int $outputTokens = 0,
         public int $imageCount = 0,
@@ -40,11 +42,13 @@ final readonly class AiResult
     /**
      * @param  array<string, mixed>|null  $structured
      * @param  array<int, string>  $imageUrls
+     * @param  array<int, string>  $imageRefs
      */
     public static function success(
         ?string $text = null,
         ?array $structured = null,
         array $imageUrls = [],
+        array $imageRefs = [],
         int $inputTokens = 0,
         int $outputTokens = 0,
         int $imageCount = 0,
@@ -55,6 +59,7 @@ final readonly class AiResult
             text: $text,
             structured: $structured,
             imageUrls: $imageUrls,
+            imageRefs: $imageRefs,
             inputTokens: $inputTokens,
             outputTokens: $outputTokens,
             imageCount: $imageCount,

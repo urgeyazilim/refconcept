@@ -213,6 +213,11 @@ final class DesignVersionTree
                     'status_label' => $version->status->label(),
                     'user_prompt' => $version->user_prompt,
                     'style_code' => $version->style_code,
+                    'render_quality' => $version->render_quality->value,
+                    // On the node rather than only on the detail endpoint: a failed
+                    // version in the middle of a tree needs to say why where it sits, not
+                    // make somebody open it to find out.
+                    'failure_reason' => $version->failure_reason,
                     'credit_cost' => $version->credit_cost,
                     'is_current' => $design->current_version_id === $version->id,
                     'created_at' => $version->created_at?->toIso8601String(),

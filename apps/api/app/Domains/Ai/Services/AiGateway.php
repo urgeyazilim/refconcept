@@ -92,7 +92,13 @@ final class AiGateway
         $job->forceFill([
             'status' => AiJobStatus::Running,
             'route_id' => $route->getKey(),
-            'credit_cost' => $route->credit_cost,
+            /*
+             * The cost is deliberately left alone. The dispatcher decided it when the job
+             * was accepted, and it may legitimately differ from the route: the design
+             * pipeline runs its three model calls at zero because the version above them
+             * holds the whole price. Re-reading it from the route here would silently
+             * charge for those steps a second time.
+             */
             'started_at' => now(),
         ])->save();
 
@@ -343,6 +349,10 @@ final class AiGateway
                     'text' => $result->text,
                     'structured' => $result->structured,
                     'image_urls' => $result->imageUrls,
+                    // References, not bytes: the images live on the private disk and the
+                    // job carries the path. A megabyte of base64 in this column would be
+                    // a table nobody can read and a query nobody can run.
+                    'image_refs' => $result->imageRefs,
                 ],
                 'attempts' => $attempt,
                 'finished_at' => now(),

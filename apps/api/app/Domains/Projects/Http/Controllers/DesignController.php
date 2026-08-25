@@ -4,15 +4,19 @@ declare(strict_types=1);
 
 namespace App\Domains\Projects\Http\Controllers;
 
+use App\Domains\Projects\Enums\RenderQuality;
 use App\Domains\Projects\Exceptions\DesignVersionRefused;
 use App\Domains\Projects\Models\Design;
 use App\Domains\Projects\Models\DesignVersion;
+use App\Domains\Projects\Models\DesignVersionEvent;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\Room;
+use App\Domains\Projects\Services\DesignVersionLauncher;
 use App\Domains\Projects\Services\DesignVersionTree;
 use App\Domains\Projects\Services\RoomPhotoStorage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 /**
  * Designs and their version trees.
@@ -29,6 +33,7 @@ final class DesignController
 {
     public function __construct(
         private readonly DesignVersionTree $tree,
+        private readonly DesignVersionLauncher $launcher,
         private readonly RoomPhotoStorage $storage,
     ) {}
 
@@ -53,6 +58,7 @@ final class DesignController
             'name' => ['sometimes', 'string', 'min:2', 'max:160'],
             'style_code' => ['sometimes', 'nullable', 'string', 'max:60'],
             'user_prompt' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'render_quality' => ['sometimes', Rule::enum(RenderQuality::class)],
         ]);
 
         abort_unless(
@@ -68,10 +74,11 @@ final class DesignController
         ]);
 
         try {
-            $version = $this->tree->branch(
+            $version = $this->launcher->launch(
                 design: $design,
                 parent: null,
                 actor: $request->user(),
+                quality: RenderQuality::from((string) ($validated['render_quality'] ?? 'draft')),
                 userPrompt: $validated['user_prompt'] ?? null,
                 styleCode: $validated['style_code'] ?? null,
             );
@@ -110,15 +117,17 @@ final class DesignController
             'parent_version_id' => ['required', 'uuid'],
             'user_prompt' => ['required', 'string', 'min:3', 'max:2000'],
             'style_code' => ['sometimes', 'nullable', 'string', 'max:60'],
+            'render_quality' => ['sometimes', Rule::enum(RenderQuality::class)],
         ]);
 
         $parent = DesignVersion::query()->findOrFail($validated['parent_version_id']);
 
         try {
-            $version = $this->tree->branch(
+            $version = $this->launcher->launch(
                 design: $design,
                 parent: $parent,
                 actor: $request->user(),
+                quality: RenderQuality::from((string) ($validated['render_quality'] ?? 'draft')),
                 userPrompt: (string) $validated['user_prompt'],
                 styleCode: $validated['style_code'] ?? null,
             );
@@ -167,7 +176,7 @@ final class DesignController
         $this->assertDesignBelongs($design, $room);
         abort_unless($version->design_id === $design->getKey(), 404);
 
-        $version->loadMissing(['assets', 'author']);
+        $version->loadMissing(['assets', 'author', 'plan', 'events']);
 
         return response()->json([
             'data' => [
@@ -176,9 +185,29 @@ final class DesignController
                 'status' => $version->status->value,
                 'status_label' => $version->status->label(),
                 'style_code' => $version->style_code,
+                'render_quality' => $version->render_quality->value,
+                'render_quality_label' => $version->render_quality->label(),
                 'user_prompt' => $version->user_prompt,
                 'credit_cost' => $version->credit_cost,
                 'failure_reason' => $version->failure_reason,
+
+                /*
+                 * The layout, not only the picture. This is what a customer reads when
+                 * they ask why there is a sideboard there — and from Phase 9 it is what
+                 * the shopping list beside the image is built from.
+                 */
+                'plan' => $version->plan === null ? null : [
+                    'style' => $version->plan->style,
+                    'palette' => $version->plan->palette,
+                    'placements' => $version->plan->placements,
+                    'notes' => $version->plan->notes,
+                    // Said out loud rather than dropped: a plan that quietly loses a
+                    // piece of furniture produces an image and a shopping list that
+                    // disagree, and the customer is left to work out which is wrong.
+                    'rejected' => $version->plan->rejected,
+                ],
+
+                'progress' => $this->progressOf($version),
                 'author' => $version->author?->displayName(),
                 'created_at' => $version->created_at?->toIso8601String(),
                 'completed_at' => $version->completed_at?->toIso8601String(),
@@ -207,6 +236,32 @@ final class DesignController
         ]);
     }
 
+    /**
+     * Progress on one version, for a client that is polling.
+     *
+     * Deliberately its own endpoint rather than a field on the design. A render takes the
+     * better part of a minute, and this is the request a browser will make every couple of
+     * seconds for the whole of it — so it returns the smallest useful thing and nothing
+     * that costs a join.
+     */
+    public function progress(
+        Request $request,
+        Project $project,
+        Room $room,
+        Design $design,
+        DesignVersion $version,
+    ): JsonResponse {
+        $this->authorizeProject($request, $project, 'view');
+        $this->assertBelongs($room, $project);
+        $this->assertDesignBelongs($design, $room);
+        abort_unless($version->design_id === $design->getKey(), 404);
+
+        return response()->json(['data' => $this->progressOf($version)])
+            // Never cached. This is polled precisely because the answer changes, and a
+            // proxy holding the first reply would freeze a finished render on a spinner.
+            ->header('Cache-Control', 'no-store, private');
+    }
+
     public function destroy(Request $request, Project $project, Room $room, Design $design): JsonResponse
     {
         $this->authorizeProject($request, $project);
@@ -219,6 +274,42 @@ final class DesignController
     }
 
     // --- helpers -------------------------------------------------------------
+
+    /**
+     * What a customer sees while they wait.
+     *
+     * The percentage comes from which stage was last announced rather than from real
+     * timings. A bar driven by measured durations jumps about as providers vary; one
+     * driven by stage boundaries moves predictably, which is what somebody watching a
+     * spinner actually wants from it.
+     *
+     * @return array<string, mixed>
+     */
+    private function progressOf(DesignVersion $version): array
+    {
+        $version->loadMissing('events');
+
+        $last = $version->events->last();
+
+        return [
+            'status' => $version->status->value,
+            'status_label' => $version->status->label(),
+            'is_finished' => $version->status->isTerminal(),
+            'stage' => $last?->stage->value,
+            'stage_label' => $last?->stage->label(),
+            'progress_bps' => $version->status->isTerminal() ? 10_000 : ($last?->stage->progressBps() ?? 0),
+            'failure_reason' => $version->failure_reason,
+
+            'events' => $version->events->map(static fn (DesignVersionEvent $event): array => [
+                'stage' => $event->stage->value,
+                'label' => $event->stage->label(),
+                'status' => $event->status,
+                'message' => $event->message,
+                'duration_ms' => $event->duration_ms,
+                'at' => $event->created_at->toIso8601String(),
+            ])->all(),
+        ];
+    }
 
     /**
      * @return array<string, mixed>

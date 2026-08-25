@@ -10,6 +10,7 @@ use App\Domains\Ai\Enums\AiModality;
 use App\Domains\Ai\Enums\AiTask;
 use App\Domains\Ai\Services\AiCall;
 use App\Domains\Ai\Services\AiResult;
+use App\Domains\Ai\Services\GeneratedImageStore;
 
 /**
  * A model provider that never calls anything.
@@ -130,10 +131,18 @@ final class FakeAiProvider implements AiProvider
     private function plainAnswer(AiCall $call): AiResult
     {
         if ($call->modality() === AiModality::Image) {
+            /*
+             * A real image, written to the real store.
+             *
+             * It would be simpler to return a made-up URL, and it would also stop the
+             * fake being usable for anything past the gateway: the design pipeline
+             * *downloads* what a provider returns, and a URL that resolves to nothing
+             * would fail every end-to-end run for a reason that has nothing to do with
+             * the code under test. So the fake produces a genuine PNG — a flat colour
+             * derived from the fingerprint, so the same request yields the same picture.
+             */
             return AiResult::success(
-                // A stable fake URL. Nothing downloads it in tests; what matters is
-                // that the gateway carries an image reference through unchanged.
-                imageUrls: ['https://fake.refconcept.test/renders/'.substr($call->fingerprint(), 0, 32).'.png'],
+                imageRefs: [$this->storedImageFor($call)],
                 inputTokens: $this->tokensFor($call->prompt),
                 imageCount: 1,
             );
@@ -230,6 +239,46 @@ final class FakeAiProvider implements AiProvider
      * text. Only ever used by the fake, so its inaccuracy costs nothing — but it has
      * to *vary with the prompt*, or a cost-cap test would pass whatever the input.
      */
+    /**
+     * Writes a small flat-colour PNG and returns its URL.
+     *
+     * Deterministic: the colour comes from the call fingerprint, so the same request
+     * produces the same bytes. Sixteen pixels square, because nothing looks at it — what
+     * matters is that it is a real image at a real address that a downloader can fetch.
+     */
+    private function storedImageFor(AiCall $call): string
+    {
+        $seed = $call->fingerprint();
+
+        $image = imagecreatetruecolor(16, 16);
+
+        if ($image === false) {
+            // GD absent. A single transparent pixel rather than a fatal error, because a
+            // test environment without the extension still needs the pipeline to run.
+            return app(GeneratedImageStore::class)->stashBase64(
+                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+            ) ?? '';
+        }
+
+        try {
+            $colour = imagecolorallocate($image,
+                (int) hexdec(substr($seed, 0, 2)),
+                (int) hexdec(substr($seed, 2, 2)),
+                (int) hexdec(substr($seed, 4, 2)),
+            );
+
+            imagefilledrectangle($image, 0, 0, 16, 16, $colour === false ? 0 : $colour);
+
+            ob_start();
+            imagepng($image);
+            $bytes = (string) ob_get_clean();
+        } finally {
+            imagedestroy($image);
+        }
+
+        return app(GeneratedImageStore::class)->stash($bytes, 'image/png');
+    }
+
     private function tokensFor(string $prompt): int
     {
         return max(1, (int) ceil(mb_strlen($prompt) / 4));

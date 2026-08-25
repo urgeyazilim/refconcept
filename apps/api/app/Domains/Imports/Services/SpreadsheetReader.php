@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domains\Imports\Services;
 
+use App\Support\Text\TurkishText;
 use DateTimeInterface;
 use Generator;
 use OpenSpout\Common\Entity\Row;
@@ -225,11 +226,14 @@ final class SpreadsheetReader
     private function cleanHeader(string $header): string
     {
         $header = preg_replace('/^\xEF\xBB\xBF/', '', $header) ?? $header;
-        $header = trim($header);
 
-        // Turkish lowercasing, because strtolower turns "İ" into a two-byte mess and
-        // leaves "I" as "I" — so "İSİM" and "isim" would not match.
-        return mb_strtolower($header, 'UTF-8');
+        /*
+         * Turkish lowercasing, and it has to be Turkish: mb_strtolower turns "İ" into an
+         * i followed by a combining dot rather than a plain i, and leaves "I" alone — so
+         * "İSİM" and "isim" would not match. The letters stay Turkish letters here; the
+         * ASCII folding happens further along, in the column mapper.
+         */
+        return app(TurkishText::class)->lower(trim($header));
     }
 
     /**

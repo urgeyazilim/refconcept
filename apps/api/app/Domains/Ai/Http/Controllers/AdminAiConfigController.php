@@ -341,6 +341,19 @@ final class AdminAiConfigController
 
             $route->fill([...$validated, 'task' => $task->value]);
             $route->is_active = true;
+
+            /*
+             * A route whose fallback is its own primary is not a fallback; it is the same
+             * call twice, and a CHECK constraint refuses it. That happens naturally when
+             * an operator promotes the fallback to primary without mentioning the
+             * fallback — an unambiguous intention, so the stale fallback is cleared rather
+             * than the save being refused with a sentence about a column they did not
+             * touch.
+             */
+            if ($route->fallback_model_id === $route->primary_model_id) {
+                $route->fallback_model_id = null;
+            }
+
             $route->save();
 
             return $route;

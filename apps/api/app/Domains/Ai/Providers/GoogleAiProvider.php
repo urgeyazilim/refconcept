@@ -167,7 +167,7 @@ final class GoogleAiProvider implements AiProvider
         $parts = (array) data_get($body, 'candidates.0.content.parts', []);
 
         $text = '';
-        $urls = [];
+        $refs = [];
 
         foreach ($parts as $part) {
             if (isset($part['text']) && is_string($part['text'])) {
@@ -179,13 +179,16 @@ final class GoogleAiProvider implements AiProvider
             $inline = $part['inline_data'] ?? $part['inlineData'] ?? null;
 
             if (is_array($inline) && isset($inline['data']) && is_string($inline['data'])) {
-                $stored = $this->images->putBase64(
+                // Written to the private disk and carried on as a reference: the bytes
+                // cannot go in the job row, and a render of somebody's home must not be
+                // staged where anybody with the link can read it.
+                $stashed = $this->images->stashBase64(
                     $inline['data'],
                     (string) ($inline['mime_type'] ?? $inline['mimeType'] ?? 'image/png'),
                 );
 
-                if ($stored !== null) {
-                    $urls[] = $stored;
+                if ($stashed !== null) {
+                    $refs[] = $stashed;
                 }
             }
         }
@@ -196,7 +199,7 @@ final class GoogleAiProvider implements AiProvider
          * structured task the validator will reject the truncated JSON on its own — with
          * a message about the shape, which is the more useful complaint.
          */
-        if ($text === '' && $urls === []) {
+        if ($text === '' && $refs === []) {
             return AiResult::failure(
                 AiFailureKind::MalformedOutput,
                 $finishReason === ''
@@ -210,10 +213,10 @@ final class GoogleAiProvider implements AiProvider
 
         return AiResult::success(
             text: $text !== '' ? $text : null,
-            imageUrls: $urls,
+            imageRefs: $refs,
             inputTokens: $inputTokens,
             outputTokens: $outputTokens,
-            imageCount: count($urls),
+            imageCount: count($refs),
             httpStatus: $response->status(),
         );
     }

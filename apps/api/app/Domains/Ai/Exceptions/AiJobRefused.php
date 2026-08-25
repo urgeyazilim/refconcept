@@ -38,9 +38,12 @@ final class AiJobRefused extends RuntimeException
     {
         return new self(
             sprintf(
-                'Aynı anda en fazla %d %s işlemi çalıştırabilirsiniz; şu anda %d tane sürüyor.',
+                'Aynı anda en fazla %d "%s" işlemi çalıştırabilirsiniz; şu anda %d tane sürüyor.',
                 $limit,
-                mb_strtolower($task->label()),
+                // Not lowercased. Turkish has two i letters and Unicode folds the dotted
+                // capital into an i plus a combining dot — a smudge in the middle of a
+                // sentence. Quoting the label keeps it readable with its capital intact.
+                $task->label(),
                 $inFlight,
             ),
             $task,

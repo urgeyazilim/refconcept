@@ -49,8 +49,14 @@ it('runs a job through the routed model and records the attempt', function (): v
         ->and($job->attempts)->toBe(1)
         ->and($job->output['text'] ?? null)->toContain('support_assist')
         ->and($job->route_id)->toBe($route->getKey())
-        // Charged from the route, not from anything the provider said.
-        ->and($job->credit_cost)->toBe($route->credit_cost);
+        /*
+         * The gateway records which route ran the job and deliberately does not touch its
+         * cost. Who pays, and how much, is settled when the job is accepted — the design
+         * pipeline runs its three model calls at zero because the version above them holds
+         * the whole price, and a gateway that re-read the route here would charge for
+         * those steps a second time.
+         */
+        ->and($job->credit_cost)->toBe(0);
 
     $request = AiRequest::query()->where('job_id', $job->getKey())->firstOrFail();
 

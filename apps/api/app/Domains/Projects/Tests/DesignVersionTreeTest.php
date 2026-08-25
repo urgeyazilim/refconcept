@@ -304,9 +304,19 @@ it('creates a design and its first version in one request', function (): void {
         ->postJson($this->designUrl, ['name' => 'Yeni deneme', 'user_prompt' => 'Sıcak minimal'])
         ->assertCreated();
 
+    $version = DesignVersion::query()->orderByDesc('id')->firstOrFail();
+
     expect($response->json('data.version_count'))->toBe(1)
-        // Honest: accepted, nothing drawn yet.
-        ->and(DesignVersion::query()->latest('id')->first()->status)->toBe(DesignVersionStatus::Pending);
+        ->and($version->design_id)->not->toBeNull();
+
+    /*
+     * This suite deliberately configures no AI routes, so the engine has nothing to run
+     * the version with — and the version says so in words a customer can read rather than
+     * sitting at "pending" forever. The generation path itself is exercised in
+     * DesignGenerationTest, which does configure it.
+     */
+    expect($version->status)->toBe(DesignVersionStatus::Failed)
+        ->and($version->failure_reason)->toContain('kullanılamıyor');
 });
 
 it('refuses to create a design for a room with no photograph', function (): void {

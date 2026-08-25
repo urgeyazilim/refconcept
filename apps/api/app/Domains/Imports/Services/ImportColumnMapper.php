@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domains\Imports\Services;
 
+use App\Support\Text\TurkishText;
+
 /**
  * Guesses which spreadsheet column is which field.
  *
@@ -222,17 +224,13 @@ final class ImportColumnMapper
      */
     private function normalise(string $header): string
     {
-        $header = mb_strtolower(trim($header), 'UTF-8');
-
-        $header = strtr($header, [
-            'ı' => 'i', 'İ' => 'i', 'ğ' => 'g', 'Ğ' => 'g',
-            'ü' => 'u', 'Ü' => 'u', 'ş' => 's', 'Ş' => 's',
-            'ö' => 'o', 'Ö' => 'o', 'ç' => 'c', 'Ç' => 'c',
-        ]);
-
-        // Punctuation and spacing carry no meaning in a column name.
-        $header = preg_replace('/[^a-z0-9]+/u', ' ', $header) ?? $header;
-
-        return trim(preg_replace('/\s+/', ' ', $header) ?? $header);
+        /*
+         * Folded by TurkishText rather than here, because the order matters and getting
+         * it wrong is invisible. Lowercasing first turns "İ" into an i plus a combining
+         * dot, the dot is then stripped as punctuation, and "İndirimli fiyat" arrives as
+         * "i ndirimli fiyat" — matching no alias, mapping no column, and reporting
+         * nothing wrong.
+         */
+        return app(TurkishText::class)->fold($header);
     }
 }

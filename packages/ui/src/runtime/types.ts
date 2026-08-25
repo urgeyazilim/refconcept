@@ -636,6 +636,8 @@ export interface DesignTreeNode {
   status_label: string
   user_prompt: string | null
   style_code: string | null
+  render_quality: 'draft' | 'premium'
+  failure_reason: string | null
   credit_cost: number
   is_current: boolean
   created_at: string | null
