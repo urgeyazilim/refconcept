@@ -25,6 +25,10 @@ final class DatabaseSeeder extends Seeder
         // with no route is a feature that fails the first time somebody uses it.
         $this->call(AiGatewaySeeder::class);
 
+        // Packages and the welcome bonus. Also not demo data: an AI feature with
+        // nothing to buy and no way to try it is a feature nobody reaches.
+        $this->call(CreditEconomySeeder::class);
+
         if (app()->environment('production')) {
             $this->command?->info('Production environment: demo data skipped.');
 

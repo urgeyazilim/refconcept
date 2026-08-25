@@ -711,3 +711,132 @@ ai console   a customer's token gets 403 from every /admin/ai endpoint
 **PHASE 6 GATE: PASS** — proceed to Phase 7.
 
 `WEB_RELEASE_APPROVED`: **NOT GRANTED** (16 phases remaining).
+
+---
+
+## Phase 7 — Credit economy
+
+**Date:** 2026-08-25
+**Scope:** what a customer buys and what an AI render spends — packages, wallets, an
+immutable ledger, expiry, holds, promotions and hand corrections.
+
+### Gate criteria (04_WEB_PHASE_PLAN.md: duplicate + concurrency + invariant tests)
+
+| # | Criterion | Method | Result |
+|---|---|---|---|
+| 1 | **The ledger is the authority and nothing else writes it** | code review + Pest | **PASS** — `CreditLedger` is the sole writer of all four tables |
+| 2 | Every entry carries the balance it produced | Pest | **PASS** — a disputed statement shows what was true then, not what today's code computes |
+| 3 | **The ledger cannot be edited** | Pest + PostgreSQL trigger | **PASS** — UPDATE and DELETE both refused, asserted directly against the table |
+| 4 | **A balance can never go negative** | Pest + CHECK constraint | **PASS** — asserted through the service and against the table |
+| 5 | Held credits can never exceed the balance | Pest + CHECK constraint | **PASS** |
+| 6 | The direction of each movement matches its type | Pest + CHECK constraint | **PASS** — a "consume" that adds credits is refused by the database |
+| 7 | An adjustment without a reason is impossible | Pest + CHECK constraint | **PASS** — enforced in the schema, not only in the request rules |
+| 8 | **The aggregate always agrees with the lots** | Pest | **PASS** — asserted after nine consecutive movements of five different kinds |
+| 9 | **A repeated reference does not grant twice** | Pest | **PASS** — the same transaction is returned |
+| 10 | A repeated reference does not spend twice | Pest | **PASS** |
+| 11 | A repeated reference does not hold twice | Pest | **PASS** — the existing reservation is handed back |
+| 12 | **A hold settles exactly once** | Pest | **PASS** — consume, consume, release leaves one charge |
+| 13 | **The wallet row is locked before any decision** | Pest (query inspection) | **PASS** — `SELECT … FOR UPDATE`, then decide from what the lock returned |
+| 14 | Lots are locked when drawn from | Pest (query inspection) | **PASS** |
+| 15 | **A stale caller-held wallet cannot overspend** | Pest | **PASS** — the ledger re-reads inside the lock and refuses |
+| 16 | Holds are independent of one another | Pest | **PASS** — one consumes, one releases, both for their own amount |
+| 17 | The sum of holds never exceeds the balance | Pest | **PASS** — the ninth of ten holds is refused, on availability rather than balance |
+| 18 | Every movement is one transaction | Pest | **PASS** — a rollback leaves no lot, no entry and no balance change |
+| 19 | **Credits expire soonest-deadline-first** | Pest | **PASS** — a promotion expiring in a week is spent before a purchase lasting a year |
+| 20 | Dated credits are spent before undated ones | Pest | **PASS** — undated credits are the reserve, not the first thing reached for |
+| 21 | Expiry removes exactly the unheld remainder | Pest | **PASS** |
+| 22 | **Held credits do not expire underneath a running job** | Pest | **PASS** — otherwise the settle finds no hold and the work is free |
+| 23 | Abandoned holds are swept and returned | Pest | **PASS** — recorded as `expired`, distinct from a clean `released` |
+| 24 | A refusal says how many credits are missing | Pest | **PASS** — "8 gerekiyor, 3 var" rather than "yetersiz bakiye" |
+| 25 | **A promotion's budget is counted under a lock** | Pest | **PASS** — a limit of two hands out two, not three |
+| 26 | A per-user limit is honoured, including above one | Pest | **PASS** — three claims produce three distinct grants, not one repeated |
+| 27 | **Unknown, ended and exhausted codes give one identical refusal** | Pest | **PASS** — otherwise the endpoint enumerates live campaigns |
+| 28 | "Already redeemed" is said plainly | Pest | **PASS** — safe, because the asker already knows the code |
+| 29 | A welcome bonus tests for credits, not for registration date | Pest | **PASS** — somebody who signed up a year ago and is only now trying the product still qualifies |
+| 30 | Redemption is rate-limited per account | Pest | **PASS** — five attempts, then 429 |
+| 31 | **Redemption requires a verified e-mail** | Pest | **PASS** — without it a promotion is a free-credit machine |
+| 32 | A campaign can be switched off | Pest | **PASS** |
+| 33 | **An AI job holds its cost before it is queued** | Pest | **PASS** — refused at the door, not queued and failed four seconds later |
+| 34 | A successful job consumes the hold | Pest | **PASS** |
+| 35 | **A failed job costs the customer nothing** | Pest | **PASS** — provider failure, cancel and a dead worker all release |
+| 36 | Three provider attempts are one charge | Pest | **PASS** — the retry is our decision and our cost |
+| 37 | A zero-cost task holds nothing | Pest | **PASS** — a query rewrite is paid from the platform's budget |
+| 38 | A job with no owner holds nothing | Pest | **PASS** |
+| 39 | A refused job leaves no litter in the customer's history | Pest | **PASS** — the row is removed rather than left as something that never ran |
+| 40 | The render appears on the statement in the customer's language | Pest + Playwright | **PASS** — "Görsel üretimi (taslak)", not a job id |
+| 41 | **Holds are hidden from the statement** | Pest | **PASS** — a reserve plus a consume is one event to the person who ran it |
+| 42 | Expiring credits are surfaced without being asked for | Pest + Playwright | **PASS** — above the statement, not inside it |
+| 43 | One customer never sees another's wallet | Pest | **PASS** — and the routes carry no id to get wrong |
+| 44 | The admin routes refuse a customer | Pest + Playwright | **PASS** |
+| 45 | A hand correction is audited with actor and reason | Pest + Playwright | **PASS** — and the reason reaches the customer's own statement |
+| 46 | A correction cannot drive a balance below zero | Pest + Playwright | **PASS** — refused rather than clamped |
+| 47 | The reconciliation figure is on the support screen | Pest | **PASS** — where the person who most needs it is already looking |
+| 48 | Backend suite | `php artisan test` | **PASS** — 473 tests, 1455 assertions |
+| 49 | Static analysis / style | PHPStan L6, Pint | **PASS** |
+| 50 | Frontend gates | ESLint, vue-tsc, token guard | **PASS** |
+| 51 | **End-to-end** | Playwright, live stack | **PASS** — 24 journeys |
+
+### End-to-end journeys added
+
+```text
+credit economy   customer signs in -> credits page shows 0 ->
+                 redeems a campaign code -> balance, expiry warning and
+                 statement all move -> the same code is refused a second time ->
+                 the API confirms one grant, not two
+
+credit economy   staff correct a balance (refused without a reason, accepted
+                 with one) -> the customer sees the correction and its reason
+                 on their own statement
+
+credit economy   a customer's token gets 403 from every /admin/credits endpoint
+
+credit economy   an operator closes a package and reopens it
+```
+
+### What this phase deliberately did not do
+
+- **No purchases.** Buying a package needs a payment provider, which is Phase 11. The
+  packages are real rows on a real endpoint and the storefront lists them honestly — with
+  "Satın alma yakında açılıyor" rather than a button that does nothing. `lifetime_purchased`
+  exists and stays at zero until then.
+- **No double-entry journal.** `06_SECURITY_PAYMENT_FINANCE_RULES.md` specifies one for
+  money, and Phase 13 builds it. Credits are not money in that sense — nobody is owed a
+  payout in credits — so this ledger records credit movements, and the journal will record
+  the lira that bought them.
+- **No refund of a purchase.** The transaction type exists and the ledger can grant against
+  it; what triggers it is a payment reversal, which does not exist yet.
+
+### Honest limitations
+
+- **The concurrency tests assert the lock is taken, not that it blocks.** They prove the
+  ledger takes `SELECT … FOR UPDATE` and decides from what the lock returned, and that a
+  caller holding a stale wallet cannot overspend. That PostgreSQL then serialises a second
+  transaction is PostgreSQL's behaviour; testing it would be testing PostgreSQL. The
+  invariants that survive a caller who forgets the lock entirely were pushed into the
+  schema instead, and those are asserted directly. This is the same position taken for the
+  stock ledger in Phase 4, for the same reason.
+- **A hold's two-hour expiry is a chosen number, not a derived one.** It has to exceed the
+  slowest route's timeout multiplied by its retries with room to spare, and today's slowest
+  route could reach roughly five minutes. Two hours is generous rather than calculated; if
+  a future route is configured beyond that, the sweeper could release a hold under a
+  running job and the work would be free. Worth a guard when route timeouts become
+  operator-editable in anger.
+- **`redemption_count` on a promotion is a denormalised counter.** It is incremented under
+  the same lock that reads it, so it cannot drift under concurrency — but it is a second
+  place the truth lives, and `credit_promotion_redemptions` is the first. They are compared
+  in the tests; there is no scheduled reconciliation between them.
+
+### Notes
+
+- The sweep runs hourly, not nightly. Expiry alone would be fine once a day; abandoned
+  holds set the cadence, because credits a customer cannot spend while their screen says
+  they can is a support ticket within the hour.
+- The seeded welcome bonus grants 25 credits — enough for a room analysis and a draft
+  render, which is the smallest amount that lets somebody see what the product does. A
+  bonus that runs out before the first result is worse than none.
+
+### Verdict
+
+**PHASE 7 GATE: PASS** — proceed to Phase 8.
+
+`WEB_RELEASE_APPROVED`: **NOT GRANTED** (15 phases remaining).

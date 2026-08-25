@@ -25,3 +25,16 @@ Schedule::command('refconcept:release-expired-reservations')
     ->everyFiveMinutes()
     ->withoutOverlapping()
     ->runInBackground();
+
+/*
+ * Dated credits stop being spendable, and holds nobody came back for go back.
+ *
+ * Hourly. A hold left over from an abandoned render is credits a customer cannot spend
+ * while their screen says they can, and waiting until midnight to return them turns a
+ * two-minute annoyance into a support ticket. Expiry itself would be fine once a day;
+ * the holds are what set the cadence.
+ */
+Schedule::command('refconcept:sweep-credits')
+    ->hourly()
+    ->withoutOverlapping()
+    ->runInBackground();

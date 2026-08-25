@@ -238,6 +238,68 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a demo product page claimed six in stock while the stock screen was empty. Opening
   stock is now booked as a receipt through the ledger.
 
+### Added — Phase 7 (Credit economy)
+
+- **An immutable credit ledger, and a wallet that is only ever a snapshot of it.** Every
+  movement is an append-only row carrying the balance it produced; `credit_wallets` exists
+  so a page load is one row rather than a sum over a year of history. Both are written
+  inside one locked transaction, so they cannot drift — and when they ever did, the ledger
+  wins. Append-only is enforced by a PostgreSQL trigger rather than by an Eloquent guard a
+  raw query would walk straight past: this is the table a customer's complaint gets settled
+  against, and a mistake is corrected with a compensating entry the way a mistake in any
+  ledger is.
+- **Credits expire in lots, soonest deadline first.** A balance cannot expire; a grant can.
+  Fifty credits bought in March and ten from a promotion in June are one number in a wallet
+  and two different deadlines, so consumption draws from batches in deadline order. Spending
+  the long-lived credits first would silently destroy the ones with a date on them, and the
+  customer would see a balance drop for no reason they could find.
+- **A hold is not a charge.** An AI job reserves its cost before it is queued and either
+  consumes or releases afterwards, so a render that failed because a provider timed out
+  costs the customer nothing — that is our problem, not theirs. Three attempts against a
+  flaky provider is still one charge: the retry is our decision and our cost. A customer who
+  cannot afford a render is told so while they are still looking at the button rather than
+  handed a job id and a failure four seconds later.
+- **Every mutating path is idempotent on a caller-supplied reference.** A client retrying a
+  request whose response it never saw is the normal case, not the exceptional one, and
+  answering it with a second charge is the failure worth engineering against. A hold settles
+  exactly once however many times a duplicate queue delivery asks it to.
+- **The database refuses what the application should not have asked for.** A negative
+  balance, held credits exceeding the balance, a rate window that ends before it begins, and
+  — the one worth naming — a movement whose direction contradicts its type. A "consume" that
+  adds credits is not a rounding error, it is free money, and it would balance perfectly in
+  every report.
+- **A hand correction demands a reason, in the schema.** It is the only movement that
+  happens because a person decided it should, and "why do I have forty fewer credits than
+  yesterday" needs an answer better than "somebody ran a script". Both the member of staff
+  and their reason reach the customer's own statement, not only an internal log. A
+  correction that would drive a balance below zero is refused rather than clamped.
+- **Promotion codes written on the assumption that somebody is attacking them.** The
+  promotion row is locked before its redemptions are counted, so two simultaneous claims
+  cannot both find room under the limit. An unknown code, an ended campaign and an exhausted
+  budget all return one identical refusal, because distinguishing them turns the endpoint
+  into an oracle that enumerates live campaigns. Redemption is rate-limited per account and
+  requires a verified e-mail — without which a promotion is a free-credit machine for
+  anybody willing to type a different address each time. "Already redeemed" *is* said
+  plainly, because the person asking has already proved they know the code.
+- **An hourly sweep** that expires dated lots and returns holds nobody came back for.
+  Expiry alone would be fine once a day; the holds set the cadence, because credits a
+  customer cannot spend while their screen says they can becomes a support ticket within the
+  hour. An abandoned hold is recorded as `expired` rather than `released`, because a release
+  is a system that finished its job and an expiry is a request that vanished.
+- **Credit tables restrict deletion rather than cascading.** A financial record outlives the
+  account it belonged to, which is what tax retention requires anyway. Erasing an account
+  means anonymising the person and keeping the money — an explicit, audited procedure rather
+  than a side effect of a foreign key.
+- **A customer's credits page**: available and total balance, what is about to expire shown
+  *above* the statement rather than buried in it, a promotion code field, the packages on
+  sale, and a statement with holds filtered out — a reserve followed by a consume is one
+  event to the person who ran a render, and three lines for it is how a statement becomes
+  something nobody checks.
+- **A credits screen in the admin panel**: packages and campaigns with their redemption
+  counts, budgets and windows, and a switch for each. Adjusting a balance lives behind a
+  wallet lookup rather than on the list, because a correction should be something somebody
+  arrives at after reading an account's history.
+
 ### Added — Phase 6 (AI gateway foundation)
 
 - **One gateway between RefConcept and every model.** Which provider, which model, which

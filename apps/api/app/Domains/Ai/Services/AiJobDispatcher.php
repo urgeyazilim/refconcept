@@ -10,6 +10,7 @@ use App\Domains\Ai\Enums\AiTask;
 use App\Domains\Ai\Exceptions\AiJobRefused;
 use App\Domains\Ai\Jobs\RunAiJob;
 use App\Domains\Ai\Models\AiJob;
+use App\Domains\Credits\Exceptions\InsufficientCredits;
 use App\Domains\Identity\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -38,7 +39,10 @@ use Throwable;
  */
 final class AiJobDispatcher
 {
-    public function __construct(private readonly AiGateway $gateway) {}
+    public function __construct(
+        private readonly AiGateway $gateway,
+        private readonly AiJobCredits $credits,
+    ) {}
 
     /**
      * Queues one job, or hands back the one this key already made.
@@ -103,6 +107,26 @@ final class AiJobDispatcher
         ])->save();
 
         /*
+         * The credits are held now, not when the worker starts.
+         *
+         * A customer with three credits should be told so while they are still looking at
+         * the button, not handed a job id and a failure four seconds later. The hold also
+         * stops somebody queueing ten renders they can afford one of.
+         *
+         * Held after the row exists because the reservation points at it. If the hold
+         * fails the InsufficientCredits exception propagates and the job stays queued with
+         * nothing to run it — so the row is removed on the way out rather than left as
+         * litter a customer would see on their history.
+         */
+        try {
+            $this->credits->hold($job, $user);
+        } catch (InsufficientCredits $e) {
+            $job->delete();
+
+            throw $e;
+        }
+
+        /*
          * Dispatched after the transaction commits, not inside it. A worker is a
          * separate process and can pick the job up within milliseconds — before an
          * uncommitted row is visible to it — and the symptom is a job that fails to
@@ -125,7 +149,12 @@ final class AiJobDispatcher
      */
     public function runNow(AiJob $job): AiJob
     {
-        return $this->gateway->run($job);
+        $ran = $this->gateway->run($job);
+
+        // Settled here as well as on the worker, because this path never reaches one.
+        $this->credits->settle($ran);
+
+        return $ran;
     }
 
     /**
@@ -147,6 +176,9 @@ final class AiJobDispatcher
             'failure_reason' => $reason,
             'finished_at' => now(),
         ])->save();
+
+        // Nothing ran, so nothing is owed.
+        $this->credits->releaseFor($job);
 
         return true;
     }
@@ -171,5 +203,8 @@ final class AiJobDispatcher
             'failure_reason' => 'İş beklenmedik şekilde sonlandı: '.$e->getMessage(),
             'finished_at' => now(),
         ])->save();
+
+        // A worker that died still leaves a customer owed their credits back.
+        $this->credits->settle($job);
     }
 }

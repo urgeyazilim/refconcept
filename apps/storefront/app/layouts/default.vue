@@ -6,7 +6,7 @@ const nav = [
   { label: 'Nasıl çalışır', to: '/' },
   { label: 'Ürünler', to: '/catalog' },
   { label: 'Profesyoneller', to: '/' },
-  { label: 'Krediler', to: '/' },
+  { label: 'Krediler', to: '/account/credits' },
 ]
 
 const menuOpen = ref(false)
@@ -75,6 +75,13 @@ watch(() => route.fullPath, () => {
               role="menuitem"
             >
               Hesabım
+            </NuxtLink>
+            <NuxtLink
+              to="/account/credits"
+              class="block rounded-sm px-3 py-2 text-sm text-ink-secondary hover:bg-bg-muted hover:text-ink"
+              role="menuitem"
+            >
+              Kredilerim
             </NuxtLink>
             <NuxtLink
               to="/account/addresses"

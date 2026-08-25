@@ -52,6 +52,13 @@
 | P6-T006 | 6 | BACKEND_AGENT | P6-T002 | DONE | console tests | Routing, key rotation, cost rates and the kill switch, all audited |
 | P6-T007 | 6 | ADMIN_PANEL_AGENT | P6-T006 | DONE | admin E2E | AI control room: routes, spend, failures and the kill switch |
 | P6-T008 | 6 | INDEPENDENT_TEST_AGENT | P6-T001..007 | DONE | Phase 6 gate | 413 backend tests, 20 E2E journeys (see TEST_REPORT.md) |
+| P7-T001 | 7 | ARCHITECT_AGENT | P6-T008 | DONE | schema review | Packages, wallets, expiry lots, an append-only ledger, holds, promotions and redemptions |
+| P7-T002 | 7 | BACKEND_AGENT | P7-T001 | DONE | invariant tests | One ledger writes everything; balance never negative, holds never exceed it, aggregate always matches the lots |
+| P7-T003 | 7 | BACKEND_AGENT | P7-T002 | DONE | concurrency tests | Row locks with a re-read inside them; a stale caller-held wallet cannot overspend |
+| P7-T004 | 7 | BACKEND_AGENT | P7-T002 | DONE | duplicate tests | Every mutating path idempotent on a reference; a hold settles exactly once |
+| P7-T005 | 7 | BACKEND_AGENT | P7-T002 | DONE | promotion tests | Locked budget, per-user limits, one identical refusal for every unusable code |
+| P7-T006 | 7 | BACKEND_AGENT | P7-T002 | DONE | AI integration tests | Hold on queue, consume on success, release on failure — a failed render costs nothing |
+| P7-T007 | 7 | INDEPENDENT_TEST_AGENT | P7-T001..006 | DONE | Phase 7 gate | 473 backend tests, 24 E2E journeys (see TEST_REPORT.md) |
 
 ## Scope notes
 

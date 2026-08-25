@@ -6,6 +6,7 @@ namespace App\Domains\Ai\Jobs;
 
 use App\Domains\Ai\Models\AiJob;
 use App\Domains\Ai\Services\AiGateway;
+use App\Domains\Ai\Services\AiJobCredits;
 use App\Domains\Ai\Services\AiJobDispatcher;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -48,7 +49,7 @@ final class RunAiJob implements ShouldQueue
 
     public function __construct(public readonly string $jobId) {}
 
-    public function handle(AiGateway $gateway): void
+    public function handle(AiGateway $gateway, AiJobCredits $credits): void
     {
         $job = AiJob::query()->find($this->jobId);
 
@@ -64,7 +65,15 @@ final class RunAiJob implements ShouldQueue
             return;
         }
 
-        $gateway->run($job);
+        $ran = $gateway->run($job);
+
+        /*
+         * Settled the moment the job reaches a terminal state: consumed on success,
+         * released on anything else. A render that failed because a provider timed out is
+         * our problem, not the customer's, and charging for it is the fastest way to lose
+         * them.
+         */
+        $credits->settle($ran);
     }
 
     /**

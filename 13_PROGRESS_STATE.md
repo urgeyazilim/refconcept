@@ -12,19 +12,19 @@ WEB
 IN_PROGRESS
 
 ## Current Phase
-PHASE_7
+PHASE_8
 
 ## Current Task
-Not started — Phase 6 is closed and Phase 7 has not begun.
+Not started — Phase 7 is closed and Phase 8 has not begun.
 
 ## Last Completed Task
-P6-T008 — Phase 6 gate verified end to end (see `TEST_REPORT.md`).
+P7-T007 — Phase 7 gate verified end to end (see `TEST_REPORT.md`).
 
 ## Next Task
-Phase 7 — Credit Economy, shipping its own UI slice alongside its API.
+Phase 8 — AI Room & Design, shipping its own UI slice alongside its API.
 
 ## Test State
-PASS — 413 backend tests / 1250 assertions, 20 Playwright E2E journeys across all three
+PASS — 473 backend tests / 1455 assertions, 24 Playwright E2E journeys across all three
 apps, PHPStan level 6, Pint, ESLint, vue-tsc and the design token guard all clean.
 
 ## Release State
@@ -421,6 +421,93 @@ reads — and this one points at a photograph of somebody's living room.
 from the call fingerprint and can be scripted to produce any failure on demand, so the
 retry, fallback, cost-cap and kill-switch paths are provoked exactly rather than hoped
 about.
+
+### PHASE_7_CREDIT_ECONOMY — DONE (2026-08-25)
+
+```text
+UPDATED_AT: 2026-08-25
+COMMIT_OR_SNAPSHOT: phase-7-credits
+PHASE: 7 — Credit Economy
+TASK: P7-T001 .. P7-T007
+STATUS: DONE
+FILES_CHANGED:
+  apps/api/database/migrations/0001_01_01_000017_create_credit_tables.php
+  apps/api/app/Domains/Credits/Enums/**      (CreditTransactionType, CreditLotSource,
+    ReservationStatus)
+  apps/api/app/Domains/Credits/Models/**     (CreditWallet, CreditLot, CreditTransaction,
+    CreditReservation, CreditPackage, CreditPromotion, CreditPromotionRedemption)
+  apps/api/app/Domains/Credits/Services/**   (CreditLedger, PromotionRedeemer,
+    CreditExpirySweeper)
+  apps/api/app/Domains/Credits/Exceptions/** (InsufficientCredits, PromotionRefused)
+  apps/api/app/Domains/Credits/Console/SweepExpiredCreditsCommand.php
+  apps/api/app/Domains/Credits/Http/Controllers/** (CreditWalletController,
+    AdminCreditController)
+  apps/api/app/Domains/Credits/Tests/**      (CreditLedgerTest, CreditConcurrencyTest,
+    CreditPromotionTest, CreditHttpTest, AiJobCreditsTest)
+  apps/api/app/Domains/Ai/Services/AiJobCredits.php   (hold → settle for AI jobs)
+  apps/api/app/Domains/Ai/Services/AiJobDispatcher.php, Jobs/RunAiJob.php
+  apps/api/routes/domains/credits.php, routes/api.php, routes/console.php
+  apps/api/bootstrap/app.php
+  apps/api/database/seeders/{CreditEconomySeeder,DatabaseSeeder}.php
+  apps/storefront/app/pages/account/credits.vue
+  apps/storefront/app/layouts/{default,account}.vue
+  apps/admin-panel/app/pages/credits/index.vue, app/layouts/default.vue
+  tests/e2e/credit-economy.spec.ts
+MIGRATIONS: 7 tables — credit_packages, credit_wallets, credit_lots,
+  credit_transactions (append-only trigger), credit_reservations, credit_promotions,
+  credit_promotion_redemptions
+TESTS_RUN: php artisan test · phpstan level 6 · pint --test · eslint · vue-tsc
+  · check-design-tokens.mjs · playwright (full suite)
+TEST_RESULT: PASS (473 backend tests / 1455 assertions; 24 E2E journeys)
+BLOCKERS: none
+NEXT_ACTION: Phase 8 — AI Room & Design
+```
+
+**The ledger is the authority; the wallet is a snapshot.** Every movement is an immutable
+row carrying the balance it produced, and `credit_wallets` exists only so a page load is
+one row rather than a sum over a year. They are written inside one locked transaction, so
+they cannot drift — and `reconcile()` puts the check on the support screen rather than in
+a report nobody runs.
+
+**Append-only by trigger, not by convention.** An Eloquent guard is a suggestion a raw
+query walks straight past, and this is the table a customer's complaint gets settled
+against. A mistake is corrected with a compensating entry, which is how a mistake in any
+ledger is corrected.
+
+**Credits expire in lots, and the soonest deadline is spent first.** A balance cannot
+expire; a grant can. Spending the long-lived credits first would silently destroy the ones
+with a date on them, and the customer would see a balance drop for no reason they could
+find.
+
+**A hold is not a charge.** An AI job reserves before it runs and consumes or releases
+afterwards, so a render that failed because a provider timed out costs the customer
+nothing. Three attempts against a flaky provider is one charge: the retry is our decision
+and our cost.
+
+**Every mutating path is idempotent on a caller-supplied reference.** A client retrying a
+request whose response it never saw is the normal case, not the exceptional one, and
+answering it with a second charge is the failure worth engineering against.
+
+**The direction of each movement is a CHECK constraint.** A "consume" that adds credits is
+not a rounding error, it is free money — and it would balance perfectly in every report,
+which is exactly why the database refuses it rather than trusting the application.
+
+**An adjustment demands a reason, in the schema.** It is the one movement that happens
+because a person decided it should, and "why do I have forty fewer credits than yesterday"
+needs an answer better than "somebody ran a script". The reason reaches the customer's own
+statement, not only an internal log.
+
+**Promotion codes assume somebody is attacking them.** The promotion row is locked before
+its redemptions are counted, so two simultaneous claims cannot both pass; an unknown code,
+an ended campaign and an exhausted budget all give one identical refusal so the endpoint
+cannot be used to enumerate live campaigns; and redemption is rate-limited per account and
+requires a verified e-mail, without which a promotion is a free-credit machine for anybody
+willing to type a different address each time.
+
+**Credit tables restrict deletion rather than cascading.** A financial record outlives the
+account it belonged to, which is also what tax retention requires. Erasing an account
+therefore means anonymising the person and keeping the money — an explicit, audited
+procedure that belongs to Phase 21 rather than a side effect of a foreign key.
 
 ---
 

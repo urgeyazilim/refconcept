@@ -10,6 +10,8 @@ use App\Domains\Ai\Models\AiJob;
 use App\Domains\Ai\Providers\FakeAiProvider;
 use App\Domains\Ai\Services\AiGateway;
 use App\Domains\Ai\Services\AiJobDispatcher;
+use App\Domains\Credits\Enums\CreditLotSource;
+use App\Domains\Credits\Services\CreditLedger;
 use App\Domains\Identity\Enums\SystemRole;
 use App\Domains\Identity\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -34,6 +36,16 @@ beforeEach(function (): void {
 
     $this->admin = User::factory()->create();
     grantPlatformRole($this->admin, SystemRole::SuperAdmin);
+
+    /*
+     * Credits, because a job now holds them before it runs. This suite is about who may
+     * read a job rather than about what it costs, so both accounts are funded well past
+     * anything they will spend — a test that failed here for lack of credits would be
+     * reporting the wrong problem.
+     */
+    $ledger = app(CreditLedger::class);
+    $ledger->grant($this->owner, 100, CreditLotSource::Purchase, 'Test paketi');
+    $ledger->grant($this->stranger, 100, CreditLotSource::Purchase, 'Test paketi');
 
     makeAiRoute(AiTask::RoomAnalysis);
 
