@@ -204,6 +204,22 @@ class Product extends Model
     }
 
     /**
+     * Whether this listing exists, ignoring how many are left.
+     *
+     * The difference from {@see isPubliclyVisible()} is stock, and it matters wherever the
+     * ledger is the authority on quantity — a basket revalidating its own lines, most of
+     * all. A customer holding the last unit at checkout has not had the listing withdrawn
+     * from under them, and treating "none left" as "no longer sold" would empty their
+     * basket while they were paying for it.
+     */
+    public function isListable(): bool
+    {
+        return $this->moderation_status === ModerationStatus::Approved
+            && $this->status === ProductStatus::Active
+            && $this->skus->contains(fn (ProductSku $sku): bool => $sku->isOffered());
+    }
+
+    /**
      * The lowest purchasable price across sellers — the "from" figure on a listing.
      */
     public function lowestActivePrice(): ?ProductSku

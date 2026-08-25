@@ -39,6 +39,15 @@ final class GoogleAiProvider implements AiProvider
 {
     private const DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 
+    /**
+     * The vector width the catalogue column is built for.
+     *
+     * Kept here as well as in the migration because this provider has to be *told* — its
+     * models default to a much wider vector, and a mismatch is not a soft failure: the
+     * insert is refused.
+     */
+    private const EMBEDDING_DIMENSIONS = 768;
+
     public function __construct(private readonly GeneratedImageStore $images) {}
 
     public function driver(): string
@@ -115,6 +124,12 @@ final class GoogleAiProvider implements AiProvider
                 'model' => 'models/'.$call->model->code,
                 'content' => ['parts' => [['text' => $call->prompt]]],
                 'taskType' => (string) ($call->options['task_type'] ?? 'RETRIEVAL_DOCUMENT'),
+                /*
+                 * The width the column expects. This model's native output is far wider,
+                 * and asking for the wider vector would produce numbers PostgreSQL refuses
+                 * — the dimension is fixed in the schema, so it has to be asked for here.
+                 */
+                'outputDimensionality' => self::EMBEDDING_DIMENSIONS,
             ],
         );
 
@@ -134,10 +149,34 @@ final class GoogleAiProvider implements AiProvider
         }
 
         return AiResult::success(
-            embedding: array_map(static fn ($value): float => (float) $value, $values),
+            embedding: $this->normalise(array_map(static fn ($value): float => (float) $value, $values)),
             inputTokens: (int) ceil(mb_strlen($call->prompt) / 4),
             httpStatus: $response->status(),
         );
+    }
+
+    /**
+     * Scales a vector to unit length.
+     *
+     * Necessary rather than tidy. This provider returns a normalised vector only at its
+     * native width; ask for a narrower one — as the schema requires — and the truncated
+     * result is *not* normalised. Cosine distance on unnormalised vectors ranks a long
+     * description above a good one, and the similarity percentage computed from it would be
+     * meaningless. Doing it here means every vector in the column is comparable however it
+     * was produced.
+     *
+     * @param  array<int, float>  $vector
+     * @return array<int, float>
+     */
+    private function normalise(array $vector): array
+    {
+        $magnitude = sqrt(array_sum(array_map(static fn (float $value): float => $value ** 2, $vector)));
+
+        if ($magnitude <= 0.0) {
+            return $vector;
+        }
+
+        return array_map(static fn (float $value): float => $value / $magnitude, $vector);
     }
 
     /**

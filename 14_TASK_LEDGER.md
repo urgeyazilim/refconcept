@@ -73,6 +73,21 @@
 | P9-T005 | 9 | BACKEND_AGENT | P9-T004 | DONE | shopping list tests | Grouped by placement, prices snapshotted, a rerank that cannot break the list |
 | P9-T006 | 9 | STOREFRONT_AGENT | P9-T005 | DONE | storefront E2E | The list beside the render, choosing, and telling us what was wrong |
 | P9-T007 | 9 | INDEPENDENT_TEST_AGENT | P9-T001..006 | DONE | Phase 9 gate | 521 backend tests, 27 E2E journeys (see TEST_REPORT.md) |
+| P10-T001 | 10 | ARCHITECT_AGENT | P9-T007 | DONE | schema review | One open cart per customer, one line per SKU, price snapshots, favourites per product |
+| P10-T002 | 10 | BACKEND_AGENT | P10-T001 | DONE | price race tests | A rise is reported and never applied; a fall blocks nothing; acceptance is explicit |
+| P10-T003 | 10 | BACKEND_AGENT | P10-T001 | DONE | stock race tests | Nothing held while idle; all-or-nothing at checkout; two baskets never exceed the shelf |
+| P10-T004 | 10 | BACKEND_AGENT | P10-T002..003 | DONE | revalidation tests | Sold out removed, short stock reduced, both reported before payment |
+| P10-T005 | 10 | BACKEND_AGENT | P10-T001 | DONE | search tests | Three methods fused by rank, facets over the whole result, nonsense returning nothing |
+| P10-T006 | 10 | STOREFRONT_AGENT | P10-T002..005 | DONE | storefront E2E | Cart, favourites, and a repricing seen from the other side of the marketplace |
+| P10-T007 | 10 | INDEPENDENT_TEST_AGENT | P10-T001..006 | DONE | Phase 10 gate | 561 backend tests, 32 E2E journeys (see TEST_REPORT.md) |
+| P11-T001 | 11 | ARCHITECT_AGENT | P10-T007 | DONE | schema review | Session freezes price and address; one live intent per session; append-only transactions; webhook inbox |
+| P11-T002 | 11 | BACKEND_AGENT | P11-T001 | DONE | state machine tests | Declared transitions only; late news dropped and logged; capture fulfils exactly once |
+| P11-T003 | 11 | BACKEND_AGENT | P11-T001 | DONE | duplicate tests | E2E-03: four deliveries, one credit load; two distinct events with the same news act once |
+| P11-T004 | 11 | BACKEND_AGENT | P11-T002 | DONE | timeout tests | A timeout is retryable and the session survives; the provider is asked rather than guessed at |
+| P11-T005 | 11 | DEVOPS_SECURITY_AGENT | P11-T001 | DONE | replay tests | Signature over exact bytes; unsigned events stored and refused; Idempotency-Key replay |
+| P11-T006 | 11 | BACKEND_AGENT | P11-T001 | DONE | gateway contract | Five-method adapter contract, registry, marketplace settlement kept separate, test provider |
+| P11-T007 | 11 | STOREFRONT_AGENT | P11-T002..006 | DONE | checkout E2E | Payment page, 3DS round trip, return page that asks rather than assumes, credit purchase |
+| P11-T008 | 11 | INDEPENDENT_TEST_AGENT | P11-T001..007 | DONE | Phase 11 gate | 594 backend tests, 38 E2E journeys, 4 defects found and fixed (see TEST_REPORT.md) |
 
 ## Scope notes
 

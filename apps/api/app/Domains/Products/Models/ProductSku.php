@@ -146,11 +146,25 @@ class ProductSku extends Model
      */
     public function isAvailable(): bool
     {
-        if (! $this->status->isPurchasable()) {
-            return false;
-        }
+        return $this->isOffered()
+            && (! $this->stock_policy->tracksQuantity() || $this->stock_quantity > 0);
+    }
 
-        if ($this->stock_policy->tracksQuantity() && $this->stock_quantity <= 0) {
+    /**
+     * Whether this offer exists at all, ignoring how many are left.
+     *
+     * The distinction matters wherever the *ledger* is the authority on quantity. An offer
+     * whose last unit is held by the very basket asking about it is still an offer — and
+     * checking `isAvailable()` there would have a customer's own checkout hold empty their
+     * basket and tell them the thing they are buying is sold out.
+     *
+     * `stock_quantity` on this row is a projection of the ledger kept for the catalogue's
+     * list query, which cannot run an aggregate per row. Anything that can ask the ledger
+     * should ask the ledger.
+     */
+    public function isOffered(): bool
+    {
+        if (! $this->status->isPurchasable()) {
             return false;
         }
 

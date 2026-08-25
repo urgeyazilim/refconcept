@@ -238,6 +238,104 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a demo product page claimed six in stock while the stock screen was empty. Opening
   stock is now booked as a receipt through the ledger.
 
+### Added — Phase 11 (Checkout and payment core)
+
+- **A checkout session that freezes what is being paid for.** Between pressing "pay" and
+  the bank answering there is a redirect, a 3DS page and often several minutes — and in
+  those minutes a seller can reprice and an address book can be edited. The session copies
+  the totals and the address text in and stops asking, so the amount charged is the amount
+  agreed and the parcel goes where it was promised.
+- **A payment state machine with declared transitions.** Providers deliver news out of
+  order: a capture can arrive before the browser has come back from 3DS, a failure can
+  follow a success because an older retry was queued behind it. A transition that is not
+  listed is not applied — a late "failed" against a captured payment is dropped, because
+  the alternative is a record saying we were not paid while the money sits in the account.
+- **A webhook inbox: received first, understood later, never twice.** The endpoint writes
+  a row and answers 200; a queued job works out what it meant. Doing the domain work inline
+  is how a slow database turns into a provider retry, then a second delivery, then a
+  customer credited twice. Duplicates are answered 200 for the same reason — a provider
+  told a duplicate failed will resend it forever.
+- **Two duplicate defences.** The inbox dedupes on the provider's own event id *and* on a
+  fingerprint of the raw body, both unique indexes so a simultaneous double delivery is
+  settled by PostgreSQL rather than by a check-then-insert both copies pass. And because a
+  provider may send two genuinely *different* events carrying the same news, the state
+  machine catches what no fingerprint can.
+- **`Idempotency-Key` on the one route where a duplicate costs money.** A browser on a bad
+  connection retries. A mobile app retries on timeout. Both get the first answer back, byte
+  for byte. The same key with a different body is refused rather than answered with
+  somebody else's result, and a failed answer is never stored — freezing a transient error
+  into a permanent one for that key would be worse than the error.
+- **An append-only payment record**, enforced by a PostgreSQL trigger rather than by an
+  Eloquent guard a raw query would walk past. Every call to a provider and its outcome,
+  including the ones we were told and deliberately ignored. When a customer says they were
+  charged twice, this table is the answer, and it is only an answer if nothing can quietly
+  edit it.
+- **A provider contract with five methods and nothing else**, and a marketplace settlement
+  capability kept separate because most providers do not have one. An adapter translates
+  vocabulary; it does not retry, does not write to the database, and does not decide what a
+  successful payment means. Adding iyzico cannot introduce a second set of rules about when
+  a payment counts as paid.
+- **A test provider that behaves like a real one** — immediate capture, 3DS, a decline, a
+  timeout, a refund, duplicate webhooks — with no network call, chosen by card token rather
+  than by amount. It is what lets the payment tests be part of the ordinary suite instead of
+  something somebody remembers to run against a sandbox once a release.
+- **Card data never enters the codebase.** No PAN, no CVV, no expiry: the customer types it
+  on the provider's own page and we receive a token or a redirect. Provider responses are
+  redacted before they are stored, belt and braces.
+- **A payment page and a return page** in the storefront, a working "Satın al" on the credit
+  packages where a placeholder used to promise one, and a checkout that gives the stock back
+  the moment somebody changes their mind.
+
+### Fixed — Phase 11
+
+- **A basket emptied by its own stock hold.** A customer taking the last of the stock into
+  checkout and then re-reading their basket was told the thing they were buying was sold
+  out, and the lines were removed. Revalidation now counts a cart's own reservations as
+  available to it, and "withdrawn" is separated from "none left" so the ledger stays the
+  authority on quantity.
+- **A sold-out listing that stayed on sale.** `product_skus.stock_quantity` — what the
+  catalogue's list query reads — was written only by the seller's own stock endpoint, so
+  buying the last unit left the listing advertising stock until a seller happened to open
+  the stock page. The inventory ledger now keeps the projection in step on every movement.
+
+### Added — Phase 10 (Search, favourites and the basket)
+
+- **A multi-seller basket.** Lines are grouped by who is selling them, because that is what
+  a marketplace basket is: several parcels from several shops, arriving on different days.
+  The seller is recorded on the line rather than looked up through the offer, so a basket
+  keeps saying which shop something came from even after the listing is withdrawn.
+- **Stock is not held while a basket sits there.** Holding it would mean a browser tab left
+  open for a week keeps a sofa off the market, and a marketplace's job is to sell the sofa.
+  The hold is taken at checkout, for fifteen minutes, by the ledger built in Phase 4 — all
+  of a basket or none of it, with rows locked in a fixed order so two baskets queue instead
+  of deadlocking. Backing out releases immediately rather than leaving a sofa unbuyable
+  while somebody else is told "sold out".
+- **A price is snapshotted when a line is added, and never silently changed.** Revalidation
+  reports what moved: a rise is shown with both figures and has to be accepted, a fall
+  blocks nothing, an item that sold out is removed and said so, and one short of stock is
+  reduced rather than dropped. Charging a customer more than they were shown is the failure
+  this whole mechanism exists to prevent, and finding out at payment is the worst moment.
+- **Tax is counted as part of the price, not on top.** Turkish prices are quoted inclusive
+  of KDV: 20.000₺ at 20% contains 3.333,33₺ of tax. The other way round overcharges every
+  customer by a fifth.
+- **Hybrid search**: a trigram match on the name for the misspellings a search box actually
+  receives, full-text over the description, and a vector for meaning — fused by rank rather
+  than by score, because a similarity, a `ts_rank` and a cosine distance are numbers on
+  unrelated scales and adding them is arithmetic without meaning.
+- **The vector ranks but does not decide.** Measured against the live embedding model, pure
+  nonsense sits about 0.35 from its nearest product and a real keyword match about 0.30 —
+  not a margin to build a search box on. So a query with no lexical footing returns nothing
+  rather than answering gibberish with a page of sofas.
+- **Facets** for category, style and price band, counted before pagination and excluding
+  their own filter — the only way a count tells somebody what is behind a filter they have
+  not clicked yet. Empty bands are not offered at all.
+- **Favourites**, per product rather than per offer: favouriting a sofa means the sofa, and
+  a favourite that broke when one seller went out of stock would be a promise the feature
+  never made. A withdrawn product leaves the list but keeps its row, so re-listing brings
+  it back.
+- **A cart page and a favourites page** in the storefront, and a working basket button on
+  the product page where a placeholder used to say the feature was coming.
+
 ### Added — Phase 9 (Product matching)
 
 - **A design now comes with a shopping list.** Every placement in the plan — "a sofa up to

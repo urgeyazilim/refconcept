@@ -73,7 +73,11 @@ final class AiGatewaySeeder extends Seeder
          */
         $models['gemini-embedding'] = $this->model(
             $google,
-            'text-embedding-004',
+            // The model this key can actually reach; `text-embedding-004` is retired.
+            // A model code that does not exist fails on the first job with a message that
+            // reads like an outage, so it is worth checking against ListModels when this
+            // is changed.
+            'gemini-embedding-001',
             'Gemini Text Embedding',
             AiModality::Embedding,
             contextTokens: 2_048,

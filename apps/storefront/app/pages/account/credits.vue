@@ -87,6 +87,30 @@ async function load() {
 
 await load()
 
+const buying = ref<string | null>(null)
+const buyError = ref<string | null>(null)
+
+/**
+ * Opens a checkout for one package and hands over to the payment page.
+ *
+ * The same session, the same intent and the same webhook path a basket uses. A top-up
+ * that took its own route through the payment code would need its own defence against
+ * duplicate confirmations, and would eventually get one that was subtly weaker.
+ */
+async function buy(id: string) {
+  buying.value = id
+  buyError.value = null
+
+  try {
+    await api.post('/api/v1/checkout/credits', { package_id: id })
+    await navigateTo('/checkout?purpose=credits')
+  } catch (error) {
+    buyError.value = error instanceof ApiError ? error.message : 'Ödeme adımı açılamadı.'
+  } finally {
+    buying.value = null
+  }
+}
+
 async function redeem() {
   if (!code.value.trim()) return
 
@@ -151,7 +175,7 @@ function formatDate(iso: string): string {
 
         <div class="rounded-sm border border-line bg-surface p-5">
           <p class="text-[11px] tracking-wide text-muted uppercase">Toplam bakiye</p>
-          <p class="mt-1 text-3xl font-medium tabular-nums">{{ wallet.balance }}</p>
+          <p data-testid="credit-balance" class="mt-1 text-3xl font-medium tabular-nums">{{ wallet.balance }}</p>
           <!--
             Only shown when there is something held. A permanent "0 bloke" line teaches
             people to ignore the number, which is the opposite of what it is for.
@@ -218,6 +242,8 @@ function formatDate(iso: string): string {
       <section v-if="packages.length > 0">
         <h2 class="text-sm font-medium">Kredi paketleri</h2>
 
+        <p v-if="buyError" class="mt-2 text-sm text-danger">{{ buyError }}</p>
+
         <div class="mt-3 grid gap-3 sm:grid-cols-3">
           <article
             v-for="item in packages"
@@ -239,13 +265,15 @@ function formatDate(iso: string): string {
               {{ item.validity_days }} gün geçerli
             </p>
 
-            <!--
-              Honest rather than a button that does nothing. Payment arrives in its own
-              phase, and a disabled "Satın al" with no explanation reads as a broken page.
-            -->
-            <p class="mt-4 rounded-sm bg-bg-muted px-3 py-2 text-xs text-muted">
-              Satın alma yakında açılıyor.
-            </p>
+            <RcButton
+              class="mt-4 w-full"
+              size="sm"
+              :loading="buying === item.id"
+              :disabled="buying !== null"
+              @click="buy(item.id)"
+            >
+              Satın al
+            </RcButton>
           </article>
         </div>
       </section>

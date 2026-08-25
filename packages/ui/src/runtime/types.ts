@@ -664,3 +664,86 @@ export interface DesignDetail extends DesignSummary {
   } | null
   tree: DesignTreeNode[]
 }
+
+/*
+ * Checkout and payments.
+ *
+ * The totals are all integer minor units and stay that way until they are formatted for
+ * display. A float here would be a rounding error in somebody's bank statement.
+ */
+
+export type CheckoutPurpose = 'cart' | 'credits'
+
+export type CheckoutStatus =
+  | 'open'
+  | 'awaiting_payment'
+  | 'paid'
+  | 'failed'
+  | 'cancelled'
+  | 'expired'
+
+export type PaymentStatus =
+  | 'created'
+  | 'requires_action'
+  | 'processing'
+  | 'authorized'
+  | 'captured'
+  | 'partially_refunded'
+  | 'refunded'
+  | 'failed'
+  | 'cancelled'
+  | 'expired'
+
+export interface CheckoutLine {
+  type: 'product' | 'credit_package'
+  name: string
+  quantity: number
+  unit_price_minor: number
+  line_total_minor: number
+  credits?: number
+  bonus_credits?: number
+}
+
+export interface CheckoutTotals {
+  subtotal_minor: number
+  discount_minor: number
+  shipping_minor: number
+  tax_minor: number
+  grand_total_minor: number
+}
+
+export interface PaymentSummary {
+  id: string
+  status: PaymentStatus
+  status_label: string
+  gateway: string
+  method: string
+  amount_minor: number
+  currency: string
+  captured_minor: number
+  refunded_minor: number
+  reference: string | null
+  /** Only ever present while the payment is waiting on the customer's bank. */
+  redirect_url: string | null
+  failure_message: string | null
+  created_at: string | null
+}
+
+export interface CheckoutSession {
+  id: string
+  purpose: CheckoutPurpose
+  status: CheckoutStatus
+  status_label: string
+  currency: string
+  totals: CheckoutTotals
+  lines: CheckoutLine[]
+  shipping_address: Record<string, string | null> | null
+  billing_address: Record<string, string | null> | null
+  expires_at: string | null
+  payment: PaymentSummary | null
+}
+
+export interface PaymentMethodOption {
+  gateway: string
+  is_default: boolean
+}

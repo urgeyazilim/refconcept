@@ -18,6 +18,8 @@ use App\Domains\Identity\Services\EmailVerificationService;
 use App\Domains\Identity\Services\PasswordResetService;
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Organizations\Policies\OrganizationPolicy;
+use App\Domains\Payments\Gateways\FakePaymentGateway;
+use App\Domains\Payments\Services\GatewayRegistry;
 use App\Domains\Products\Models\Product;
 use App\Domains\Products\Policies\ProductPolicy;
 use App\Domains\Projects\Models\Design;
@@ -59,6 +61,23 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(AuthenticateUser::class, fn (): AuthenticateUser => new AuthenticateUser(
             (int) config('refconcept.security.tokens.ttl_days', 30),
         ));
+
+        /*
+         * Who may take money.
+         *
+         * A singleton with its adapters registered explicitly, rather than a lookup that
+         * discovers classes in a directory. Discovery would mean a file dropped in the
+         * right folder changes who charges customers, which is more authority than a
+         * filename should carry. Whether a registered gateway may actually be *used* is a
+         * separate, configured question — see GatewayRegistry::isEnabled().
+         */
+        $this->app->singleton(GatewayRegistry::class, function (): GatewayRegistry {
+            $registry = new GatewayRegistry;
+
+            $registry->register($this->app->make(FakePaymentGateway::class));
+
+            return $registry;
+        });
     }
 
     public function boot(): void

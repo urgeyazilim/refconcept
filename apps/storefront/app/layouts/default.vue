@@ -77,6 +77,13 @@ watch(() => route.fullPath, () => {
               Hesabım
             </NuxtLink>
             <NuxtLink
+              to="/favorites"
+              class="block rounded-sm px-3 py-2 text-sm text-ink-secondary hover:bg-bg-muted hover:text-ink"
+              role="menuitem"
+            >
+              Favorilerim
+            </NuxtLink>
+            <NuxtLink
               to="/account/credits"
               class="block rounded-sm px-3 py-2 text-sm text-ink-secondary hover:bg-bg-muted hover:text-ink"
               role="menuitem"
@@ -100,6 +107,19 @@ watch(() => route.fullPath, () => {
             </button>
           </div>
         </div>
+
+        <!--
+          The basket is in the header rather than only in the account menu: it is the one
+          thing a shopper checks constantly, and burying it behind a dropdown is how a
+          half-filled cart gets forgotten.
+        -->
+        <NuxtLink
+          v-if="isAuthenticated"
+          to="/cart"
+          class="hidden text-sm text-ink-secondary hover:text-ink sm:block"
+        >
+          Sepetim
+        </NuxtLink>
 
         <div v-else class="flex items-center gap-3">
           <NuxtLink

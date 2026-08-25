@@ -241,6 +241,7 @@ test.describe('product lifecycle', () => {
     })).json()
 
     const productId = created.data.id
+    const slug = created.data.slug
 
     await request.post(`${API}/api/v1/seller/products/${productId}/media`, {
       headers: { Authorization: `Bearer ${seller.account.token}` },
@@ -280,12 +281,17 @@ test.describe('product lifecycle', () => {
     await expect(page.getByText('Görsel çözünürlüğü yetersiz, açıklama çok kısa.')).toBeVisible()
     await expect(page.getByText(/İşaretlenen alanlar:.*media/)).toBeVisible()
 
-    // --- the listing stays out of the catalogue and reopens for the seller ------
-    const catalogue = await request.get(
-      `${API}/api/v1/catalog/products?search=${encodeURIComponent(productName)}`,
-    )
+    /*
+     * --- the listing stays out of the catalogue and reopens for the seller ------
+     *
+     * Asked for by slug rather than by a name search. A slug is unique; a name search is
+     * a *similarity* query, so it legitimately also finds the same-named listings left by
+     * earlier runs — which would make this assertion about test isolation rather than
+     * about moderation.
+     */
+    const catalogue = await request.get(`${API}/api/v1/catalog/products/${slug}`)
 
-    expect((await catalogue.json()).data).toHaveLength(0)
+    expect(catalogue.status()).toBe(404)
 
     await signIn(page, PORTAL, seller.account.email)
     await gotoInteractive(page, `${PORTAL}/products/${productId}`)

@@ -3,11 +3,15 @@
 declare(strict_types=1);
 
 use App\Domains\Ai\Exceptions\AiJobRefused;
+use App\Domains\Commerce\Exceptions\CartRefused;
 use App\Domains\Credits\Console\SweepExpiredCreditsCommand;
 use App\Domains\Credits\Exceptions\InsufficientCredits;
 use App\Domains\Identity\Console\GrantRoleCommand;
 use App\Domains\Inventory\Console\ReleaseExpiredReservationsCommand;
 use App\Domains\Matching\Console\EmbedCatalogueCommand;
+use App\Domains\Payments\Console\ExpireCheckoutSessionsCommand;
+use App\Domains\Payments\Exceptions\CheckoutRefused;
+use App\Domains\Payments\Exceptions\GatewayUnavailable;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -27,6 +31,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ReleaseExpiredReservationsCommand::class,
         SweepExpiredCreditsCommand::class,
         EmbedCatalogueCommand::class,
+        ExpireCheckoutSessionsCommand::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         // The three Nuxt clients are separate origins; CORS is configured in config/cors.php.
@@ -59,5 +64,32 @@ return Application::configure(basePath: dirname(__DIR__))
         // is a 503 that says "try later", a concurrency limit a 429 that says "you, later".
         $exceptions->render(function (AiJobRefused $e) {
             return response()->json(['message' => $e->getMessage()], $e->status);
+        });
+
+        /*
+         * A basket refusal carries its own status too. A stock problem is a 409 — the
+         * request was fine and the world changed underneath it — while a quantity of two
+         * hundred is a 422, because the request itself was wrong. A controller inventing
+         * its own answer would get that distinction wrong sooner or later.
+         */
+        $exceptions->render(function (CartRefused $e) {
+            return response()->json(['message' => $e->getMessage()], $e->status);
+        });
+
+        // The same shape once more for checkout: an expired session is a 409 because the
+        // world moved on, a missing address a 422 because the request was incomplete.
+        $exceptions->render(function (CheckoutRefused $e) {
+            return response()->json(['message' => $e->getMessage()], $e->status);
+        });
+
+        /*
+         * No provider can take the payment.
+         *
+         * A 503 rather than a 500: the customer did nothing wrong and trying again in a
+         * moment might genuinely work. The gateway's name stays out of the response —
+         * an error page is not the place to publish which integrations are switched off.
+         */
+        $exceptions->render(function (GatewayUnavailable $e) {
+            return response()->json(['message' => $e->getMessage()], 503);
         });
     })->create();

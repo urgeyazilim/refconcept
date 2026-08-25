@@ -50,3 +50,17 @@ Schedule::command('refconcept:embed-catalogue')
     ->dailyAt('03:20')
     ->withoutOverlapping()
     ->runInBackground();
+
+/*
+ * Abandoned checkouts are closed and their stock returned.
+ *
+ * Every minute, which is more often than any other sweep here, because this one is not
+ * only housekeeping: a customer may have just one live session per purpose, so a checkout
+ * left at the payment step locks them out of starting another until it is cleared. A
+ * fifteen-minute session followed by a five-minute wait to be told so is twenty minutes
+ * of somebody unable to buy anything.
+ */
+Schedule::command('refconcept:expire-checkouts')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->runInBackground();

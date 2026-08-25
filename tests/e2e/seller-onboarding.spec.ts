@@ -14,6 +14,7 @@ import { gotoHydrated, waitForHydration } from './support/hydration'
  */
 
 const PORTAL = process.env.E2E_SELLER_PORTAL_URL ?? 'http://localhost:3001'
+const API = process.env.E2E_API_URL ?? 'http://localhost:58000'
 
 async function signIn(page: Page, email: string): Promise<void> {
   await page.goto(`${PORTAL}/auth/login`)
@@ -27,7 +28,7 @@ async function signIn(page: Page, email: string): Promise<void> {
 }
 
 test.describe('seller onboarding', () => {
-  test('a new seller completes the application and submits it for review', async ({ page }) => {
+  test('a new seller completes the application and submits it for review', async ({ page, request }) => {
     const account = await createVerifiedAccount('onboarding')
 
     await signIn(page, account.email)
@@ -109,24 +110,44 @@ test.describe('seller onboarding', () => {
       await expect(page.getByText('Belge yüklendi.')).toBeVisible()
     }
 
-    // --- agreements -----------------------------------------------------------
-    // Each acceptance reloads the application, so the list is driven down by what is
-    // still on screen rather than by a count captured once. Waiting on the count is
-    // what makes the next click land after the reload instead of during it.
+    /*
+     * --- agreements -----------------------------------------------------------
+     *
+     * Each click is confirmed by waiting for a badge to *appear*, not for a button to
+     * disappear. The difference caught a real defect: a reload used to blank the whole
+     * form, so "no accept buttons on screen" was also what a page mid-refresh looked
+     * like — the loop could see zero, decide there was nothing left to accept, and pass
+     * having accepted nothing at all. An appearing badge cannot be faked by an empty
+     * page.
+     */
     const acceptButtons = page.getByRole('button', { name: 'Okudum, onaylıyorum' })
+    const acceptedBadges = page.getByText('Onaylandı', { exact: true })
 
-    expect(await acceptButtons.count()).toBeGreaterThan(0)
+    const outstandingCount = await acceptButtons.count()
+    expect(outstandingCount).toBeGreaterThan(0)
 
-    for (let guard = 0; guard < 10; guard++) {
-      const remaining = await acceptButtons.count()
-
-      if (remaining === 0) break
-
+    for (let accepted = 0; accepted < outstandingCount; accepted++) {
       await acceptButtons.first().click()
-      await expect(acceptButtons).toHaveCount(remaining - 1)
+      await expect(acceptedBadges).toHaveCount(accepted + 1)
     }
 
     await expect(acceptButtons).toHaveCount(0)
+
+    /*
+     * The buttons being gone is not the same as the acceptances having landed — the list
+     * is empty for a moment while the page reloads too. Checked against the API so that a
+     * failed acceptance fails here, at its cause, rather than three steps later as a
+     * submit button that will not enable and no explanation of why.
+     */
+    const agreements = await request.get(`${API}/api/v1/seller/agreements`, {
+      headers: { Authorization: `Bearer ${account.token}`, Accept: 'application/json' },
+    })
+
+    const outstanding = (await agreements.json()).data
+      .filter((agreement: { accepted: boolean }) => !agreement.accepted)
+      .map((agreement: { title: string }) => agreement.title)
+
+    expect(outstanding, `onaylanmayan sözleşmeler: ${outstanding.join(', ')}`).toHaveLength(0)
 
     // --- submit ---------------------------------------------------------------
     const submit = page.getByRole('button', { name: 'İncelemeye gönder' })
@@ -195,7 +216,7 @@ test.describe('seller review', () => {
     // Build a complete application through the API: this test is about the review
     // decision, not about re-driving the wizard a third time.
     const headers = { Authorization: `Bearer ${applicant.token}`, Accept: 'application/json' }
-    const api = process.env.E2E_API_URL ?? 'http://localhost:58000'
+    const api = API
 
     await request.post(`${api}/api/v1/seller/application`, {
       headers,

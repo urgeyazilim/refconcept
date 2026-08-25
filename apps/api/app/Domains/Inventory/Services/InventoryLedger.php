@@ -394,6 +394,25 @@ final class InventoryLedger
     }
 
     /** Sellable units for a SKU across every active location. */
+    /**
+     * Every hold taken against one reference.
+     *
+     * A basket reserves several SKUs under one reference, so releasing it means finding
+     * them all — and a caller that kept its own list of reservation ids would be a second
+     * record of the same thing, drifting the first time one path forgot to update it.
+     *
+     * @return array<int, StockReservation>
+     */
+    public function reservationsFor(string $referenceType, string $referenceId): array
+    {
+        return StockReservation::query()
+            ->where('reference_type', $referenceType)
+            ->where('reference_id', $referenceId)
+            ->held()
+            ->get()
+            ->all();
+    }
+
     public function sellableFor(ProductSku $sku): int
     {
         return (int) StockItem::query()
@@ -457,6 +476,8 @@ final class InventoryLedger
         ?string $referenceType,
         ?string $referenceId,
     ): StockMovement {
+        $this->project($item);
+
         return StockMovement::query()->create([
             'stock_item_id' => $item->getKey(),
             'type' => $type,
@@ -468,6 +489,45 @@ final class InventoryLedger
             'reason' => $reason,
             'created_by' => $actor?->getKey(),
         ]);
+    }
+
+    /**
+     * Keeps the SKU's own quantity in step with the ledger.
+     *
+     * `product_skus.stock_quantity` is a projection, not a source: the catalogue's list
+     * query cannot run an aggregate per row, so it reads a column instead. Every movement
+     * updates it here, in the ledger, because the ledger is the only thing that knows the
+     * figure changed.
+     *
+     * It used to be updated by the seller's stock controller alone, which meant a sale
+     * did not touch it at all — the last unit could be bought and paid for while the
+     * listing went on saying it was in stock, until a seller happened to open the stock
+     * page. The next customer only found out at checkout.
+     *
+     * Written with a direct update rather than through the model: this runs inside a
+     * locked transaction on a hot path, and there is nothing on the SKU to observe.
+     */
+    private function project(StockItem $item): void
+    {
+        ProductSku::query()
+            ->whereKey($item->sku_id)
+            ->update(['stock_quantity' => $this->sellableForId($item->sku_id)]);
+    }
+
+    /**
+     * The sellable total for a SKU by id.
+     *
+     * The same question {@see sellableFor()} answers, asked without a model to hand. The
+     * active-location filter is repeated deliberately rather than approximated: a
+     * projection that disagreed with the authority would be worse than no projection.
+     */
+    private function sellableForId(string $skuId): int
+    {
+        return (int) StockItem::query()
+            ->forSku($skuId)
+            ->whereHas('location', fn ($location) => $location->where('is_active', true))
+            ->get()
+            ->sum(fn (StockItem $item): int => $item->sellable());
     }
 
     /**

@@ -66,6 +66,86 @@ const taxNote = computed(() => {
   return `Fiyata %${bpsToPercent(sku.tax_rate_bps)} KDV dahildir.`
 })
 
+const quantity = ref(1)
+const addingToCart = ref(false)
+const favoriting = ref(false)
+const isFavorite = ref(false)
+const cartMessage = ref<string | null>(null)
+const cartError = ref(false)
+
+const { isAuthenticated } = useAuth()
+
+/**
+ * Whether this product is already on the customer's list.
+ *
+ * Asked once on load, and only when somebody is signed in — a flag on every catalogue
+ * response would mean a join on a listing anonymous visitors also read.
+ */
+async function loadFavoriteState() {
+  if (!isAuthenticated.value || !product.value) return
+
+  try {
+    const response = await api.post<{ data: string[] }>('/api/v1/favorites/check', {
+      product_ids: [product.value.id],
+    })
+
+    isFavorite.value = response.data.length > 0
+  } catch {
+    // A favourite indicator that fails to load is not worth an error message.
+  }
+}
+
+await loadFavoriteState()
+
+async function addToCart() {
+  if (!selectedSku.value) return
+
+  addingToCart.value = true
+  cartMessage.value = null
+  cartError.value = false
+
+  try {
+    await api.post('/api/v1/cart/items', {
+      sku_id: selectedSku.value.id,
+      quantity: quantity.value,
+    })
+
+    cartMessage.value = 'Ürün sepetinize eklendi.'
+  } catch (error) {
+    cartError.value = true
+    cartMessage.value = error instanceof ApiError
+      ? (error.isUnauthorized ? 'Sepete eklemek için giriş yapın.' : error.message)
+      : 'Ürün sepete eklenemedi.'
+  } finally {
+    addingToCart.value = false
+  }
+}
+
+async function toggleFavorite() {
+  if (!product.value) return
+
+  favoriting.value = true
+  cartMessage.value = null
+  cartError.value = false
+
+  try {
+    if (isFavorite.value) {
+      await api.delete(`/api/v1/favorites/${product.value.id}`)
+      isFavorite.value = false
+    } else {
+      await api.post(`/api/v1/favorites/${product.value.id}`)
+      isFavorite.value = true
+    }
+  } catch (error) {
+    cartError.value = true
+    cartMessage.value = error instanceof ApiError
+      ? (error.isUnauthorized ? 'Favorilere eklemek için giriş yapın.' : error.message)
+      : 'İşlem tamamlanamadı.'
+  } finally {
+    favoriting.value = false
+  }
+}
+
 const deliveryNote = computed(() => {
   const sku = selectedSku.value
 
@@ -208,16 +288,46 @@ const deliveryNote = computed(() => {
             <p v-if="deliveryNote" class="mt-1.5 text-ink-secondary">{{ deliveryNote }}</p>
           </div>
 
-          <!-- Basket arrives in Phase 6; saying so beats a button that does nothing. -->
-          <div class="rounded-md border border-dashed border-line-strong p-5 text-sm">
-            <p class="font-medium">Sepet yakında</p>
-            <p class="mt-1.5 leading-relaxed text-ink-secondary">
-              Sipariş akışı hazırlanıyor. Bu ürünü tasarımınızda kullanmak için
-              RefConcept hesabınızla oda fotoğrafınızı yükleyebilirsiniz.
+          <!-- Basket -->
+          <div class="space-y-3">
+            <div class="flex flex-wrap items-center gap-3">
+              <label for="quantity" class="sr-only">Adet</label>
+              <input
+                id="quantity"
+                v-model.number="quantity"
+                type="number"
+                min="1"
+                max="99"
+                class="w-20 rounded-sm border border-line bg-surface px-3 py-2.5 text-sm tabular-nums"
+              >
+
+              <RcButton
+                :loading="addingToCart"
+                :disabled="addingToCart || !selectedSku?.is_available"
+                @click="addToCart"
+              >
+                Sepete ekle
+              </RcButton>
+
+              <button
+                type="button"
+                class="rounded-sm border border-line px-3 py-2.5 text-sm text-ink-secondary transition-colors hover:bg-bg-muted hover:text-ink disabled:opacity-40"
+                :disabled="favoriting"
+                :aria-pressed="isFavorite"
+                @click="toggleFavorite"
+              >
+                {{ isFavorite ? 'Favorilerimde' : 'Favorilere ekle' }}
+              </button>
+            </div>
+
+            <!--
+              Whatever the API said, in its own words. A basket refusal carries the number
+              that matters — "yalnızca 2 adet kaldı" — and paraphrasing it here would lose
+              exactly the part the customer needs.
+            -->
+            <p v-if="cartMessage" class="text-sm" :class="cartError ? 'text-danger' : 'text-success'">
+              {{ cartMessage }}
             </p>
-            <RcButton to="/account" size="sm" variant="secondary" class="mt-4">
-              Hesabıma git
-            </RcButton>
           </div>
 
           <!-- Dimensions -->

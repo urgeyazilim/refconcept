@@ -12,19 +12,19 @@ WEB
 IN_PROGRESS
 
 ## Current Phase
-PHASE_10
+PHASE_12
 
 ## Current Task
-Not started — Phase 9 is closed and Phase 10 has not begun.
+Not started — Phase 11 is closed and Phase 12 has not begun.
 
 ## Last Completed Task
-P9-T007 — Phase 9 gate verified end to end (see `TEST_REPORT.md`).
+P11-T008 — Phase 11 gate verified end to end (see `TEST_REPORT.md`).
 
 ## Next Task
-Phase 10 — Search / Favorites / Cart, shipping its own UI slice alongside its API.
+Phase 12 — iyzico, shipping its own UI slice alongside its API.
 
 ## Test State
-PASS — 521 backend tests / 1592 assertions, 27 Playwright E2E journeys across all three
+PASS — 594 backend tests / 1804 assertions, 38 Playwright E2E journeys across all three
 apps, PHPStan level 6, Pint, ESLint, vue-tsc and the design token guard all clean.
 
 ## Release State
@@ -639,6 +639,155 @@ that a rejected product is not suggested again for that spot.
 The text embedded is assembled from what describes the product, in a fixed order, with the
 seller's name and delivery terms deliberately left out: two sofas from the same shop must
 not be similar *because* of the shop.
+
+### PHASE_10_SEARCH_FAVORITES_CART — DONE (2026-08-25)
+
+```text
+UPDATED_AT: 2026-08-25
+COMMIT_OR_SNAPSHOT: phase-10-shopping
+PHASE: 10 — Search / Favorites / Cart
+TASK: P10-T001 .. P10-T007
+STATUS: DONE
+FILES_CHANGED:
+  apps/api/database/migrations/0001_01_01_000020_create_cart_and_favorite_tables.php
+  apps/api/app/Domains/Commerce/Enums/{CartStatus,LineIssue}.php
+  apps/api/app/Domains/Commerce/Models/{Cart,CartItem,Favorite}.php
+  apps/api/app/Domains/Commerce/Services/{CartService,CatalogSearch}.php
+  apps/api/app/Domains/Commerce/Exceptions/CartRefused.php
+  apps/api/app/Domains/Commerce/Http/Controllers/{CartController,FavoriteController}.php
+  apps/api/app/Domains/Commerce/Tests/{CartRaceTest,SearchAndFavoritesTest}.php
+  apps/api/app/Domains/Catalog/Http/Controllers/PublicCatalogController.php  (hybrid + facets)
+  apps/api/app/Domains/Inventory/Services/InventoryLedger.php  (reservationsFor)
+  apps/api/app/Domains/Ai/Providers/GoogleAiProvider.php  (embedding width, normalisation)
+  apps/api/database/seeders/AiGatewaySeeder.php
+  apps/api/routes/domains/shopping.php, routes/api.php, bootstrap/app.php
+  apps/storefront/app/pages/{cart,favorites}.vue
+  apps/storefront/app/pages/catalog/[slug].vue, app/layouts/default.vue
+  tests/e2e/shopping.spec.ts
+MIGRATIONS: 3 tables — favorites, carts (one open per customer, partial unique index),
+  cart_items (one line per SKU); plus a trigram index on products.name
+TESTS_RUN: php artisan test · phpstan level 6 · pint --test · eslint · vue-tsc
+  · check-design-tokens.mjs · playwright (full suite)
+TEST_RESULT: PASS (561 backend tests / 1697 assertions; 32 E2E journeys)
+BLOCKERS: none
+NEXT_ACTION: Phase 11 — Checkout / Payment Core
+```
+
+**Stock is not held while something sits in a basket.** Holding it would mean a browser
+tab left open for a week keeps a sofa off the market, and a marketplace's job is to sell
+the sofa. The hold is taken at checkout, for fifteen minutes, by the ledger built in Phase
+4 — all of a basket or none of it, with rows locked in a fixed order so two baskets queue
+rather than deadlock.
+
+**A price is snapshotted when a line is added, and never silently changed.** Revalidation
+reports: a rise is shown with both figures and has to be accepted, a fall blocks nothing,
+something sold out is removed and said so. Charging a customer more than they were shown
+is the failure this whole mechanism exists to prevent.
+
+**The basket is grouped by seller** because that is what a marketplace basket is — several
+parcels from several shops, arriving on different days — and the seller is recorded on the
+line so it keeps saying who was selling something after the offer is withdrawn.
+
+**Search is three methods fused by rank**, not by score: a trigram similarity, a `ts_rank`
+and a cosine distance are numbers on unrelated scales and adding them is arithmetic without
+meaning. Reciprocal rank fusion asks each only for an ordering.
+
+**The vector ranks but does not decide.** Measured against the live embedding model, pure
+nonsense sits about 0.35 from its nearest product and a real keyword match about 0.30 — six
+hundredths is not a margin to build a search box on. So a query with no lexical footing
+returns nothing, which costs the purely semantic case and is far better than answering
+gibberish with a page of sofas.
+
+**Facets are counted before pagination and exclude their own filter**, so a count tells a
+customer what is behind a filter they have not clicked yet — which is the only thing a
+facet count is for.
+
+### PHASE_11_CHECKOUT_PAYMENT_CORE — DONE (2026-08-25)
+
+```text
+UPDATED_AT: 2026-08-25
+COMMIT_OR_SNAPSHOT: phase-11-payments
+PHASE: 11 — Checkout / Payment Core
+TASK: P11-T001 .. P11-T008
+STATUS: DONE
+FILES_CHANGED:
+  apps/api/database/migrations/0001_01_01_000021_create_payment_tables.php
+  apps/api/app/Domains/Payments/Enums/{PaymentStatus,CheckoutStatus,CheckoutPurpose}.php
+  apps/api/app/Domains/Payments/Contracts/{PaymentGateway,MarketplaceSettlementGateway}.php
+  apps/api/app/Domains/Payments/Gateways/FakePaymentGateway.php
+  apps/api/app/Domains/Payments/Models/{CheckoutSession,PaymentIntent,PaymentTransaction,
+    PaymentWebhookEvent,IdempotencyKey}.php
+  apps/api/app/Domains/Payments/Services/{CheckoutService,PaymentProcessor,CheckoutFulfiller,
+    GatewayRegistry,WebhookInbox,WebhookProcessor,PaymentRequest,PaymentResult,RefundRequest,
+    RefundResult,CancelRequest,CancelResult,WebhookEvent,GatewayResult,SellerGatewayProfile}.php
+  apps/api/app/Domains/Payments/Http/Controllers/{CheckoutController,PaymentWebhookController,
+    FakeGatewayController}.php
+  apps/api/app/Domains/Payments/Http/Middleware/EnsureIdempotentRequest.php
+  apps/api/app/Domains/Payments/Jobs/ProcessPaymentWebhook.php
+  apps/api/app/Domains/Payments/Console/ExpireCheckoutSessionsCommand.php
+  apps/api/app/Domains/Payments/Exceptions/{CheckoutRefused,GatewayUnavailable}.php
+  apps/api/app/Domains/Payments/Tests/{PaymentCoreTest,CheckoutHttpTest}.php
+  apps/api/app/Domains/Commerce/Services/CartService.php  (own-hold revalidation)
+  apps/api/app/Domains/Inventory/Services/InventoryLedger.php  (stock projection)
+  apps/api/app/Domains/Products/Models/{Product,ProductSku}.php  (isOffered / isListable)
+  apps/api/resources/views/payments/fake-challenge.blade.php
+  apps/api/config/payments.php, routes/domains/payments.php, routes/api.php,
+    routes/console.php, bootstrap/app.php, app/Providers/AppServiceProvider.php
+  packages/ui/src/runtime/types.ts  (checkout and payment types)
+  apps/storefront/app/pages/checkout/{index,return}.vue
+  apps/storefront/app/pages/cart.vue, app/pages/account/credits.vue
+  tests/e2e/checkout.spec.ts, tests/e2e/support/catalog.ts, tests/e2e/shopping.spec.ts
+MIGRATIONS: 5 tables — checkout_sessions (one live per purpose per customer),
+  payment_intents (one live per session, unique gateway external id),
+  payment_transactions (append-only, trigger-enforced), payment_webhook_events
+  (deduped on provider event id and body fingerprint), idempotency_keys
+TESTS_RUN: php artisan test · phpstan level 6 · pint · eslint · vue-tsc
+  · check-design-tokens.mjs · playwright (full suite)
+TEST_RESULT: PASS (594 backend tests / 1804 assertions; 38 E2E journeys)
+BLOCKERS: none
+NEXT_ACTION: Phase 12 — iyzico
+```
+
+**Everything here can be asked the same question twice.** That is the phase in one
+sentence. Providers retry: they send the same webhook four times, they call back after the
+browser already returned, they time out with the money already taken. A payment system
+that is not idempotent end to end does not fail loudly — it charges somebody twice, and
+nobody notices until the reconciliation.
+
+**The checkout session freezes what is being paid for.** Between pressing "pay" and the
+bank answering there is a redirect, a 3DS page and often minutes, and in those minutes the
+seller can reprice and the address book can be edited. So the session copies the totals and
+the address text in and stops asking anybody.
+
+**The status is only ever written through one method, and only along declared
+transitions.** News arrives out of order — a late `failed` for a payment that has since
+captured is dropped, deliberately, because the alternative is a record saying we were not
+paid while the money sits in the account.
+
+**A webhook is stored before it is understood.** The endpoint writes a row and answers 200;
+the meaning is worked out on a worker. Doing the domain work inline is how a slow database
+turns into a provider retry, which turns into a second delivery, which turns into a
+customer credited twice. Duplicates are answered 200 for the same reason: a provider told
+that a duplicate failed will resend it forever.
+
+**Two duplicate defences, not one.** The inbox refuses a second copy of the same delivery,
+keyed on the provider's event id *and* a fingerprint of the raw body. But a provider may
+also send two genuinely different events saying the same thing, and those are duplicates by
+no fingerprint — the state machine stops those, because captured→captured is not a
+transition.
+
+**Card data never enters this codebase.** Not the PAN, not the CVV, not the expiry. The
+customer types it on the provider's own page or into its SDK and we receive a token. That
+is the line between being in PCI-DSS scope and not, and no debugging convenience is worth
+crossing it. The processor also redacts provider responses before storing them, belt and
+braces.
+
+**Two defects found by the payment journeys, both older than this phase.** A basket that
+took the last of the stock into checkout and then reloaded was emptied and told the thing
+it was buying was sold out — by its own hold. And `product_skus.stock_quantity`, which the
+catalogue's list query reads, was written only by the seller's own stock endpoint, so
+buying the last unit left the listing advertising stock until a seller happened to open the
+stock page. Both are fixed with tests; detail in `TEST_REPORT.md`.
 
 ---
 

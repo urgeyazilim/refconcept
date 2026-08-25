@@ -97,8 +97,20 @@ const isEditable = computed(() => application.value?.is_editable === true)
 const primaryBankAccount = computed(() => application.value?.bank_accounts?.[0] ?? null)
 const status = computed(() => application.value?.status ?? null)
 
-async function load() {
-  loading.value = true
+/*
+ * Reloads the application. Only the very first call blanks the page.
+ *
+ * Every save and every acceptance refreshes from the server, and the skeleton is an
+ * `v-if` over the whole form — so re-showing it for a refresh tears the entire page out
+ * of the DOM and puts it back a moment later. That flashes, loses the reader's place in a
+ * long form, and makes "the section is empty" mean two different things at once: nothing
+ * to show, or not looked yet. A refresh leaves what is on screen alone and swaps the data
+ * underneath it, which is what a reader expects after pressing Save.
+ */
+async function load({ blank = false } = {}) {
+  if (blank) {
+    loading.value = true
+  }
 
   try {
     const [applicationResponse, agreementsResponse] = await Promise.all([
@@ -269,7 +281,7 @@ function documentFor(type: string): SellerDocumentSummary | undefined {
   return (application.value?.documents ?? []).find((d) => d.type === type)
 }
 
-await load()
+await load({ blank: true })
 </script>
 
 <template>

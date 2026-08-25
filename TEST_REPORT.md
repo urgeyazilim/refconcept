@@ -1071,3 +1071,201 @@ design generation   the catalogue is embedded through the operator's own command
 **PHASE 9 GATE: PASS** — proceed to Phase 10.
 
 `WEB_RELEASE_APPROVED`: **NOT GRANTED** (13 phases remaining).
+
+---
+
+## Phase 10 — Search, favourites and the basket
+
+**Date:** 2026-08-25
+**Scope:** finding things, keeping them, and a basket that tells the truth when the world
+moves underneath it.
+
+### Gate criteria (04_WEB_PHASE_PLAN.md: price/stock race tests)
+
+| # | Criterion | Method | Result |
+|---|---|---|---|
+| 1 | **One open basket per customer** | Pest + partial unique index | **PASS** — two would mean items split across two places with one of them invisible |
+| 2 | The same offer added twice raises the quantity | Pest + unique index | **PASS** — not a second line showing two of something added once |
+| 3 | **The price is snapshotted when the line is added** | Pest | **PASS** |
+| 4 | **A price rise is reported and not applied** | Pest + Playwright | **PASS** — both figures shown, the old one still in force, the subtotal unchanged |
+| 5 | A price fall does not block checkout | Pest | **PASS** — nobody is harmed by paying less |
+| 6 | A new price applies only when accepted | Pest + Playwright | **PASS** — an explicit act, so it is agreed to rather than done to them |
+| 7 | **A line nobody can buy is removed and reported** | Pest | **PASS** — not left greyed out to fail at payment |
+| 8 | A line short of stock is reduced, not removed | Pest | **PASS** — somebody who wanted four and can have two would rather have two |
+| 9 | Adding more than exists is refused, with the number | Pest | **PASS** — "yalnızca 2 adet kaldı", not "yetersiz stok" |
+| 10 | **An idle basket holds no stock** | Pest + Playwright | **PASS** — the decision this phase turns on |
+| 11 | **Checkout holds all of a basket or none of it** | Pest + Playwright | **PASS** — a partial hold is a problem handed to the customer, not an order |
+| 12 | The hold has a deadline | Pest | **PASS** — fifteen minutes, so an abandoned attempt returns the stock |
+| 13 | Backing out releases immediately | Pest + Playwright | **PASS** — not left to expire while somebody else is told "sold out" |
+| 14 | A basket in checkout cannot be edited | Pest + Playwright | **PASS** — otherwise the hold and the basket disagree |
+| 15 | **Two baskets never hold more than exists** | Pest | **PASS** — the invariant, asserted however the two interleave |
+| 16 | A stale basket cannot over-reserve | Pest | **PASS** — revalidation runs before any hold is taken |
+| 17 | Rows are locked before anything is decided | Pest (query inspection) | **PASS** — two tabs adding the same product cannot both insert |
+| 18 | Checkout on an empty basket is refused | Pest | **PASS** |
+| 19 | The seller is recorded on every line | Pest | **PASS** — a basket keeps saying which shop an item came from |
+| 20 | **Tax is inside the price, not on top** | Pest | **PASS** — 20.000₺ at 20% contains 3.333,33₺; the other way overcharges by a fifth |
+| 21 | An unlisted product cannot enter a basket | Pest | **PASS** |
+| 22 | One customer cannot touch another's line | Pest | **PASS** — 404 rather than 403: whether it exists is not a stranger's business |
+| 23 | **Search finds by name** | Pest + Playwright | **PASS** |
+| 24 | Search survives a misspelling | Pest | **PASS** — trigram similarity, because a search box receives "Bergma" constantly |
+| 25 | Search finds words from a description | Pest | **PASS** — the maintained tsvector |
+| 26 | **Nonsense returns nothing** | Pest + Playwright | **PASS** — the important negative; see the limitation below for what it cost |
+| 27 | A product every method agrees on outranks one only a single method found | Pest | **PASS** — the reason fusion is by rank |
+| 28 | **Facets count the whole result, not the page** | Pest | **PASS** — one product on the page, three in the count |
+| 29 | Facets narrow with the other filters | Pest | **PASS** |
+| 30 | Empty price bands are not offered | Pest | **PASS** — a filter returning nothing teaches somebody the filters do not work |
+| 31 | Favouriting twice is favouriting once | Pest | **PASS** |
+| 32 | A withdrawn product leaves the favourites list but keeps its row | Pest | **PASS** — re-listing brings it back |
+| 33 | Favourites are private | Pest | **PASS** |
+| 34 | A page's favourite state is one request | Pest | **PASS** — not a join on a listing anonymous visitors also read |
+| 35 | Backend suite | `php artisan test` | **PASS** — 561 tests, 1697 assertions |
+| 36 | Static analysis / style | PHPStan L6, Pint | **PASS** |
+| 37 | Frontend gates | ESLint, vue-tsc, token guard | **PASS** |
+| 38 | **End-to-end** | Playwright, live stack | **PASS** — 32 journeys |
+
+### End-to-end journeys added
+
+```text
+shopping   a customer adds to the basket -> the seller reprices through the pricing
+           endpoint -> the cart page shows both figures and refuses to move on ->
+           accepting applies the new price
+
+shopping   one basket holds three of three at checkout -> a second basket is told the
+           item sold out and emptied -> the first backs out -> the second can buy
+
+shopping   a basket in checkout refuses edits
+
+shopping   a customer favourites from the product page and finds it on their list
+
+shopping   search finds a listing, offers facets, and answers nonsense with nothing
+```
+
+### Defects found and fixed during this phase
+
+- **An N+1 on the busiest endpoint a shop has.** `revalidate()` loaded the product but not
+  its SKUs, and `isPubliclyVisible()` reads them — so every cart view issued a query per
+  line. Strict mode caught it in tests; production would have carried it silently.
+- **The seeded embedding model did not exist.** `text-embedding-004` is retired for this
+  key; the catalogue silently failed to embed with a message that read like an outage.
+  Corrected to `gemini-embedding-001`, which needs `outputDimensionality` passed explicitly
+  because its native vector is far wider than the column.
+- **Embeddings from that model are not normalised at a reduced width.** Cosine distance on
+  unnormalised vectors ranks a long description above a good one, and every similarity
+  percentage computed from them would have been meaningless. Normalised in the adapter, so
+  every vector in the column is comparable however it was produced.
+- **A nearest-neighbour search with no ceiling is a sort, not a search.** Caught by a test
+  asserting that nonsense returns nothing — without it, every query returned the whole
+  catalogue in some order.
+
+### Honest limitations
+
+- **Pure semantic search is not enabled, and the reason is measured rather than assumed.**
+  Against the live embedding model, the nearest neighbour of "zzzzqqqqxyz" sits 0.3526 away
+  and the nearest of "Bergama" 0.2969 — a six-hundredth margin that no threshold can
+  separate reliably. So the lexical methods decide *whether* anything matched and the vector
+  decides the order. The cost is real: "sıcak ve sade bir salon", which matches no word in
+  any product, now returns nothing. Enabling it needs one of a larger catalogue, a threshold
+  calibrated against labelled queries, or a rerank pass over the top neighbours — and until
+  one of those exists, answering gibberish with a page of sofas would be the worse failure.
+- **Guest baskets are not supported.** A cart requires an account. That is a real conversion
+  gap and a deliberate deferral: a guest cart needs a merge-on-login story and an
+  abandoned-cart sweep, both of which belong with the full storefront in Phase 20 rather
+  than half-built here.
+- **Nothing sweeps abandoned checkout holds.** The reservations carry a fifteen-minute
+  expiry and the ledger already knows how to release stale holds, but no schedule calls it
+  for carts — so a customer who closes the tab mid-payment keeps the stock held until
+  something else touches that SKU. Phase 11 owns the checkout lifecycle and is the right
+  place for it; today the exposure is fifteen minutes per abandoned attempt.
+- **The per-line quantity ceiling is 99.** Arbitrary, and wrong for a trade customer buying
+  chairs. It is a guard against a typo rather than a considered commercial limit.
+- **Facet counts run one query per price band.** Four extra counts on a catalogue listing is
+  cheap at this size and will not be at a hundred thousand products; a single grouped query
+  with `width_bucket` is the fix when it matters.
+- **Search relevance is untested as relevance.** The suite proves the machinery — that each
+  method contributes, that fusion prefers agreement, that filters narrow — and not that the
+  ordering is *good*. That needs labelled queries, and the same limitation stands as in
+  Phase 9.
+
+### Notes
+
+- The catalogue was embedded against the live Gemini model during this phase — eighteen
+  products, no failures — so the embedding path is verified against a real provider and not
+  only against the simulator.
+- `CandidateQuery` in Phase 9 deliberately has no distance ceiling, and that is not an
+  inconsistency: its hard filters have already narrowed the set to one category, and "the
+  three nearest sofas" is the answer being asked for. Here the question is "does anything
+  match at all", which is a different question.
+
+### Verdict
+
+**PHASE 10 GATE: PASS** — proceed to Phase 11.
+
+`WEB_RELEASE_APPROVED`: **NOT GRANTED** (12 phases remaining).
+
+---
+
+## Phase 11 — Checkout and payment core
+
+**Date:** 2026-08-25
+**Scope:** taking money, and the four ways a payment system quietly loses it.
+
+### Gate criteria (04_WEB_PHASE_PLAN.md: duplicate / replay / timeout tests)
+
+| # | Criterion | Method | Result |
+|---|---|---|---|
+| 1 | **A session freezes the price** | Pest | **PASS** — the seller reprices mid-checkout and the total does not move |
+| 2 | **A session freezes the address** | Pest | **PASS** — editing the address book later does not change where a parcel was promised |
+| 3 | Opening checkout twice returns the same session | Pest + partial unique index | **PASS** — not a second stock hold for one basket |
+| 4 | Somebody else's address is refused | Pest | **PASS** — 404 rather than 403: whether it exists is not a stranger's business |
+| 5 | An unverified account cannot pay | Pest (HTTP) | **PASS** — otherwise the marketplace is a card-testing service |
+| 6 | **A capture consumes the stock hold** | Pest + Playwright | **PASS** — consumed, not released; a sold sofa must not return to the shelf |
+| 7 | A paid basket is closed | Pest | **PASS** — not left sitting there ready to be paid again |
+| 8 | **A capture credits a wallet exactly once** | Pest + Playwright | **PASS** — paid and bonus credits as separate lots |
+| 9 | **The same webhook four times loads credits once** | Pest + Playwright | **PASS** — E2E-03; deduped on event id and body fingerprint |
+| 10 | **Two different events with the same news act once** | Pest | **PASS** — no fingerprint can catch this; the state machine does |
+| 11 | **A late failure after a capture is ignored** | Pest | **PASS** — and logged, because "we were told this and ignored it" is the sentence somebody needs later |
+| 12 | An unsigned event is stored and refused | Pest + Playwright | **PASS** — 401 at the door, a row on the other side of it |
+| 13 | An event claiming more than the payment is refused | Pest | **PASS** — the provider is the authority on its own payment, not on the amount |
+| 14 | **A timeout leaves the checkout retryable** | Pest + Playwright | **PASS** — the session survives a decline; a customer does not start over at today's prices |
+| 15 | A retry after a timeout is a second attempt, both kept | Pest | **PASS** — the history a chargeback is argued from |
+| 16 | **The provider is asked when we do not know** | Pest | **PASS** — our database is never the authority on whether a bank took money |
+| 17 | A second payment while one is at the bank is refused | Pest + partial unique index | **PASS** — the double-click defence |
+| 18 | A session already paid cannot be paid again | Pest | **PASS** |
+| 19 | **An `Idempotency-Key` replays the first answer** | Pest (HTTP) + Playwright | **PASS** — byte for byte, with `Idempotent-Replay: true` |
+| 20 | The same key with a different body is refused | Pest (HTTP) | **PASS** — a retry, that is not; answering it with a stored result would be worse |
+| 21 | A failed answer is not stored under a key | Pest (HTTP) | **PASS** — else a transient failure freezes into a permanent one for that key |
+| 22 | **A refund cannot exceed what was captured** | Pest + CHECK constraint | **PASS** — refused with a sentence before the constraint is reached |
+| 23 | A partial refund leaves the rest refundable | Pest | **PASS** |
+| 24 | A retried refund is the same refund | Pest + partial unique index | **PASS** — the operation most likely to be retried, and the one where a duplicate costs money |
+| 25 | **The financial record cannot be edited** | Pest (raw `UPDATE`) | **PASS** — a PostgreSQL trigger, not an Eloquent guard a raw query walks past |
+| 26 | An abandoned checkout is closed and the stock returned | Pest | **PASS** — every minute, because a live session locks the customer out of starting another |
+| 27 | A checkout mid-3DS is left alone by the sweeper | Pest | **PASS** — "your payment expired" while the bank thinks otherwise is worse than a late session |
+| 28 | An unknown gateway name is a 404 | Pest (HTTP) | **PASS** — the webhook endpoint does not confirm which integrations exist |
+| 29 | One customer cannot read another's payment | Pest (HTTP) | **PASS** |
+| 30 | Backing out returns the stock immediately | Pest (HTTP) + Playwright | **PASS** |
+| 31 | **The 3DS round trip works end to end** | Playwright | **PASS** — out to a stand-in bank page, back, and the page asks rather than assumes |
+| 32 | Card data never reaches the API | Code review + adapter contract | **PASS** — a token or a redirect, never a PAN; responses redacted before storage |
+
+### Defects found and fixed in this phase
+
+| Id | Severity | Defect | Fix |
+|---|---|---|---|
+| P11-D001 | **P1** | A basket that took the last of the stock into checkout and was then re-read emptied itself and reported "out of stock" — against its **own** hold. Every customer buying the last unit of anything would have lost their basket while paying for it. | `CartService::revalidate()` counts the cart's own reservations as available to it; `ProductSku::isOffered()` and `Product::isListable()` separate "withdrawn" from "none left", so the ledger stays the authority on quantity |
+| P11-D002 | **P1** | `product_skus.stock_quantity` — what the catalogue's list query reads — was written only by the seller's own stock endpoint. Buying the last unit left the listing advertising stock until a seller happened to open the stock page, and the next customer found out at checkout. | `InventoryLedger` projects the sellable figure onto the SKU on every movement, in the ledger, where the change is known |
+| P11-D003 | P2 | The stand-in 3DS page rendered perfectly and did nothing when clicked. Blade swallows the newline after a directive, so three `const` declarations collapsed onto one line and the whole script was a syntax error. | Explicit semicolons, and a comment saying why they are load-bearing |
+| P11-D004 | P2 | `GET /checkout` always read the basket session, so buying credits landed on a page saying there was nothing to pay for. | The endpoint takes `purpose`; a customer may legitimately have one session of each |
+
+### Known limitations
+
+- **Shipping is zero.** Rates, options and delivery promises are Phase 17. The total is
+  stated as the goods total rather than invented, because a figure that changes after the
+  customer agreed to it is the failure the session exists to prevent.
+- **No orders yet.** A paid basket consumes its hold and is marked `ordered`; building the
+  master order and its per-seller orders is Phase 15, and hooks into
+  `CheckoutFulfiller::settleCart()` — deliberately one call rather than logic spread
+  through the payment code.
+- **One gateway.** The registry, the contract and the webhook inbox are provider-agnostic
+  and the only adapter is the test one. iyzico is Phase 12; the marketplace settlement
+  contract is declared and unimplemented until then.
+- **Refunds are service-level only.** The processor can refund and the record is correct,
+  but there is no operator screen for it — that arrives with the admin work in Phase 18.

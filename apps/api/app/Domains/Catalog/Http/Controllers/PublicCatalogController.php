@@ -10,6 +10,7 @@ use App\Domains\Catalog\Models\Category;
 use App\Domains\Catalog\Models\Color;
 use App\Domains\Catalog\Models\Material;
 use App\Domains\Catalog\Models\Style;
+use App\Domains\Commerce\Services\CatalogSearch;
 use App\Domains\Products\Http\Resources\ProductResource;
 use App\Domains\Products\Models\Product;
 use App\Domains\Products\Models\ProductSku;
@@ -30,6 +31,8 @@ use Illuminate\Support\Facades\DB;
  */
 final class PublicCatalogController
 {
+    public function __construct(private readonly CatalogSearch $search) {}
+
     /** The category tree, for navigation and filters. */
     public function categories(Request $request): JsonResponse
     {
@@ -194,15 +197,21 @@ final class PublicCatalogController
             });
         }
 
-        if (isset($validated['search'])) {
-            $term = $validated['search'];
+        /*
+         * Hybrid search: name, description and meaning, fused by rank.
+         *
+         * Three methods rather than one because a furniture search box receives three
+         * kinds of thing — a misspelled name, words from a description, and a description
+         * of a feeling — and no single index answers all three. See CatalogSearch for why
+         * the fusion is by rank rather than by score.
+         */
+        $ranked = null;
 
-            // Trigram similarity on the name plus the maintained tsvector: the first
-            // survives typos, the second ranks whole-word matches in the description.
-            $query->where(function (Builder $inner) use ($term): void {
-                $inner->where('name', 'ilike', '%'.$term.'%')
-                    ->orWhereRaw("search_document @@ plainto_tsquery('simple', ?)", [$term]);
-            });
+        if (isset($validated['search'])) {
+            $ranked = $this->search->rank(
+                (string) $validated['search'],
+                $validated['room_type'] ?? null,
+            );
         }
 
         // Price filters compare against the effective price of a purchasable offer,
@@ -229,6 +238,22 @@ final class PublicCatalogController
             });
         }
 
+        /*
+         * Facets are counted before the ranking is applied and before pagination, so they
+         * describe the whole result set rather than the page being looked at. Counting
+         * after would show "modern (4)" on a page that happens to contain four.
+         */
+        $facets = $this->search->facets(clone $query);
+
+        if ($ranked !== null) {
+            $this->search->applyRanking($query, $ranked);
+
+            // Relevance is its own order and overriding it with "newest" would throw away
+            // the whole point of having searched.
+            return ProductResource::collection($query->paginate($validated['per_page'] ?? 24))
+                ->additional(['facets' => $facets]);
+        }
+
         match ($validated['sort'] ?? 'newest') {
             'price_asc' => $query->orderBy(
                 $this->cheapestOfferSubquery(),
@@ -240,7 +265,8 @@ final class PublicCatalogController
             default => $query->orderByDesc('published_at'),
         };
 
-        return ProductResource::collection($query->paginate($validated['per_page'] ?? 24));
+        return ProductResource::collection($query->paginate($validated['per_page'] ?? 24))
+            ->additional(['facets' => $facets]);
     }
 
     public function product(string $slug): JsonResponse

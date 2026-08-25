@@ -64,18 +64,25 @@ async function submitRegistration(
  * browser cannot read that header, so the window is waited out in full.
  */
 async function waitOutTheThrottle(page: Page): Promise<void> {
+  const throttled = page.getByText(/Too Many Attempts|Çok fazla/i)
+  const accepted = page.getByRole('heading', { name: 'E-postanızı kontrol edin' })
+
   for (let attempt = 0; attempt < 3; attempt++) {
-    const throttled = page.getByText(/Too Many Attempts|Çok fazla/i)
+    /*
+     * Wait for the submission to resolve before judging it. Reading the page the instant
+     * after the click saw neither notice — the response had not arrived yet — so a refusal
+     * went unnoticed and the test failed fifteen seconds later on a confirmation that was
+     * never coming, with the throttle notice sitting in the failure screenshot.
+     */
+    await expect(accepted.or(throttled)).toBeVisible({ timeout: 20_000 })
 
     if (await throttled.count() === 0) {
       return
     }
 
+    // Five registrations a minute from one address, so the window has to pass in full.
     await page.waitForTimeout(61_000)
     await page.getByRole('button', { name: 'Hesabımı oluştur' }).click()
-
-    // Give the submission a moment to produce either the confirmation or another refusal.
-    await page.waitForTimeout(1_500)
   }
 }
 
