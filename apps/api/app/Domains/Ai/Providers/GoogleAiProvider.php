@@ -6,6 +6,7 @@ namespace App\Domains\Ai\Providers;
 
 use App\Domains\Ai\Contracts\AiProvider;
 use App\Domains\Ai\Enums\AiFailureKind;
+use App\Domains\Ai\Enums\AiModality;
 use App\Domains\Ai\Services\AiCall;
 use App\Domains\Ai\Services\AiResult;
 use App\Domains\Ai\Services\GeneratedImageStore;
@@ -64,6 +65,16 @@ final class GoogleAiProvider implements AiProvider
         }
 
         try {
+            /*
+             * Embeddings are a different endpoint on the same API, and the only place this
+             * adapter branches on modality. Everything else — text, vision, image — comes
+             * back through :generateContent, which is why the rest of the class does not
+             * ask what kind of call it is making.
+             */
+            if ($call->modality() === AiModality::Embedding) {
+                return $this->embed($call);
+            }
+
             $response = $this->client($call)->post(
                 sprintf('/models/%s:generateContent', $call->model->code),
                 $this->payloadFor($call),
@@ -87,6 +98,47 @@ final class GoogleAiProvider implements AiProvider
     }
 
     // --- internals -----------------------------------------------------------
+
+    /**
+     * Turns text into a vector.
+     *
+     * `RETRIEVAL_DOCUMENT` rather than the default, because that is what these vectors are
+     * for: a catalogue somebody will search. The asymmetric variants matter — a query
+     * embedded as a document sits in a slightly different place from the same words
+     * embedded as a query, and the difference is measurable in what comes back.
+     */
+    private function embed(AiCall $call): AiResult
+    {
+        $response = $this->client($call)->post(
+            sprintf('/models/%s:embedContent', $call->model->code),
+            [
+                'model' => 'models/'.$call->model->code,
+                'content' => ['parts' => [['text' => $call->prompt]]],
+                'taskType' => (string) ($call->options['task_type'] ?? 'RETRIEVAL_DOCUMENT'),
+            ],
+        );
+
+        if ($response->failed()) {
+            return $this->translateFailure($response);
+        }
+
+        /** @var array<int, float> $values */
+        $values = (array) data_get($response->json() ?? [], 'embedding.values', []);
+
+        if ($values === []) {
+            return AiResult::failure(
+                AiFailureKind::MalformedOutput,
+                'Google boş bir vektör döndürdü.',
+                httpStatus: $response->status(),
+            );
+        }
+
+        return AiResult::success(
+            embedding: array_map(static fn ($value): float => (float) $value, $values),
+            inputTokens: (int) ceil(mb_strlen($call->prompt) / 4),
+            httpStatus: $response->status(),
+        );
+    }
 
     /**
      * @return array<string, mixed>

@@ -12,6 +12,7 @@ use App\Domains\Ai\Models\AiTaskRoute;
 use App\Domains\Ai\Services\AiJobDispatcher;
 use App\Domains\Credits\Models\CreditReservation;
 use App\Domains\Credits\Services\CreditLedger;
+use App\Domains\Matching\Services\ShoppingListBuilder;
 use App\Domains\Projects\Enums\GenerationStage;
 use App\Domains\Projects\Enums\RenderQuality;
 use App\Domains\Projects\Exceptions\DesignGenerationFailed;
@@ -56,6 +57,7 @@ final class DesignGenerationPipeline
         private readonly PlacementValidator $validator,
         private readonly RoomPhotoStorage $storage,
         private readonly CreditLedger $ledger,
+        private readonly ShoppingListBuilder $shoppingList,
     ) {}
 
     /**
@@ -78,6 +80,7 @@ final class DesignGenerationPipeline
             $analysis = $this->analyse($version, $room);
             $plan = $this->plan($version, $room, $analysis);
             $this->render($version, $room, $analysis, $plan);
+            $this->match($version);
         } catch (DesignGenerationFailed $e) {
             return $this->fail($version, $e);
         } catch (AiJobRefused $e) {
@@ -307,6 +310,51 @@ final class DesignGenerationPipeline
             GenerationStage::Render,
             'succeeded',
             'Görsel üretildi.',
+            $this->elapsed($started),
+        );
+    }
+
+    /**
+     * Turns the plan into a shopping list.
+     *
+     * Deliberately after the render and deliberately unable to fail the version. A design
+     * with an image and no product suggestions is still a design the customer wanted; one
+     * that failed because the catalogue had no sofas in their budget would be a render
+     * they paid for and cannot see. The list is rebuildable on demand, so a bad moment
+     * here costs nothing permanent.
+     */
+    private function match(DesignVersion $version): void
+    {
+        $started = microtime(true);
+
+        $this->event($version, GenerationStage::Match, 'started', 'Ürünler eşleştiriliyor…');
+
+        try {
+            $matches = $this->shoppingList->build($version->fresh() ?? $version);
+        } catch (Throwable $e) {
+            Log::warning('Shopping list could not be built', [
+                'design_version_id' => $version->getKey(),
+                'exception' => $e->getMessage(),
+            ]);
+
+            $this->event(
+                $version,
+                GenerationStage::Match,
+                'failed',
+                'Ürün önerileri şimdilik hazırlanamadı; tasarımınız hazır.',
+                $this->elapsed($started),
+            );
+
+            return;
+        }
+
+        $this->event(
+            $version,
+            GenerationStage::Match,
+            $matches->isEmpty() ? 'skipped' : 'succeeded',
+            $matches->isEmpty()
+                ? 'Bu plana uyan ürün bulunamadı.'
+                : sprintf('%d ürün önerisi hazır.', $matches->count()),
             $this->elapsed($started),
         );
     }

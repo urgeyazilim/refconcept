@@ -36,6 +36,16 @@ enum AiTask: string
     case ObjectExtraction = 'object_extraction';
 
     case ProductTagging = 'product_tagging';
+
+    /**
+     * Turn a product description into a vector.
+     *
+     * The task that makes "warm minimalist oak" find a product described as "İskandinav
+     * meşe" without either phrase appearing in the other. Runs over the catalogue rather
+     * than on a customer request, which is why it is cheap enough to be worth doing for
+     * every listing.
+     */
+    case TextEmbedding = 'text_embedding';
     case ProductQueryRewrite = 'product_query_rewrite';
     case ProductMatchRerank = 'product_match_rerank';
     case BudgetOptimize = 'budget_optimize';
@@ -52,6 +62,7 @@ enum AiTask: string
             self::ImageEdit => 'Görsel düzenleme',
             self::ObjectExtraction => 'Nesne çıkarımı',
             self::ProductTagging => 'Ürün etiketleme',
+            self::TextEmbedding => 'Metin vektörü',
             self::ProductQueryRewrite => 'Arama sorgusu iyileştirme',
             self::ProductMatchRerank => 'Ürün eşleştirme sıralaması',
             self::BudgetOptimize => 'Bütçe optimizasyonu',
@@ -65,6 +76,7 @@ enum AiTask: string
     {
         return match ($this) {
             self::RoomAnalysis, self::ObjectExtraction, self::ProductTagging => AiModality::Vision,
+            self::TextEmbedding => AiModality::Embedding,
             self::ImageRenderDraft, self::ImageRenderPremium, self::ImageEdit => AiModality::Image,
             default => AiModality::Text,
         };

@@ -353,6 +353,12 @@ final class AiGateway
                     // job carries the path. A megabyte of base64 in this column would be
                     // a table nobody can read and a query nobody can run.
                     'image_refs' => $result->imageRefs,
+                    /*
+                     * A vector is a few kilobytes of numbers, which is small enough to
+                     * carry here and saves the caller a second round trip. It is written
+                     * to its real home — a pgvector column — by whoever asked for it.
+                     */
+                    'embedding' => $result->embedding,
                 ],
                 'attempts' => $attempt,
                 'finished_at' => now(),

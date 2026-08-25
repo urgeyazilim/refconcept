@@ -45,6 +45,38 @@ async function submitRegistration(
   }
 
   await page.getByRole('button', { name: 'Hesabımı oluştur' }).click()
+
+  if (consent) {
+    await waitOutTheThrottle(page)
+  }
+}
+
+/**
+ * Waits out the registration rate limit rather than disabling it.
+ *
+ * Registration is throttled to a handful of attempts a minute per address, which is the
+ * correct production behaviour and exactly what a suite that creates a dozen accounts
+ * runs into. Raising the limit for tests would mean the suite no longer exercises the
+ * configuration that ships, so instead the form is resubmitted after the window passes —
+ * which is also what a real person would do, and it keeps the throttle real.
+ *
+ * The API helper in support/accounts.ts honours `Retry-After` for the same reason; a
+ * browser cannot read that header, so the window is waited out in full.
+ */
+async function waitOutTheThrottle(page: Page): Promise<void> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const throttled = page.getByText(/Too Many Attempts|Çok fazla/i)
+
+    if (await throttled.count() === 0) {
+      return
+    }
+
+    await page.waitForTimeout(61_000)
+    await page.getByRole('button', { name: 'Hesabımı oluştur' }).click()
+
+    // Give the submission a moment to produce either the confirmation or another refusal.
+    await page.waitForTimeout(1_500)
+  }
 }
 
 async function signIn(page: Page, email: string, password: string): Promise<void> {

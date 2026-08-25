@@ -12,19 +12,19 @@ WEB
 IN_PROGRESS
 
 ## Current Phase
-PHASE_9
+PHASE_10
 
 ## Current Task
-Not started — Phase 8 is closed and Phase 9 has not begun.
+Not started — Phase 9 is closed and Phase 10 has not begun.
 
 ## Last Completed Task
-P8-T007 — Phase 8 gate verified end to end (see `TEST_REPORT.md`).
+P9-T007 — Phase 9 gate verified end to end (see `TEST_REPORT.md`).
 
 ## Next Task
-Phase 9 — Product Matching, shipping its own UI slice alongside its API.
+Phase 10 — Search / Favorites / Cart, shipping its own UI slice alongside its API.
 
 ## Test State
-PASS — 493 backend tests / 1528 assertions, 26 Playwright E2E journeys across all three
+PASS — 521 backend tests / 1592 assertions, 27 Playwright E2E journeys across all three
 apps, PHPStan level 6, Pint, ESLint, vue-tsc and the design token guard all clean.
 
 ## Release State
@@ -577,6 +577,68 @@ pipeline copies what it wants and discards the staged copy.
 combining dot, not a plain i. A spreadsheet column headed "İndirimli fiyat" folded to
 "i ndirimli fiyat", matched no alias, and the discount prices silently never arrived.
 `TurkishText` now folds before lowercasing, in one place, with tests.
+
+### PHASE_9_PRODUCT_MATCHING — DONE (2026-08-25)
+
+```text
+UPDATED_AT: 2026-08-25
+COMMIT_OR_SNAPSHOT: phase-9-matching
+PHASE: 9 — Product Matching
+TASK: P9-T001 .. P9-T007
+STATUS: DONE
+FILES_CHANGED:
+  apps/api/database/migrations/0001_01_01_000019_create_matching_tables.php
+  apps/api/app/Domains/Matching/Enums/{EmbeddingSource,MatchStatus,FeedbackVerdict}.php
+  apps/api/app/Domains/Matching/Models/{ProductEmbedding,DesignMatch,DesignMatchFeedback}.php
+  apps/api/app/Domains/Matching/Services/{ProductEmbedder,CandidateQuery,ShoppingListBuilder}.php
+  apps/api/app/Domains/Matching/Console/EmbedCatalogueCommand.php
+  apps/api/app/Domains/Matching/Http/Controllers/DesignMatchController.php
+  apps/api/app/Domains/Matching/Tests/{ProductMatchingTest,ShoppingListTest}.php
+  apps/api/app/Domains/Ai/Enums/AiTask.php            (TextEmbedding)
+  apps/api/app/Domains/Ai/Services/{AiResult,AiGateway}.php
+  apps/api/app/Domains/Ai/Providers/{OpenAiProvider,GoogleAiProvider,FakeAiProvider}.php
+  apps/api/app/Domains/Projects/Enums/GenerationStage.php  (match stage)
+  apps/api/app/Domains/Projects/Services/DesignGenerationPipeline.php
+  apps/api/routes/domains/projects.php, routes/console.php, bootstrap/app.php
+  apps/api/database/seeders/AiGatewaySeeder.php
+  apps/storefront/app/pages/projects/[id]/rooms/[roomId]/designs/[designId].vue
+  tests/e2e/design-generation.spec.ts, tests/e2e/auth-journey.spec.ts
+MIGRATIONS: 4 tables — product_embeddings (pgvector 768, HNSW cosine index),
+  design_extracted_objects, design_matches, design_match_feedback
+TESTS_RUN: php artisan test · phpstan level 6 · pint --test · eslint · vue-tsc
+  · check-design-tokens.mjs · playwright (full suite)
+TEST_RESULT: PASS (521 backend tests / 1592 assertions; 27 E2E journeys)
+BLOCKERS: none
+NEXT_ACTION: Phase 10 — Search / Favorites / Cart
+```
+
+**Narrow first, then rank.** Category, stock, budget and width are applied in SQL before
+anything is scored. A model asked to respect "no wider than 2200mm" will sometimes; a
+`WHERE width_mm <= 2200` always does. What is left for the vector is the part that is
+genuinely a matter of resemblance.
+
+**A category that does not match anything returns nothing.** Silently dropping the filter
+would let the search fall back to the nearest products in the whole catalogue — which is
+how a plan asking for a chandelier ends up recommending a wardrobe, with nothing looking
+wrong.
+
+**The rerank is optional in the strongest sense.** If the model call fails, the list built
+from similarity is returned unchanged. A customer with a slightly worse-ordered shopping
+list is far better off than one with no shopping list.
+
+**Prices are snapshots.** A customer who comes back next week sees the list they were
+shown, with today's price beside it when the two differ. Hiding the change would be the
+wrong kind of tidy — the difference is the most useful thing the row can tell them.
+
+**Feedback is the only honest signal.** Similarity scores are the system marking its own
+homework. Each verdict names the part of the pipeline it blames — wrong size is a filter
+bug, wrong style is a modelling problem — and the one thing it changes automatically is
+that a rejected product is not suggested again for that spot.
+
+**Embedding is hashed, so a nightly pass over an unchanged catalogue costs one query.**
+The text embedded is assembled from what describes the product, in a fixed order, with the
+seller's name and delivery terms deliberately left out: two sofas from the same shop must
+not be similar *because* of the shop.
 
 ---
 

@@ -186,7 +186,7 @@ return new class extends Migration
         DB::statement(<<<'SQL'
             ALTER TABLE design_version_events
             ADD CONSTRAINT design_version_events_stage_check
-            CHECK (stage IN ('queued', 'analysis', 'plan', 'render', 'save', 'done'))
+            CHECK (stage IN ('queued', 'analysis', 'plan', 'render', 'save', 'match', 'done'))
         SQL);
 
         DB::statement(<<<'SQL'

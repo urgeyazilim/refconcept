@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Domains\Identity\Http\Middleware\EnsureEmailIsVerified;
 use App\Domains\Identity\Http\Middleware\EnsureUserIsActive;
+use App\Domains\Matching\Http\Controllers\DesignMatchController;
 use App\Domains\Projects\Http\Controllers\DesignController;
 use App\Domains\Projects\Http\Controllers\ProjectController;
 use App\Domains\Projects\Http\Controllers\ProjectMemberController;
@@ -93,6 +94,20 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, EnsureEmailIsVerif
         // returning the smallest useful thing rather than a field on the whole design.
         Route::get('{project}/rooms/{room}/designs/{design}/versions/{version}/progress', [DesignController::class, 'progress'])
             ->name('designs.version.progress');
+
+        /*
+         * The shopping list. Nested under the project like everything else in this
+         * subtree, so one authorisation check on the parent covers the branch and there is
+         * no match id that opens a stranger's flat.
+         */
+        Route::get('{project}/rooms/{room}/designs/{design}/versions/{version}/matches', [DesignMatchController::class, 'index'])
+            ->name('designs.version.matches');
+        Route::post('{project}/rooms/{room}/designs/{design}/versions/{version}/matches/rebuild', [DesignMatchController::class, 'rebuild'])
+            ->name('designs.version.matches.rebuild');
+        Route::post('{project}/rooms/{room}/designs/{design}/versions/{version}/matches/{match}/choose', [DesignMatchController::class, 'choose'])
+            ->name('designs.version.matches.choose');
+        Route::post('{project}/rooms/{room}/designs/{design}/versions/{version}/matches/{match}/feedback', [DesignMatchController::class, 'feedback'])
+            ->name('designs.version.matches.feedback');
         Route::delete('{project}/rooms/{room}/designs/{design}', [DesignController::class, 'destroy'])
             ->name('designs.destroy');
     });

@@ -23,7 +23,7 @@ import { gotoInteractive, waitForHydration } from './support/hydration'
 const STOREFRONT = process.env.E2E_STOREFRONT_URL ?? 'http://localhost:3000'
 const API = process.env.E2E_API_URL ?? 'http://localhost:58000'
 
-const PIPELINE_TASKS = ['room_analysis', 'design_plan', 'image_render_draft'] as const
+const PIPELINE_TASKS = ['room_analysis', 'design_plan', 'image_render_draft', 'text_embedding', 'product_match_rerank'] as const
 
 async function signIn(page: Page, email: string): Promise<void> {
   await page.context().clearCookies()
@@ -72,9 +72,11 @@ async function useSimulator(request: APIRequestContext, token: string) {
      * person and may be reworded; a code is the identifier the seeder writes and the
      * console shows, so a copy edit cannot break this suite.
      */
-    const wantedCode = task === 'image_render_draft'
-      ? 'fake-image-1'
-      : (task === 'room_analysis' ? 'fake-vision-1' : 'fake-text-1')
+    const wantedCode = {
+      image_render_draft: 'fake-image-1',
+      room_analysis: 'fake-vision-1',
+      text_embedding: 'fake-embedding-1',
+    }[task as string] ?? 'fake-text-1'
 
     const model = fake.models.find((entry: { code: string }) => entry.code === wantedCode)
     expect(model, `simulator model ${wantedCode} for ${task}`).toBeTruthy()
@@ -234,6 +236,126 @@ test.describe('design generation', () => {
 
       expect(entries[0].type).toBe('consume')
       expect(entries[0].description).toBe('Tasarım üretimi')
+    } finally {
+      await restore()
+    }
+  })
+
+  test('the design comes with products a customer can actually buy', async ({ request }) => {
+    const restore = await useSimulator(request, admin.token)
+
+    try {
+      const customer = await createVerifiedAccount('design-shopper')
+
+      const adminHeaders = { Authorization: `Bearer ${admin.token}`, Accept: 'application/json' }
+      const headers = { Authorization: `Bearer ${customer.token}`, Accept: 'application/json' }
+
+      const me = await request.get(`${API}/api/v1/auth/me`, { headers })
+      const customerId = (await me.json()).data.id
+
+      await request.post(`${API}/api/v1/admin/credits/wallets/${customerId}/adjust`, {
+        headers: adminHeaders,
+        data: { delta: 50, reason: 'E2E alışveriş listesi testi için bakiye.' },
+      })
+
+      /*
+       * The seeded demo catalogue has to be searchable before anything can be matched
+       * against it. Run through the same console command an operator would use — and it is
+       * cheap to repeat, because a product whose text has not changed is skipped.
+       */
+      const { execFile } = await import('node:child_process')
+      const { promisify } = await import('node:util')
+      const run = promisify(execFile)
+
+      await run('docker', [
+        'compose', 'exec', '-T', 'api',
+        'php', 'artisan', 'refconcept:embed-catalogue',
+      ])
+
+      const project = await request.post(`${API}/api/v1/projects`, {
+        headers,
+        data: { name: `Liste Testi ${Date.now()}`, project_type: 'home' },
+      })
+
+      const projectId = (await project.json()).data.id
+
+      const room = await request.post(`${API}/api/v1/projects/${projectId}/rooms`, {
+        headers,
+        data: {
+          name: 'Salon',
+          room_type: 'living_room',
+          width_mm: 4_200,
+          length_mm: 5_600,
+          measurement_quality: 'manual',
+        },
+      })
+
+      const roomId = (await room.json()).data.id
+
+      await request.post(`${API}/api/v1/projects/${projectId}/rooms/${roomId}/media`, {
+        headers: { Authorization: `Bearer ${customer.token}` },
+        multipart: {
+          file: { name: 'salon.png', mimeType: 'image/png', buffer: pngBuffer(1280, 960) },
+        },
+      })
+
+      const created = await request.post(
+        `${API}/api/v1/projects/${projectId}/rooms/${roomId}/designs`,
+        { headers, data: { user_prompt: 'İskandinav, açık renkler' } },
+      )
+
+      expect(created.ok()).toBeTruthy()
+
+      const designId = (await created.json()).data.id
+      const versionId = (await created.json().catch(() => ({}))).version_id
+
+      // The worker runs the pipeline; the list is built as its last step.
+      let matches: { placements: Array<{ category: string, matches: unknown[] }> } | null = null
+
+      for (let attempt = 0; attempt < 60; attempt++) {
+        const detail = await request.get(
+          `${API}/api/v1/projects/${projectId}/rooms/${roomId}/designs/${designId}`,
+          { headers },
+        )
+
+        const design = (await detail.json()).data
+
+        if (design.status === 'ready') {
+          const current = design.current_version?.id ?? versionId
+
+          const list = await request.get(
+            `${API}/api/v1/projects/${projectId}/rooms/${roomId}/designs/${designId}/versions/${current}/matches`,
+            { headers },
+          )
+
+          matches = (await list.json()).data
+          break
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 2_000))
+      }
+
+      expect(matches, 'the design should have finished and produced a list').toBeTruthy()
+      expect(matches!.placements.length).toBeGreaterThan(0)
+
+      /*
+       * The assertion that matters: every suggestion is something somebody could put in a
+       * basket. A list of plausible-looking products that cannot be bought is worse than
+       * no list, because it takes a customer all the way to the disappointment.
+       */
+      const first = matches!.placements.find(group => group.matches.length > 0)
+
+      expect(first, 'at least one placement should have suggestions').toBeTruthy()
+
+      const suggestion = first!.matches[0] as {
+        product: { name: string | null }
+        price: { amount_minor: number }
+        sku: { id: string }
+      }
+
+      expect(suggestion.product.name).toBeTruthy()
+      expect(suggestion.price.amount_minor).toBeGreaterThan(0)
+      expect(suggestion.sku.id).toBeTruthy()
     } finally {
       await restore()
     }

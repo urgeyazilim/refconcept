@@ -953,3 +953,121 @@ design generation   a customer with no credits is refused before anything runs
 **PHASE 8 GATE: PASS** — proceed to Phase 9.
 
 `WEB_RELEASE_APPROVED`: **NOT GRANTED** (14 phases remaining).
+
+---
+
+## Phase 9 — Product matching
+
+**Date:** 2026-08-25
+**Scope:** turning a design plan into products a customer can buy — embeddings, hard
+filters, pgvector retrieval, reranking, the shopping list, and what a customer says about
+it.
+
+### Gate criteria (04_WEB_PHASE_PLAN.md: benchmark fixtures + budget/stock/category filters)
+
+The benchmark is a fixed catalogue of seven products with deliberate differences — sofas
+of different widths and prices, a sofa nobody can buy, a coffee table, a wardrobe in
+another room — so every assertion below names the answer it expects and why.
+
+| # | Criterion | Method | Result |
+|---|---|---|---|
+| 1 | **Every listable product gets a vector** | Pest | **PASS** — and only listable ones; a draft listing cannot appear in a result |
+| 2 | Unchanged text is not re-embedded | Pest | **PASS** — hashed input, so a nightly pass over an unchanged catalogue costs one query |
+| 3 | Changed text is re-embedded | Pest | **PASS** — and replaces rather than accumulating |
+| 4 | The seller's name is not in the embedded text | Pest | **PASS** — two sofas from one shop must not be similar *because* of the shop |
+| 5 | **Only the right category comes back** | Pest | **PASS** — the wardrobe and the coffee table are excluded from a sofa search |
+| 6 | **A category with no match returns nothing** | Pest | **PASS** — the important negative: falling back to the whole catalogue would recommend a wardrobe for a chandelier |
+| 7 | Category matching survives capitals and accents | Pest | **PASS** — the planner writes prose, the catalogue holds slugs |
+| 8 | **Nothing out of stock is ever suggested** | Pest | **PASS** — asserted with the out-of-stock product as the *textually nearest* candidate |
+| 9 | **A product too wide for the wall is refused** | Pest | **PASS** — 2100mm passes a 2200mm limit, 3200mm does not |
+| 10 | An unmeasured product is allowed through | Pest | **PASS** — excluding everything unmeasured would empty the results for the customer who measured |
+| 11 | **A budget ceiling is respected** | Pest | **PASS** — in the retrieval and again per placement in the list |
+| 12 | A bedroom category stays out of a living room | Pest | **PASS** — and the same query finds it in the bedroom |
+| 13 | Products used for one placement are excluded from the next | Pest | **PASS** — two placements wanting a sofa get two different sofas |
+| 14 | Ordering follows meaning, not price | Pest | **PASS** — the nearest description ranks first |
+| 15 | Similarity is a bounded percentage | Pest | **PASS** — clamped, because a similarity below nothing is unreadable |
+| 16 | One row per product, not per offer | code review + Pest | **PASS** — `DISTINCT ON`, cheapest purchasable offer wins |
+| 17 | **The list is grouped by placement** | Pest + Playwright | **PASS** — "for the sofa, these" rather than a flat list |
+| 18 | Ranks start at one and follow the score | Pest | **PASS** |
+| 19 | **The price shown is a snapshot** | Pest | **PASS** — and a later change is reported rather than silently applied |
+| 20 | A placement the catalogue cannot serve is left empty | Pest | **PASS** — an empty group beats a wrong suggestion |
+| 21 | Rebuilding replaces rather than merges | Pest | **PASS** — two generations would produce an order nobody can explain |
+| 22 | **The rerank is optional** | code review | **PASS** — a failed model call returns the similarity ordering unchanged |
+| 23 | The rerank is blended, not substituted | code review | **PASS** — 60/40, so a model with a favourite cannot bury a closer match |
+| 24 | Only the shortlist is reranked | code review | **PASS** — ten candidates, not four hundred |
+| 25 | **The list is the owner's alone** | Pest | **PASS** — a stranger gets 403 |
+| 26 | Choosing demotes the alternatives | Pest | **PASS** — two accepted for one spot does not reflect what happened |
+| 27 | The total counts only what was chosen | Pest | **PASS** — summing suggestions would be five times the real figure next to "toplam" |
+| 28 | **Feedback is recorded and blames a stage** | Pest | **PASS** — wrong size is a filter bug, wrong style a modelling problem |
+| 29 | Every verdict is kept | Pest | **PASS** — "too expensive" then "wrong style" is two statements |
+| 30 | A negative verdict stops the suggestion recurring | Pest | **PASS** — the one thing feedback changes automatically |
+| 31 | A positive verdict changes nothing | Pest | **PASS** |
+| 32 | Matching cannot fail a design | code review | **PASS** — a render the customer paid for is not lost because the catalogue had no sofas |
+| 33 | Backend suite | `php artisan test` | **PASS** — 521 tests, 1592 assertions |
+| 34 | Static analysis / style | PHPStan L6, Pint | **PASS** |
+| 35 | Frontend gates | ESLint, vue-tsc, token guard | **PASS** |
+| 36 | **End-to-end** | Playwright, live stack | **PASS** — 27 journeys |
+
+### End-to-end journeys added
+
+```text
+design generation   the catalogue is embedded through the operator's own command ->
+                    a design is generated -> the shopping list comes back grouped by
+                    placement, with a named product, a real SKU and a price above zero
+```
+
+### Defects found and fixed during this phase
+
+- **`SELECT DISTINCT` with an ordered expression** failed outright in PostgreSQL. Rewritten
+  as `DISTINCT ON (p.id)` inside a subquery, which also expresses the real intent — one row
+  per product, cheapest purchasable offer.
+- **The vector column is `NOT NULL`,** so writing the row through Eloquent and setting the
+  vector afterwards could never work. Replaced with a single upsert, which is also one
+  write rather than three per product.
+- **Registration throttling broke the suite as it grew.** The browser-driven registration
+  now waits out the limit and resubmits, the way `accounts.ts` already honoured
+  `Retry-After` for the API — the throttle stays real rather than being disabled for tests.
+
+### Honest limitations
+
+- **The fake embeddings are word-overlap, not meaning.** They make the benchmark
+  deterministic and the filters testable, and they prove nothing about whether a real
+  embedding model finds "İskandinav meşe" for "warm minimalist oak". That question needs a
+  real model and a person judging the results; no fixture can answer it.
+- **There is no relevance metric.** The suite asserts that specific products are or are not
+  returned; it does not measure precision or recall over a labelled set, because no labelled
+  set exists. `design_match_feedback` is the beginning of one — it is the reason the table
+  is there — and until enough of it accumulates, "is matching good" is a judgement rather
+  than a number.
+- **Image embeddings are schema and enum only.** "A sofa like the one in this render" is a
+  different question from "a sofa matching this description", and only the second is
+  answered today. The column and the enum case exist so adding it does not need a migration
+  and a re-embedding run.
+- **Object extraction is a table without a producer.** `design_extracted_objects` is
+  migrated and modelled; nothing writes to it yet. The `ObjectExtraction` task exists in the
+  gateway, and wiring it belongs with the interactive render view rather than here — a
+  bounding box is only useful once somebody can click on it.
+- **The per-placement budget is an even split plus half.** Crude and defensible: the sofa
+  costs more than the lamp, and inventing a split without asking the customer would be
+  inventing a preference. It is the first thing to revisit when there is feedback to revisit
+  it with.
+- **The rerank weighting (60/40) is a guess.** It is a starting point chosen to stop a model
+  with a favourite from flattening the ranking, not a tuned figure.
+
+### Notes
+
+- The catalogue is embedded by `refconcept:embed-catalogue`, scheduled nightly and safe to
+  run repeatedly. It reports embedded / unchanged / failed separately, because "1200
+  processed" hides whether anything happened.
+- Embeddings are 768-dimensional, which is a schema-level commitment: changing it means
+  re-embedding everything. The model name is stored beside every vector so a mixed catalogue
+  is detectable rather than quietly wrong.
+- The HNSW index needs no training pass, so similarity search works on an empty catalogue
+  and stays correct as products are added one at a time — which is how a marketplace
+  actually grows.
+
+### Verdict
+
+**PHASE 9 GATE: PASS** — proceed to Phase 10.
+
+`WEB_RELEASE_APPROVED`: **NOT GRANTED** (13 phases remaining).

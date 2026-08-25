@@ -65,9 +65,11 @@ final class OpenAiProvider implements AiProvider
         }
 
         try {
-            return $call->modality() === AiModality::Image
-                ? $this->generateImage($call)
-                : $this->generateText($call);
+            return match ($call->modality()) {
+                AiModality::Image => $this->generateImage($call),
+                AiModality::Embedding => $this->embed($call),
+                default => $this->generateText($call),
+            };
         } catch (ConnectionException $e) {
             // Covers both a refused socket and a client-side timeout; the message
             // distinguishes them for a person, the kind does for the gateway.
@@ -83,6 +85,38 @@ final class OpenAiProvider implements AiProvider
     }
 
     // --- internals -----------------------------------------------------------
+
+    /** Turns text into a vector. */
+    private function embed(AiCall $call): AiResult
+    {
+        $response = $this->client($call)->post('/embeddings', [
+            'model' => $call->model->code,
+            'input' => $call->prompt,
+        ]);
+
+        if ($response->failed()) {
+            return $this->translateFailure($response);
+        }
+
+        $body = $response->json() ?? [];
+
+        /** @var array<int, float> $values */
+        $values = (array) data_get($body, 'data.0.embedding', []);
+
+        if ($values === []) {
+            return AiResult::failure(
+                AiFailureKind::MalformedOutput,
+                'OpenAI boş bir vektör döndürdü.',
+                httpStatus: $response->status(),
+            );
+        }
+
+        return AiResult::success(
+            embedding: array_map(static fn ($value): float => (float) $value, $values),
+            inputTokens: (int) data_get($body, 'usage.prompt_tokens', 0),
+            httpStatus: $response->status(),
+        );
+    }
 
     private function generateText(AiCall $call): AiResult
     {

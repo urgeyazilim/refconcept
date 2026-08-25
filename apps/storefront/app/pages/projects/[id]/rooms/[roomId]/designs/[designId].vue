@@ -43,6 +43,40 @@ interface VersionProgress {
   events: Array<{ stage: string, label: string, status: string, message: string, at: string }>
 }
 
+interface MatchRow {
+  id: string
+  rank: number
+  status: string
+  status_label: string
+  product: { id: string, name: string | null, slug: string | null, image_url: string | null }
+  sku: { id: string, variant: string | null, seller: string | null, width_mm: number | null }
+  price: { amount_minor: number, currency: string }
+  current_price_minor: number | null
+  price_has_moved: boolean
+  score_bps: number
+  similarity_bps: number | null
+  reason: string | null
+}
+
+interface PlacementGroup {
+  index: number
+  category: string | null
+  wall: string | null
+  max_width_mm: number | null
+  matches: MatchRow[]
+}
+
+interface ShoppingList {
+  placements: PlacementGroup[]
+  total_minor: number
+  currency: string
+  verdicts: Array<{ value: string, label: string }>
+}
+
+const shoppingList = ref<ShoppingList | null>(null)
+const listBusy = ref(false)
+const listMessage = ref<string | null>(null)
+
 const progress = ref<Record<string, VersionProgress>>({})
 const pollFailures = ref(0)
 const pollStalled = ref(false)
@@ -69,6 +103,99 @@ async function load() {
 await load()
 
 useHead(() => ({ title: design.value?.name ?? 'Tasarım' }))
+
+/**
+ * The version whose shopping list is shown.
+ *
+ * The one the customer is looking at, not the newest — going back to an earlier version
+ * is the point of keeping a tree, and its list has to come back with it.
+ */
+const shownVersionId = computed(() => design.value?.current_version?.id ?? null)
+
+async function loadShoppingList() {
+  const versionId = shownVersionId.value
+
+  if (!versionId) {
+    shoppingList.value = null
+
+    return
+  }
+
+  try {
+    const response = await api.get<{ data: ShoppingList }>(`${base}/versions/${versionId}/matches`)
+    shoppingList.value = response.data
+  } catch {
+    // A design without a shopping list is still a design. Failing the whole page over
+    // the suggestions would take away the thing the customer actually came for.
+    shoppingList.value = null
+  }
+}
+
+await loadShoppingList()
+
+watch(shownVersionId, () => { void loadShoppingList() })
+
+async function rebuildList() {
+  if (!shownVersionId.value) return
+
+  listBusy.value = true
+  listMessage.value = null
+
+  try {
+    const response = await api.post<{ message: string }>(
+      `${base}/versions/${shownVersionId.value}/matches/rebuild`,
+    )
+
+    listMessage.value = response.message
+    await loadShoppingList()
+  } catch (error) {
+    listMessage.value = error instanceof ApiError ? error.message : 'Öneriler yenilenemedi.'
+  } finally {
+    listBusy.value = false
+  }
+}
+
+async function chooseMatch(match: MatchRow) {
+  if (!shownVersionId.value) return
+
+  listBusy.value = true
+
+  try {
+    await api.post(`${base}/versions/${shownVersionId.value}/matches/${match.id}/choose`)
+    await loadShoppingList()
+  } catch (error) {
+    listMessage.value = error instanceof ApiError ? error.message : 'Seçim kaydedilemedi.'
+  } finally {
+    listBusy.value = false
+  }
+}
+
+/**
+ * Tells us what was wrong with a suggestion.
+ *
+ * The only honest signal about whether matching works — everything else is the system
+ * marking its own homework. The reasons are short on purpose: a list of twelve is a list
+ * nobody reads to the end.
+ */
+async function sendFeedback(match: MatchRow, verdict: string) {
+  if (!shownVersionId.value) return
+
+  listBusy.value = true
+
+  try {
+    await api.post(`${base}/versions/${shownVersionId.value}/matches/${match.id}/feedback`, { verdict })
+    listMessage.value = 'Geri bildiriminiz için teşekkürler.'
+    await loadShoppingList()
+  } catch (error) {
+    listMessage.value = error instanceof ApiError ? error.message : 'Geri bildirim gönderilemedi.'
+  } finally {
+    listBusy.value = false
+  }
+}
+
+function money(minor: number, currency: string): string {
+  return new Intl.NumberFormat('tr-TR', { style: 'currency', currency }).format(minor / 100)
+}
 
 /** Versions the engine is still working on. */
 const running = computed(() => rows.value
@@ -235,6 +362,118 @@ const statusTone: Record<string, string> = {
         sayfayı yenileyerek son durumu görebilirsiniz.
       </RcAlert>
 
+
+      <!--
+        The shopping list.
+
+        Above the version tree, because it is what the customer came for: the picture is
+        the idea and this is the part they can act on.
+      -->
+      <section v-if="shoppingList && shoppingList.placements.length > 0" class="rc-card p-6 sm:p-8">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 class="text-lg font-medium">Alışveriş listesi</h2>
+            <p class="mt-1.5 max-w-[62ch] text-sm leading-relaxed text-ink-secondary">
+              Plandaki her parça için satın alınabilir, ölçüsü uyan ve stokta olan ürünler.
+              Beğenmediklerinizi işaretlerseniz bir dahakine önerilmez.
+            </p>
+          </div>
+
+          <RcButton size="sm" variant="ghost" :loading="listBusy" @click="rebuildList">
+            Önerileri yenile
+          </RcButton>
+        </div>
+
+        <p v-if="listMessage" class="mt-3 text-sm text-ink-secondary">{{ listMessage }}</p>
+
+        <p v-if="shoppingList.total_minor > 0" class="mt-4 text-sm">
+          Seçtikleriniz:
+          <span class="font-medium tabular-nums">
+            {{ money(shoppingList.total_minor, shoppingList.currency) }}
+          </span>
+        </p>
+
+        <div class="mt-6 space-y-8">
+          <div v-for="group in shoppingList.placements" :key="group.index">
+            <h3 class="text-sm font-medium">
+              {{ group.category }}
+              <span v-if="group.max_width_mm" class="font-normal text-muted">
+                · en fazla {{ Math.round(group.max_width_mm / 10) }} cm
+              </span>
+            </h3>
+
+            <ul class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <li
+                v-for="match in group.matches"
+                :key="match.id"
+                class="rounded-md border p-3"
+                :class="match.status === 'accepted'
+                  ? 'border-charcoal bg-bg-muted'
+                  : (match.status === 'rejected' ? 'border-line opacity-50' : 'border-line')"
+              >
+                <div class="aspect-[4/3] overflow-hidden rounded-sm bg-bg-muted">
+                  <img
+                    v-if="match.product.image_url"
+                    :src="match.product.image_url"
+                    :alt="match.product.name ?? ''"
+                    class="size-full object-cover"
+                    loading="lazy"
+                  >
+                </div>
+
+                <p class="mt-2.5 line-clamp-2 text-sm">{{ match.product.name }}</p>
+                <p v-if="match.sku.seller" class="text-xs text-muted">{{ match.sku.seller }}</p>
+
+                <p class="mt-1.5 text-sm font-medium tabular-nums">
+                  {{ money(match.price.amount_minor, match.price.currency) }}
+                </p>
+
+                <!--
+                  A price that has moved since the list was built. Said out loud rather
+                  than silently repriced: the difference is the most useful thing this card
+                  can tell a customer who came back a week later.
+                -->
+                <p v-if="match.price_has_moved && match.current_price_minor" class="text-xs text-warning">
+                  Güncel fiyat: {{ money(match.current_price_minor, match.price.currency) }}
+                </p>
+
+                <p v-if="match.reason" class="mt-1.5 line-clamp-2 text-xs text-ink-secondary">
+                  {{ match.reason }}
+                </p>
+
+                <div v-if="canEdit" class="mt-3 flex flex-wrap gap-1.5">
+                  <button
+                    v-if="match.status !== 'accepted'"
+                    type="button"
+                    class="rounded-sm border border-line px-2.5 py-1 text-xs text-ink-secondary transition-colors hover:bg-bg-muted hover:text-ink disabled:opacity-40"
+                    :disabled="listBusy"
+                    @click="chooseMatch(match)"
+                  >
+                    Bunu seç
+                  </button>
+                  <span v-else class="rounded-sm bg-charcoal px-2.5 py-1 text-xs text-inverse">Seçildi</span>
+
+                  <select
+                    v-if="match.status !== 'rejected'"
+                    class="rounded-sm border border-line bg-surface px-2 py-1 text-xs text-ink-secondary"
+                    :disabled="listBusy"
+                    @change="sendFeedback(match, ($event.target as HTMLSelectElement).value)"
+                  >
+                    <option value="">Geri bildirim…</option>
+                    <option v-for="verdict in shoppingList.verdicts" :key="verdict.value" :value="verdict.value">
+                      {{ verdict.label }}
+                    </option>
+                  </select>
+                </div>
+              </li>
+            </ul>
+
+            <p v-if="group.matches.length === 0" class="mt-3 text-sm text-muted">
+              Bu parça için uygun ürün bulunamadı.
+            </p>
+          </div>
+        </div>
+      </section>
 
       <!-- The tree -->
       <section class="rc-card p-6 sm:p-8">

@@ -43,6 +43,9 @@ final class FakeAiProvider implements AiProvider
      */
     private static array $scripted = [];
 
+    /** Matches the width of the pgvector column; see the matching migration. */
+    private const VECTOR_DIMENSIONS = 768;
+
     /** How long a scripted "timeout" pretends to take, in milliseconds. */
     public static int $simulatedLatencyMs = 0;
 
@@ -130,6 +133,13 @@ final class FakeAiProvider implements AiProvider
 
     private function plainAnswer(AiCall $call): AiResult
     {
+        if ($call->modality() === AiModality::Embedding) {
+            return AiResult::success(
+                embedding: $this->deterministicVector($call->prompt),
+                inputTokens: $this->tokensFor($call->prompt),
+            );
+        }
+
         if ($call->modality() === AiModality::Image) {
             /*
              * A real image, written to the real store.
@@ -277,6 +287,52 @@ final class FakeAiProvider implements AiProvider
         }
 
         return app(GeneratedImageStore::class)->stash($bytes, 'image/png');
+    }
+
+    /**
+     * A vector derived from the words, not from noise.
+     *
+     * The point of a fake embedding is that similar text must come out *near* similar
+     * text — otherwise a matching test asserts nothing. So each word contributes to a few
+     * fixed positions chosen by its hash, and two descriptions sharing most of their words
+     * end up close together. Nonsense as an embedding; useful as a fixture.
+     *
+     * @return array<int, float>
+     */
+    private function deterministicVector(string $text): array
+    {
+        $vector = array_fill(0, self::VECTOR_DIMENSIONS, 0.0);
+
+        $words = preg_split('/[^\p{L}\p{N}]+/u', mb_strtolower($text, 'UTF-8')) ?: [];
+
+        foreach ($words as $word) {
+            if ($word === '') {
+                continue;
+            }
+
+            $seed = crc32($word);
+
+            // Three positions per word: enough that two texts sharing a word are visibly
+            // closer than two that share none, few enough that the vector stays sparse.
+            for ($i = 0; $i < 3; $i++) {
+                $position = (int) (($seed >> ($i * 8)) % self::VECTOR_DIMENSIONS);
+                $vector[$position] += 1.0;
+            }
+        }
+
+        // Normalised, because the store and the search both assume unit length — cosine
+        // distance on unnormalised vectors would rank a long description above a good one.
+        $magnitude = sqrt(array_sum(array_map(static fn (float $value): float => $value ** 2, $vector)));
+
+        if ($magnitude === 0.0) {
+            // Empty text still needs a valid vector; a zero vector has no direction and
+            // every distance from it is the same.
+            $vector[0] = 1.0;
+
+            return $vector;
+        }
+
+        return array_map(static fn (float $value): float => $value / $magnitude, $vector);
     }
 
     private function tokensFor(string $prompt): int

@@ -28,6 +28,9 @@ enum GenerationStage: string
     /** Writing the image and marking the version ready. */
     case Save = 'save';
 
+    /** Finding products a customer can actually buy for the layout. */
+    case Match = 'match';
+
     case Done = 'done';
 
     public function label(): string
@@ -38,6 +41,7 @@ enum GenerationStage: string
             self::Plan => 'Yerleşim planlanıyor',
             self::Render => 'Görsel üretiliyor',
             self::Save => 'Kaydediliyor',
+            self::Match => 'Ürünler eşleştiriliyor',
             self::Done => 'Tamamlandı',
         };
     }
@@ -56,7 +60,8 @@ enum GenerationStage: string
             self::Analysis => 2_500,
             self::Plan => 4_500,
             self::Render => 8_000,
-            self::Save => 9_500,
+            self::Save => 9_000,
+            self::Match => 9_600,
             self::Done => 10_000,
         };
     }

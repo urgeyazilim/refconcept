@@ -238,6 +238,44 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a demo product page claimed six in stock while the stock screen was empty. Opening
   stock is now booked as a receipt through the ledger.
 
+### Added — Phase 9 (Product matching)
+
+- **A design now comes with a shopping list.** Every placement in the plan — "a sofa up to
+  2200mm against the south wall" — becomes a shortlist of products that are in stock, fit,
+  cost less than the budget allows, and look like the design.
+- **Narrow first, then rank.** Category, stock, budget and width are applied in SQL before
+  anything is scored, because a model asked to respect "no wider than 2200mm" will sometimes
+  and a `WHERE` clause always does. What is left for the vector is the part that is
+  genuinely a matter of resemblance.
+- **Semantic search over the catalogue**, using pgvector with an HNSW cosine index. A
+  customer asking for "warm minimalist oak" finds a sofa a seller described as "İskandinav
+  meşe iskeletli" without either phrase containing the other — which full-text search cannot
+  do, and which a synonym list large enough to fake would need maintaining forever.
+- **A category that matches nothing returns nothing.** Silently dropping the filter would
+  let the search fall back to the nearest products in the whole catalogue, which is how a
+  plan asking for a chandelier ends up recommending a wardrobe with nothing looking wrong.
+- **The rerank is optional in the strongest sense.** A model reorders the shortlist — only
+  the shortlist, because a rerank over four hundred candidates is a bill — and if the call
+  fails, the list built from similarity is returned unchanged. Its opinion is blended 60/40
+  with the similarity rather than replacing it, so a model with a favourite cannot bury a
+  genuinely closer match.
+- **Prices are snapshots.** A customer who returns next week sees the list they were shown,
+  with today's price beside it when the two differ. Hiding the change would be the wrong kind
+  of tidy: the difference is the most useful thing the row can tell them.
+- **Feedback, because everything else is the system marking its own homework.** Six verdicts,
+  each naming the part of the pipeline it blames — wrong size is a filter bug, wrong style a
+  modelling problem — so a week of clicks is readable. Every verdict is kept rather than the
+  latest overwriting the last, and the one thing it changes automatically is that a rejected
+  product is not suggested again for that spot.
+- **Catalogue embedding is hashed and scheduled.** `refconcept:embed-catalogue` runs nightly
+  and is safe to repeat: a product whose text has not changed costs nothing. The text
+  embedded is assembled from what describes the product, in a fixed order, with the seller's
+  name and delivery terms deliberately left out — two sofas from the same shop must not be
+  similar *because* of the shop.
+- **Matching cannot fail a design.** It runs as the last step of the generation pipeline and
+  is unable to fail the version: a render the customer paid for is not lost because the
+  catalogue happened to have no sofas in their budget.
+
 ### Added — Phase 8 (AI room analysis and design generation)
 
 - **The design engine**: a room photograph becomes a finished render in three model calls —

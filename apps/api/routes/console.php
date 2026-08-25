@@ -38,3 +38,15 @@ Schedule::command('refconcept:sweep-credits')
     ->hourly()
     ->withoutOverlapping()
     ->runInBackground();
+
+/*
+ * Every listable product gets a search vector.
+ *
+ * Nightly rather than hourly: a description changes when a seller edits it, which is not
+ * an event worth a provider call within the hour. The hash means an unchanged catalogue
+ * costs one query and nothing else, so the run is cheap even when there is nothing to do.
+ */
+Schedule::command('refconcept:embed-catalogue')
+    ->dailyAt('03:20')
+    ->withoutOverlapping()
+    ->runInBackground();

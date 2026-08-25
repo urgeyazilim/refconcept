@@ -66,6 +66,13 @@
 | P8-T005 | 8 | BACKEND_AGENT | P8-T004 | DONE | credit tests | One hold for the whole version; every failure path returns it in full |
 | P8-T006 | 8 | STOREFRONT_AGENT | P8-T004 | DONE | storefront E2E | Live progress, render quality, the plan beside the image |
 | P8-T007 | 8 | INDEPENDENT_TEST_AGENT | P8-T001..006 | DONE | Phase 8 gate | 493 backend tests, 26 E2E journeys (see TEST_REPORT.md) |
+| P9-T001 | 9 | ARCHITECT_AGENT | P8-T007 | DONE | schema review | pgvector embeddings with an HNSW index, snapshot matches, append-only feedback |
+| P9-T002 | 9 | BACKEND_AGENT | P9-T001 | DONE | embedding tests | Hashed input so an unchanged catalogue costs nothing; seller and delivery terms excluded |
+| P9-T003 | 9 | BACKEND_AGENT | P9-T002 | DONE | filter benchmark | Category, stock, budget, width and room type — every one asserted against a fixed catalogue |
+| P9-T004 | 9 | BACKEND_AGENT | P9-T003 | DONE | retrieval tests | One row per product, ordering by meaning, an unmatched category returning nothing |
+| P9-T005 | 9 | BACKEND_AGENT | P9-T004 | DONE | shopping list tests | Grouped by placement, prices snapshotted, a rerank that cannot break the list |
+| P9-T006 | 9 | STOREFRONT_AGENT | P9-T005 | DONE | storefront E2E | The list beside the render, choosing, and telling us what was wrong |
+| P9-T007 | 9 | INDEPENDENT_TEST_AGENT | P9-T001..006 | DONE | Phase 9 gate | 521 backend tests, 27 E2E journeys (see TEST_REPORT.md) |
 
 ## Scope notes
 

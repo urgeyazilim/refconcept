@@ -43,6 +43,7 @@ final class AiGatewaySeeder extends Seeder
             'fake-text' => $this->model($fake, 'fake-text-1', 'Fake Metin', AiModality::Text, structured: true),
             'fake-vision' => $this->model($fake, 'fake-vision-1', 'Fake Görsel Anlama', AiModality::Vision, structured: true, imageInput: true),
             'fake-image' => $this->model($fake, 'fake-image-1', 'Fake Görsel Üretimi', AiModality::Image),
+            'fake-embedding' => $this->model($fake, 'fake-embedding-1', 'Fake Vektör', AiModality::Embedding, maxOutputTokens: null),
         ];
 
         $models['gemini-text'] = $this->model(
@@ -70,7 +71,19 @@ final class AiGatewaySeeder extends Seeder
          * the cost-cap tests explicit about the rate they are testing against rather
          * than inheriting one from here.
          */
+        $models['gemini-embedding'] = $this->model(
+            $google,
+            'text-embedding-004',
+            'Gemini Text Embedding',
+            AiModality::Embedding,
+            contextTokens: 2_048,
+            maxOutputTokens: null,
+        );
+
         $this->rate($models['gemini-text'], inputPerMillion: 1_250_000, outputPerMillion: 10_000_000);
+        // Embeddings have no output tokens to speak of and are an order of magnitude
+        // cheaper than generation, which is what makes embedding a whole catalogue viable.
+        $this->rate($models['gemini-embedding'], inputPerMillion: 25_000, outputPerMillion: 0);
         $this->rate($models['gemini-image'], inputPerMillion: 1_250_000, outputPerMillion: 0, perImage: 30_000);
 
         /*
@@ -445,6 +458,22 @@ final class AiGatewaySeeder extends Seeder
                         ],
                     ],
                 ],
+            ],
+
+            AiTask::TextEmbedding->value => [
+                'primary' => 'gemini-embedding',
+                'fallback' => 'fake-embedding',
+                'credits' => 0,
+                'timeout' => 20,
+                'attempts' => 2,
+                'concurrency' => 20,
+                'max_cost_micros' => 20_000,
+                'description' => 'Ürün açıklamasını aramaya uygun bir vektöre çevirir.',
+                /*
+                 * No prompt template. An embedding has no instructions — the text *is* the
+                 * input — and inventing a wrapper would only push every vector in the
+                 * catalogue in the same direction.
+                 */
             ],
 
             AiTask::ProductQueryRewrite->value => [

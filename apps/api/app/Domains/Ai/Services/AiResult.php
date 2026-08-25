@@ -24,6 +24,7 @@ final readonly class AiResult
      * @param  array<string, mixed>|null  $structured  the parsed answer, for schema tasks
      * @param  array<int, string>  $imageUrls  images the provider produced, by URL
      * @param  array<int, string>  $imageRefs  images already stashed on the private disk
+     * @param  array<int, float>|null  $embedding  a vector, for embedding tasks
      */
     private function __construct(
         public bool $successful,
@@ -31,6 +32,7 @@ final readonly class AiResult
         public ?array $structured = null,
         public array $imageUrls = [],
         public array $imageRefs = [],
+        public ?array $embedding = null,
         public int $inputTokens = 0,
         public int $outputTokens = 0,
         public int $imageCount = 0,
@@ -43,12 +45,14 @@ final readonly class AiResult
      * @param  array<string, mixed>|null  $structured
      * @param  array<int, string>  $imageUrls
      * @param  array<int, string>  $imageRefs
+     * @param  array<int, float>|null  $embedding
      */
     public static function success(
         ?string $text = null,
         ?array $structured = null,
         array $imageUrls = [],
         array $imageRefs = [],
+        ?array $embedding = null,
         int $inputTokens = 0,
         int $outputTokens = 0,
         int $imageCount = 0,
@@ -60,6 +64,7 @@ final readonly class AiResult
             structured: $structured,
             imageUrls: $imageUrls,
             imageRefs: $imageRefs,
+            embedding: $embedding,
             inputTokens: $inputTokens,
             outputTokens: $outputTokens,
             imageCount: $imageCount,
