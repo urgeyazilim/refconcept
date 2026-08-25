@@ -88,6 +88,14 @@
 | P11-T006 | 11 | BACKEND_AGENT | P11-T001 | DONE | gateway contract | Five-method adapter contract, registry, marketplace settlement kept separate, test provider |
 | P11-T007 | 11 | STOREFRONT_AGENT | P11-T002..006 | DONE | checkout E2E | Payment page, 3DS round trip, return page that asks rather than assumes, credit purchase |
 | P11-T008 | 11 | INDEPENDENT_TEST_AGENT | P11-T001..007 | DONE | Phase 11 gate | 594 backend tests, 38 E2E journeys, 4 defects found and fixed (see TEST_REPORT.md) |
+| P12-T001 | 12 | BACKEND_AGENT | P11-T008 | DEFERRED | iyzico sandbox | Needs live official docs + sandbox credentials; adapter seam ready (see 13_PROGRESS_STATE.md) |
+| P13-T001 | 13 | BACKEND_AGENT | P11-T008 | DEFERRED | QNB test flow | Needs live official docs + merchant credentials; adapter seam ready |
+| P14-T001 | 14 | ARCHITECT_AGENT | P11-T008 | DONE | schema review | Reference unique for all time; one live and one settled transfer per intent; receipts on the private disk |
+| P14-T002 | 14 | BACKEND_AGENT | P14-T001 | DONE | mismatch tests | Short and over payments as named states; a shortfall releases nothing and states the figure |
+| P14-T003 | 14 | BACKEND_AGENT | P14-T001 | DONE | duplicate tests | Row lock, state check and a partial unique index; a second confirmation is a 409 |
+| P14-T004 | 14 | DEVOPS_SECURITY_AGENT | P14-T001 | DONE | access tests | payments.view and payments.settle split; receipts only via short-lived signed links |
+| P14-T005 | 14 | STOREFRONT_AGENT | P14-T002..004 | DONE | transfer E2E | Method choice, reference page, receipt upload; finance queue in the admin panel |
+| P14-T006 | 14 | INDEPENDENT_TEST_AGENT | P14-T001..005 | DONE | Phase 14 gate | 619 backend tests, 42 E2E journeys, 2 defects found and fixed (see TEST_REPORT.md) |
 
 ## Scope notes
 

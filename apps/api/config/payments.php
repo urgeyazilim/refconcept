@@ -53,6 +53,23 @@ return [
             'webhook_secret' => env('REFCONCEPT_PAYMENT_FAKE_SECRET', 'refconcept-fake-gateway'),
         ],
 
+        /*
+         * Havale / EFT.
+         *
+         * A payment method with no provider in it: the customer transfers money to one of
+         * our own accounts and a person in finance confirms it against a statement.
+         *
+         * `window_hours` is the compromise the whole method turns on. A transfer takes a
+         * day or two, and stock is held for the whole of it — which is a real cost, borne
+         * against a payment that may never arrive. Too short and customers lose their
+         * basket overnight; too long and popular items sit reserved for people who changed
+         * their mind. Two days covers a Friday evening order clearing on Monday.
+         */
+        'bank_transfer' => [
+            'enabled' => (bool) env('REFCONCEPT_BANK_TRANSFER_ENABLED', true),
+            'window_hours' => (int) env('REFCONCEPT_BANK_TRANSFER_WINDOW_HOURS', 48),
+        ],
+
         // Phase 12. Present so the shape is visible, empty so it cannot be selected.
         'iyzico' => [
             'enabled' => (bool) env('REFCONCEPT_IYZICO_ENABLED', false),

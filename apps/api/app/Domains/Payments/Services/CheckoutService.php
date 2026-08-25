@@ -14,6 +14,7 @@ use App\Domains\Payments\Enums\CheckoutPurpose;
 use App\Domains\Payments\Enums\CheckoutStatus;
 use App\Domains\Payments\Enums\PaymentStatus;
 use App\Domains\Payments\Exceptions\CheckoutRefused;
+use App\Domains\Payments\Gateways\BankTransferGateway;
 use App\Domains\Payments\Models\CheckoutSession;
 use App\Domains\Payments\Models\PaymentIntent;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +40,7 @@ final class CheckoutService
         private readonly CartService $carts,
         private readonly GatewayRegistry $gateways,
         private readonly PaymentProcessor $processor,
+        private readonly BankTransferService $transfers,
     ) {}
 
     /**
@@ -187,7 +189,7 @@ final class CheckoutService
      *
      * @throws CheckoutRefused
      */
-    public function pay(CheckoutSession $session, ?string $gatewayName, ?string $paymentToken, ?string $clientIp = null, ?string $idempotencyKey = null): PaymentIntent
+    public function pay(CheckoutSession $session, ?string $gatewayName, ?string $paymentToken, ?string $clientIp = null, ?string $idempotencyKey = null, ?string $bankAccountId = null): PaymentIntent
     {
         $this->assertPayable($session);
 
@@ -223,6 +225,16 @@ final class CheckoutService
                 'expires_at' => now()->addSeconds((int) config('payments.timings.intent_ttl_seconds', 1800)),
             ]);
         });
+
+        if ($intent->gateway === BankTransferGateway::NAME) {
+            /*
+             * The transfer has to exist before the adapter is asked, because for this
+             * method *we* are the provider: the reference it reports back is the one
+             * allocated here. Opening it also stretches the stock hold from the card
+             * window of minutes to the transfer window of days.
+             */
+            $this->transfers->open($intent, $bankAccountId);
+        }
 
         $result = $this->processor->start($intent, new PaymentRequest(
             intent: $intent,

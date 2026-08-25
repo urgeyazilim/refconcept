@@ -403,6 +403,30 @@ final class InventoryLedger
      *
      * @return array<int, StockReservation>
      */
+    /**
+     * Pushes back the deadline on every hold a reference is carrying.
+     *
+     * A card checkout holds stock for minutes; a bank transfer needs days. Extending is
+     * not the same as re-reserving — the quantity does not move, so nothing has to be
+     * re-checked against availability, and a customer told their goods are reserved does
+     * not lose them overnight.
+     */
+    public function extendHolds(string $referenceType, string $referenceId, int $seconds): int
+    {
+        $until = now()->addSeconds($seconds);
+        $extended = 0;
+
+        foreach ($this->reservationsFor($referenceType, $referenceId) as $reservation) {
+            $reservation->forceFill(['expires_at' => $until])->save();
+            $extended++;
+        }
+
+        return $extended;
+    }
+
+    /**
+     * @return array<int, StockReservation>
+     */
     public function reservationsFor(string $referenceType, string $referenceId): array
     {
         return StockReservation::query()

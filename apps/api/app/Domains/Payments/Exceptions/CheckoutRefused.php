@@ -84,4 +84,28 @@ final class CheckoutRefused extends RuntimeException
     {
         return new self('Ödeme oturumu bulunamadı.', 404);
     }
+
+    public static function transferUnavailable(): self
+    {
+        // 503 rather than 422: nobody did anything wrong, there is simply no receiving
+        // account configured for this currency, and that is ours to fix.
+        return new self('Havale/EFT şu anda kullanılamıyor.', 503);
+    }
+
+    public static function transferAmountInvalid(): self
+    {
+        return new self('Gelen tutar sıfırdan büyük olmalı.', 422);
+    }
+
+    public static function transferAlreadyDecided(string $status): self
+    {
+        // The second operator on a stale screen. Told what happened rather than refused
+        // blankly, so they can see it was not their action that failed.
+        return new self(sprintf('Bu havale zaten sonuçlandırılmış (%s).', $status), 409);
+    }
+
+    public static function transferNotFound(): self
+    {
+        return new self('Havale kaydı bulunamadı.', 404);
+    }
 }

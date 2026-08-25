@@ -12,19 +12,19 @@ WEB
 IN_PROGRESS
 
 ## Current Phase
-PHASE_12
+PHASE_15
 
 ## Current Task
-Not started — Phase 11 is closed and Phase 12 has not begun.
+Not started — Phase 14 is closed; Phases 12 and 13 remain deferred (see below) and Phase 15 has not begun.
 
 ## Last Completed Task
-P11-T008 — Phase 11 gate verified end to end (see `TEST_REPORT.md`).
+P14-T006 — Phase 14 gate verified end to end (see `TEST_REPORT.md`).
 
 ## Next Task
-Phase 12 — iyzico, shipping its own UI slice alongside its API.
+Phase 15 — Orders / Seller Orders, shipping its own UI slice alongside its API.
 
 ## Test State
-PASS — 594 backend tests / 1804 assertions, 38 Playwright E2E journeys across all three
+PASS — 619 backend tests / 1894 assertions, 42 Playwright E2E journeys across all three
 apps, PHPStan level 6, Pint, ESLint, vue-tsc and the design token guard all clean.
 
 ## Release State
@@ -52,6 +52,27 @@ account profile, address book and the legal pages.
 Phase 20 keeps its original job — the full storefront experience, approved-design
 parity and the complete customer journey — but it will polish real screens rather
 than build them from nothing.
+
+## Deferred Phases
+
+### PHASE_12_IYZICO and PHASE_13_QNB — DEFERRED (2026-08-25)
+
+Deferred at the product owner's instruction, and blocked in the same way regardless: both
+phases are specified in `06_SECURITY_PAYMENT_FINANCE_RULES.md` as "implement against the
+**current official documentation at coding time**", and both need sandbox credentials and a
+signed merchant contract that appear in this file's own External Go-Live Dependencies list.
+Writing an adapter against remembered documentation would produce something that looks
+finished, passes its own tests, and fails on the first real transaction.
+
+Nothing is blocked by the deferral. Phase 11 delivered the provider-agnostic parts — the
+five-method `PaymentGateway` contract, the gateway registry, the webhook inbox, the
+idempotency layer and the payment state machine — so each adapter is an isolated addition
+whose seams already exist and are exercised by the test provider. The marketplace
+settlement contract is declared for the same reason.
+
+**To pick these up:** add the adapter under `app/Domains/Payments/Gateways/`, register it in
+`AppServiceProvider`, fill in its `config/payments.php` block, and enable it. No other code
+has to change.
 
 ## Immutable Rule
 Flutter/mobile/AR work must not start before `WEB_RELEASE_APPROVED`.
@@ -788,6 +809,74 @@ it was buying was sold out — by its own hold. And `product_skus.stock_quantity
 catalogue's list query reads, was written only by the seller's own stock endpoint, so
 buying the last unit left the listing advertising stock until a seller happened to open the
 stock page. Both are fixed with tests; detail in `TEST_REPORT.md`.
+
+### PHASE_14_BANK_TRANSFER — DONE (2026-08-26)
+
+```text
+UPDATED_AT: 2026-08-26
+COMMIT_OR_SNAPSHOT: phase-14-bank-transfer
+PHASE: 14 — Bank Transfer
+TASK: P14-T001 .. P14-T006
+STATUS: DONE
+FILES_CHANGED:
+  apps/api/database/migrations/0001_01_01_000022_create_bank_transfer_tables.php
+  apps/api/app/Domains/Payments/Enums/BankTransferStatus.php
+  apps/api/app/Domains/Payments/Gateways/BankTransferGateway.php
+  apps/api/app/Domains/Payments/Models/{BankTransfer,PaymentBankAccount,PaymentReceipt}.php
+  apps/api/app/Domains/Payments/Services/{BankTransferService,ReceiptStorage,CheckoutService}.php
+  apps/api/app/Domains/Payments/Http/Controllers/{BankTransferController,AdminPaymentController,
+    CheckoutController}.php
+  apps/api/app/Domains/Payments/Console/ExpireBankTransfersCommand.php
+  apps/api/app/Domains/Payments/Exceptions/CheckoutRefused.php
+  apps/api/app/Domains/Payments/Tests/{BankTransferTest,BankTransferHttpTest}.php
+  apps/api/app/Domains/Identity/Enums/{Permission,SystemRole}.php  (payments.view / payments.settle)
+  apps/api/app/Domains/Inventory/Services/InventoryLedger.php  (extendHolds)
+  apps/api/database/seeders/{BankAccountSeeder,DatabaseSeeder}.php
+  apps/api/config/payments.php, routes/domains/payments.php, routes/console.php, bootstrap/app.php,
+    app/Providers/AppServiceProvider.php
+  packages/ui/src/runtime/types.ts
+  apps/storefront/app/pages/checkout/index.vue
+  apps/storefront/app/pages/checkout/transfer/[reference].vue
+  apps/admin-panel/app/pages/payments/index.vue, app/layouts/default.vue
+  tests/e2e/bank-transfer.spec.ts
+MIGRATIONS: 3 tables — payment_bank_accounts, bank_transfers (reference unique for all time,
+  one live and one settled per intent), payment_receipts
+TESTS_RUN: php artisan test · phpstan level 6 · pint · eslint · vue-tsc
+  · check-design-tokens.mjs · playwright (full suite)
+TEST_RESULT: PASS (619 backend tests / 1894 assertions; 42 E2E journeys)
+BLOCKERS: none
+NEXT_ACTION: Phase 15 — Orders / Seller Orders
+```
+
+**The reference is the whole mechanism.** A transfer arrives at the bank as a line on a
+statement with a name and an amount and very little else; the code the customer types into
+the description field is the only thing tying that line to an order. So it is unique for
+all time rather than merely among live transfers, and it is drawn from an alphabet with no
+0/O and no 1/I/L — a character pair that looks identical in one bank's font is a payment
+nobody can match.
+
+**Short and over payments are states, not flags.** People transfer the wrong figure
+constantly: a typo, an intermediary bank's fee taken in transit, two orders paid in one go.
+A boolean "paid?" forces an operator to decide privately whether 4.997,50₺ is close enough,
+and leaves no trace of the decision. `short_paid` releases nothing and states the
+difference; `over_paid` releases the order and records a surplus somebody owes back.
+
+**Stock is held for the transfer window, not the card window.** Two days rather than
+fifteen minutes, because a customer told their goods are reserved and then losing them
+overnight has been lied to. That is a real cost borne against a payment that may never
+arrive, which is why the window is configured rather than generous and why an unpaid
+transfer is expired promptly — and why expiring one releases its stock itself rather than
+waiting for the checkout sweeper's separate clock to agree.
+
+**Confirmation happens once**, enforced three ways: a row lock and a state check that
+refuses the second operator with a sentence, and a partial unique index behind both.
+Reading a payment and settling one are separate permissions, because answering "did it
+arrive" is a support job and deciding that it did releases goods and cannot be undone.
+
+**The receiving IBAN is stored in plain text**, a deliberate exception to the rule that
+IBANs are encrypted at rest. That rule protects sellers' payout details, which are personal
+data. These are the platform's own accounts, printed on the checkout page for every
+customer to copy — encrypting a number we publish would be theatre.
 
 ---
 

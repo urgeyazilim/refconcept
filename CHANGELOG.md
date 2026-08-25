@@ -238,6 +238,43 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a demo product page claimed six in stock while the stock screen was empty. Opening
   stock is now booked as a receipt through the ledger.
 
+### Added — Phase 14 (Havale / EFT)
+
+- **A payment method with no provider in it.** The customer transfers money to one of the
+  platform's own accounts and a person in finance confirms it against a statement. It goes
+  through the same gateway contract, the same state machine and the same fulfilment path as
+  a card payment, so nothing downstream has to know how the money arrived.
+- **A reference built to be typed.** It is the only thing tying a line on a bank statement
+  to an order, so it is unique for all time rather than merely among live transfers, and it
+  is drawn from an alphabet with no 0/O and no 1/I/L — a character pair that is identical in
+  one bank's font is a payment nobody can match.
+- **Short and over payments as named states.** People transfer the wrong figure constantly:
+  a typo, an intermediary bank's fee taken in transit, two orders paid in one go. A boolean
+  "paid?" forces an operator to decide privately whether 4.997,50₺ is close enough and
+  leaves no trace of the decision. A shortfall releases nothing and states the figure still
+  owed; an overpayment releases the order and records a surplus somebody owes back.
+- **Stock held for the transfer window, not the card window.** Two days rather than fifteen
+  minutes, because a customer told their goods are reserved and then losing them overnight
+  has been lied to. It is a real cost borne against a payment that may never arrive, which
+  is why the window is configured and why an unpaid transfer is expired promptly — and why
+  expiring one returns its own stock rather than waiting for a second timer to agree.
+- **Confirmation happens once**, enforced three ways: a row lock, a state check that refuses
+  the second operator with a sentence rather than a blank error, and a partial unique index
+  behind both.
+- **Reading a payment and settling one are separate grants.** Answering "did it arrive" is a
+  support job; deciding that it did releases goods and cannot be undone. An analyst gets the
+  first and not the second.
+- **Receipts on the private disk**, under random keys, reachable only through a five-minute
+  signed link issued after a permission check — the same tier as seller onboarding
+  documents, because a bank's PDF carries an account number and a balance.
+- **A finance screen that does the arithmetic in front of the operator.** The received
+  figure has to be typed rather than defaulted, and the difference from what was expected is
+  shown before the confirm button does anything — because a number already in the box is a
+  number that gets accepted without being read.
+- **A transfer page in the storefront** with the reference above the account details,
+  copyable in one tap, and the instruction to include it repeated where somebody skimming
+  will still see it.
+
 ### Added — Phase 11 (Checkout and payment core)
 
 - **A checkout session that freezes what is being paid for.** Between pressing "pay" and

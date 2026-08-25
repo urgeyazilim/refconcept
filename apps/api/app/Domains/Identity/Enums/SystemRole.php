@@ -66,12 +66,17 @@ enum SystemRole: string
                 Permission::OrganizationsView,
                 Permission::OrganizationsManage,
                 Permission::AuditView,
+                Permission::PaymentsView,
+                Permission::PaymentsSettle,
             ],
 
             self::Analyst => [
                 Permission::UsersView,
                 Permission::OrganizationsView,
                 Permission::AuditView,
+                // Reads payments, cannot settle one: an analyst answering "did it arrive"
+                // does not also get to decide that it did.
+                Permission::PaymentsView,
             ],
 
             self::SellerOwner => [

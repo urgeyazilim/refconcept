@@ -18,6 +18,7 @@ use App\Domains\Identity\Services\EmailVerificationService;
 use App\Domains\Identity\Services\PasswordResetService;
 use App\Domains\Organizations\Models\Organization;
 use App\Domains\Organizations\Policies\OrganizationPolicy;
+use App\Domains\Payments\Gateways\BankTransferGateway;
 use App\Domains\Payments\Gateways\FakePaymentGateway;
 use App\Domains\Payments\Services\GatewayRegistry;
 use App\Domains\Products\Models\Product;
@@ -75,6 +76,7 @@ class AppServiceProvider extends ServiceProvider
             $registry = new GatewayRegistry;
 
             $registry->register($this->app->make(FakePaymentGateway::class));
+            $registry->register($this->app->make(BankTransferGateway::class));
 
             return $registry;
         });

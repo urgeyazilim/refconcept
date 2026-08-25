@@ -117,6 +117,7 @@ final class CheckoutController
             'purpose' => ['sometimes', 'string', 'in:cart,credits'],
             'gateway' => ['sometimes', 'nullable', 'string', 'max:40'],
             'payment_token' => ['sometimes', 'nullable', 'string', 'max:191'],
+            'bank_account_id' => ['sometimes', 'nullable', 'uuid'],
         ]);
 
         $purpose = CheckoutPurpose::from($validated['purpose'] ?? 'cart');
@@ -132,6 +133,7 @@ final class CheckoutController
             $validated['payment_token'] ?? null,
             $request->ip(),
             $request->header('Idempotency-Key'),
+            $validated['bank_account_id'] ?? null,
         );
 
         return $this->json([

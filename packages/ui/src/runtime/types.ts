@@ -747,3 +747,63 @@ export interface PaymentMethodOption {
   gateway: string
   is_default: boolean
 }
+
+/*
+ * Bank transfer.
+ *
+ * `expected_minor` and `received_minor` are separate because the second is a claim about
+ * the world rather than a copy of the first: people transfer the wrong figure, and the
+ * difference is the whole reason this method needs a screen of its own.
+ */
+
+export type BankTransferStatus =
+  | 'awaiting_transfer'
+  | 'under_review'
+  | 'confirmed'
+  | 'short_paid'
+  | 'over_paid'
+  | 'rejected'
+  | 'expired'
+
+export interface BankAccountOption {
+  id: string
+  bank_name: string
+  branch: string | null
+  account_holder: string
+  iban: string
+  currency: string
+  note: string | null
+}
+
+export interface BankTransferDetail {
+  id: string
+  reference: string
+  status: BankTransferStatus
+  status_label: string
+  message: string
+  expected_minor: number
+  received_minor: number | null
+  shortfall_minor: number | null
+  currency: string
+  expires_at: string | null
+  bank_account: BankAccountOption | null
+  receipt_count: number
+}
+
+export interface BankTransferRow {
+  id: string
+  reference: string
+  status: BankTransferStatus
+  status_label: string
+  expected_minor: number
+  received_minor: number | null
+  shortfall_minor: number
+  currency: string
+  customer_email: string | null
+  bank_account: string | null
+  value_date: string | null
+  expires_at: string | null
+  created_at: string | null
+  is_decidable: boolean
+  receipt_count: number
+}

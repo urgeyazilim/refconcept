@@ -29,6 +29,10 @@ final class DatabaseSeeder extends Seeder
         // nothing to buy and no way to try it is a feature nobody reaches.
         $this->call(CreditEconomySeeder::class);
 
+        // A receiving account, so bank transfer is a working payment method on a fresh
+        // stack rather than one that 503s the first time somebody picks it.
+        $this->call(BankAccountSeeder::class);
+
         if (app()->environment('production')) {
             $this->command?->info('Production environment: demo data skipped.');
 

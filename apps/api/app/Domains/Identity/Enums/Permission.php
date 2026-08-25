@@ -27,6 +27,14 @@ enum Permission: string
     case AuditView = 'platform.audit.view';
     case SystemSettingsManage = 'platform.settings.manage';
 
+    /*
+     * Finance is split in two on purpose. Reading a payment is a support job; confirming
+     * that money arrived releases goods and cannot be undone, so it is a separate grant
+     * somebody has to be given deliberately.
+     */
+    case PaymentsView = 'platform.payments.view';
+    case PaymentsSettle = 'platform.payments.settle';
+
     // --- seller-scoped -----------------------------------------------------------
     case SellerProfileView = 'seller.profile.view';
     case SellerProfileManage = 'seller.profile.manage';
@@ -50,6 +58,8 @@ enum Permission: string
             self::OrganizationsManage => 'Organizasyon oluşturma ve durum değiştirme',
             self::AuditView => 'Denetim kayıtlarını görüntüleme',
             self::SystemSettingsManage => 'Sistem ayarlarını yönetme',
+            self::PaymentsView => 'Ödemeleri ve havaleleri görüntüleme',
+            self::PaymentsSettle => 'Havale onaylama ve reddetme',
             self::SellerProfileView => 'Satıcı profilini görüntüleme',
             self::SellerProfileManage => 'Satıcı profilini düzenleme',
             self::SellerUsersView => 'Satıcı kullanıcılarını görüntüleme',

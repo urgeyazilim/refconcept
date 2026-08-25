@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Domains\Identity\Http\Middleware\EnsureEmailIsVerified;
 use App\Domains\Identity\Http\Middleware\EnsureUserIsActive;
+use App\Domains\Payments\Http\Controllers\AdminPaymentController;
+use App\Domains\Payments\Http\Controllers\BankTransferController;
 use App\Domains\Payments\Http\Controllers\CheckoutController;
 use App\Domains\Payments\Http\Controllers\FakeGatewayController;
 use App\Domains\Payments\Http\Controllers\PaymentWebhookController;
@@ -56,6 +58,52 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, EnsureEmailIsVerif
 Route::middleware(['auth:sanctum', EnsureUserIsActive::class])
     ->get('payments/{intent}', [CheckoutController::class, 'payment'])
     ->name('payments.show');
+
+/*
+ * Bank transfer.
+ *
+ * A transfer is addressed by its reference, which is short and typable by design — so the
+ * controller checks it against the caller before saying anything, and answers 404 rather
+ * than 403 when it does not match. The account list is public: a customer deciding how to
+ * pay should be able to see the options before committing to a checkout.
+ */
+Route::get('bank-transfers/accounts', [BankTransferController::class, 'accounts'])
+    ->name('bank-transfers.accounts');
+
+Route::middleware(['auth:sanctum', EnsureUserIsActive::class, EnsureEmailIsVerified::class])
+    ->prefix('bank-transfers/{reference}')
+    ->as('bank-transfers.')
+    ->group(function (): void {
+        Route::get('/', [BankTransferController::class, 'show'])->name('show');
+        Route::post('submitted', [BankTransferController::class, 'submit'])->name('submit');
+        Route::post('receipts', [BankTransferController::class, 'uploadReceipt'])->name('receipts.store');
+    });
+
+/*
+ * Finance.
+ *
+ * Guarded by two separate permissions rather than one: reading a payment is a support job,
+ * and confirming that money arrived releases goods and cannot be undone.
+ */
+Route::middleware(['auth:sanctum', EnsureUserIsActive::class])
+    ->prefix('admin/payments')
+    ->as('admin.payments.')
+    ->group(function (): void {
+        Route::get('transfers', [AdminPaymentController::class, 'transfers'])->name('transfers.index');
+        Route::get('transfers/{transfer}', [AdminPaymentController::class, 'transfer'])->name('transfers.show');
+        Route::get('transfers/{transfer}/receipts/{receipt}', [AdminPaymentController::class, 'receipt'])
+            ->name('transfers.receipt');
+
+        Route::post('transfers/{transfer}/confirm', [AdminPaymentController::class, 'confirm'])
+            ->name('transfers.confirm');
+        Route::post('transfers/{transfer}/reject', [AdminPaymentController::class, 'reject'])
+            ->name('transfers.reject');
+
+        Route::get('bank-accounts', [AdminPaymentController::class, 'accounts'])->name('accounts.index');
+        Route::post('bank-accounts', [AdminPaymentController::class, 'saveAccount'])->name('accounts.store');
+        Route::patch('bank-accounts/{account}', [AdminPaymentController::class, 'saveAccount'])
+            ->name('accounts.update');
+    });
 
 /*
  * The test provider's own endpoints — a stand-in 3DS page and the webhook it would have

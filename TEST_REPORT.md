@@ -1269,3 +1269,66 @@ shopping   search finds a listing, offers facets, and answers nonsense with noth
   contract is declared and unimplemented until then.
 - **Refunds are service-level only.** The processor can refund and the record is correct,
   but there is no operator screen for it — that arrives with the admin work in Phase 18.
+
+---
+
+## Phase 14 — Bank transfer
+
+**Date:** 2026-08-26
+**Scope:** a payment method with no provider in it — the customer transfers money to our
+own account and a person confirms it against a statement.
+
+### Gate criteria (04_WEB_PHASE_PLAN.md: duplicate confirmation and amount mismatch tests)
+
+| # | Criterion | Method | Result |
+|---|---|---|---|
+| 1 | **A reference is allocated and quoted** | Pest + Playwright | **PASS** — and it is the payment's external id, so the unique index guarantees no two payments share one |
+| 2 | The reference avoids lookalike characters | Pest | **PASS** — no 0/O, no 1/I/L; it is copied by eye into a banking app |
+| 3 | The reference is unique for all time | Pest + unique index | **PASS** — statements are reconciled months after a transfer stops being live |
+| 4 | Reloading quotes the same reference | Pest | **PASS** — two references would leave the money matching neither |
+| 5 | **Stock is held for the transfer window** | Pest + Playwright | **PASS** — two days, not fifteen minutes |
+| 6 | The customer is told the window before choosing | Playwright | **PASS** — a method that quietly takes two days is a support ticket |
+| 7 | No receiving account is a 503, not a crash | Pest | **PASS** — nobody did anything wrong |
+| 8 | **Too little released nothing** | Pest + Playwright | **PASS** — the gate; a hundred kuruş short is still short |
+| 9 | The shortfall is stated as a figure | Pest + Playwright | **PASS** — "eksik ödeme" alone leaves a customer guessing what to send |
+| 10 | A shortfall can be made up against the same reference | Pest | **PASS** — `short_paid` is not terminal |
+| 11 | **Too much releases the order and records the surplus** | Pest | **PASS** — captured at what was owed; the excess is a refund, not a larger sale |
+| 12 | An arrival of nothing is refused | Pest | **PASS** |
+| 13 | **A transfer is confirmed exactly once** | Pest + Playwright | **PASS** — row lock, state check, and a partial unique index behind both |
+| 14 | A second confirmation does not consume stock twice | Pest + Playwright | **PASS** — one unit left the shelf, not two |
+| 15 | A second confirmation does not credit a wallet twice | Pest | **PASS** — the same fulfilment path a card uses, called once |
+| 16 | A refusal demands a reason | Pest (HTTP) | **PASS** — an unexplained financial refusal is indistinguishable from a mistake |
+| 17 | A refusal is recorded with who and when | Pest | **PASS** |
+| 18 | A refused transfer leaves the session payable | Pest | **PASS** — the customer pays another way rather than starting over |
+| 19 | **An unpaid transfer expires and returns the stock** | Pest | **PASS** — by its own clock, not the checkout sweeper's |
+| 20 | A transfer inside its window is left alone | Pest | **PASS** |
+| 21 | Reading and settling are separate permissions | Pest (HTTP) | **PASS** — an analyst can answer "did it arrive" and cannot decide that it did |
+| 22 | A customer cannot reach finance | Pest (HTTP) | **PASS** |
+| 23 | **Somebody else's reference is a 404** | Pest + Playwright | **PASS** — the reference is short and typable, which is what makes it guessable |
+| 24 | A receipt goes to the private disk under a random key | Pest | **PASS** — the path never appears in a response |
+| 25 | A receipt is reached only by a short-lived signed link | Code + Pest | **PASS** — five minutes; the file shows somebody's bank balance |
+| 26 | A non-receipt file is refused | Pest (HTTP) | **PASS** |
+| 27 | Uploading a receipt does not confirm anything | Pest (HTTP) | **PASS** — a receipt is a picture, and pictures are easy to make |
+| 28 | A receiving IBAN is checksum-validated | Pest (HTTP) | **PASS** — a mistyped one sends every customer's money elsewhere |
+| 29 | The accounts are readable before signing in | Pest (HTTP) | **PASS** — a customer choosing a method should see the options first |
+| 30 | The IBAN is grouped for copying | Pest (HTTP) | **PASS** — an unbroken run of 26 characters is how a digit gets dropped |
+
+### Defects found and fixed in this phase
+
+| Id | Severity | Defect | Fix |
+|---|---|---|---|
+| P14-D001 | P2 | An expiring transfer marked itself expired but left the stock held: the checkout session had been stretched to the transfer window, so the checkout sweeper would not touch it for another two days. | `BankTransferService::expireOverdue()` releases the holds and closes the session itself, rather than relying on a second clock agreeing |
+| P14-D002 | P3 | Saving a receiving account with a bad IBAN produced a 500 from the value object rather than a 422 with a field error. | Validated with the same mod-97 closure rule the seller onboarding form uses |
+
+### Known limitations
+
+- **Reconciliation is manual.** Finance reads a statement and types the figure. Importing a
+  statement file, or reading a bank API, is a later piece of work — the schema is ready for
+  it (`value_date` exists precisely because statements are organised by it) but nothing
+  parses a file yet.
+- **An overpayment is recorded, not refunded.** The surplus is visible on the transfer and
+  in the audit trail; actually sending it back is a manual transfer somebody makes, and the
+  operator screen for refunds arrives with the admin work in Phase 18.
+- **One currency in practice.** The schema carries a currency on both the account and the
+  transfer, and the account lookup filters on it, but nothing else in the platform sells in
+  anything but TRY yet.

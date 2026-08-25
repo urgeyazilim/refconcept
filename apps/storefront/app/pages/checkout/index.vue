@@ -12,7 +12,7 @@
  * total and the tax inside it — because the last place to discover a surprise is the page
  * after the one with the button on it.
  */
-import type { Address, CheckoutPurpose, CheckoutSession, PaymentMethodOption } from '@refconcept/ui/types'
+import type { Address, BankAccountOption, CheckoutPurpose, CheckoutSession, PaymentMethodOption } from '@refconcept/ui/types'
 
 definePageMeta({ middleware: ['auth', 'verified'] })
 useHead({ title: 'Ödeme' })
@@ -51,6 +51,24 @@ const testCards = [
 ]
 
 const usingTestGateway = computed(() => methods.value.some(method => method.gateway === 'fake'))
+const transferAvailable = computed(() => methods.value.some(method => method.gateway === 'bank_transfer'))
+
+/** Which method the customer picked. Card unless they say otherwise. */
+const chosenGateway = ref<'card' | 'bank_transfer'>('card')
+
+const bankAccounts = ref<BankAccountOption[]>([])
+const chosenAccountId = ref<string | null>(null)
+
+async function loadBankAccounts() {
+  try {
+    const response = await api.get<{ data: BankAccountOption[] }>('/api/v1/bank-transfers/accounts')
+    bankAccounts.value = response.data
+    chosenAccountId.value = response.data[0]?.id ?? null
+  } catch {
+    // The page still works without the list; the option simply will not offer a choice
+    // of account, and the server picks the default one.
+  }
+}
 
 async function open() {
   loading.value = true
@@ -94,7 +112,7 @@ async function loadAddresses() {
   }
 }
 
-await Promise.all([open(), loadAddresses()])
+await Promise.all([open(), loadAddresses(), loadBankAccounts()])
 
 /** Re-opens the session against a different address, re-snapshotting it. */
 async function changeAddress(id: string) {
@@ -115,7 +133,9 @@ async function pay() {
         method: 'POST',
         body: {
           purpose: purpose.value,
-          payment_token: usingTestGateway.value ? testToken.value : undefined,
+          gateway: chosenGateway.value === 'bank_transfer' ? 'bank_transfer' : undefined,
+          bank_account_id: chosenGateway.value === 'bank_transfer' ? chosenAccountId.value : undefined,
+          payment_token: chosenGateway.value === 'card' && usingTestGateway.value ? testToken.value : undefined,
         },
         /*
          * A key the client generates once per attempt. If the connection drops and the
@@ -130,6 +150,14 @@ async function pay() {
     )
 
     const payment = response.data.payment
+
+    if (chosenGateway.value === 'bank_transfer' && payment.reference) {
+      // No bank to redirect to: the customer is shown where to send the money and what
+      // to write in the description.
+      await router.push(`/checkout/transfer/${payment.reference}`)
+
+      return
+    }
 
     if (payment.status === 'requires_action' && payment.redirect_url) {
       // Off to the bank. The answer comes back as a webhook whether or not the browser
@@ -242,12 +270,50 @@ const addressLine = (address: Record<string, string | null> | null): string =>
         <section class="rc-card p-5 sm:p-6">
           <h2 class="text-sm font-medium">Ödeme yöntemi</h2>
 
+          <!-- Card or transfer. Two clear options rather than a hidden default. -->
+          <fieldset v-if="transferAvailable" class="mt-3 space-y-2">
+            <legend class="sr-only">Ödeme yöntemi</legend>
+            <label class="flex items-center gap-2 text-sm">
+              <input v-model="chosenGateway" type="radio" value="card" :disabled="paying">
+              Kredi/banka kartı
+            </label>
+            <label class="flex items-center gap-2 text-sm">
+              <input v-model="chosenGateway" type="radio" value="bank_transfer" :disabled="paying">
+              Havale / EFT
+            </label>
+          </fieldset>
+
+          <!--
+            What a transfer actually costs the customer in time, said before they choose
+            rather than after. A method that quietly takes two days is a support ticket.
+          -->
+          <div v-if="chosenGateway === 'bank_transfer'" class="mt-4 space-y-3">
+            <p class="rounded-sm bg-bg-muted px-3 py-2 text-xs text-ink-secondary">
+              Havale/EFT ile ödemede ürünleriniz iki gün boyunca sizin için ayrılır.
+              Ödemeniz bankadan görüldüğünde siparişiniz onaylanır.
+            </p>
+
+            <div v-if="bankAccounts.length > 1">
+              <label for="bank-account" class="text-xs text-muted">Hangi hesaba göndereceksiniz?</label>
+              <select
+                id="bank-account"
+                v-model="chosenAccountId"
+                class="mt-1 w-full rounded-sm border border-line bg-surface px-3 py-2 text-sm"
+                :disabled="paying"
+              >
+                <option v-for="account in bankAccounts" :key="account.id" :value="account.id">
+                  {{ account.bank_name }} — {{ account.iban }}
+                </option>
+              </select>
+            </div>
+          </div>
+
           <!--
             The test provider announces itself. A payment form that looks real but is not
             is the one thing on this page that would be genuinely dangerous to leave
             ambiguous.
           -->
-          <template v-if="usingTestGateway">
+          <template v-if="chosenGateway === 'card' && usingTestGateway">
             <p class="mt-2 rounded-sm bg-warning-subtle px-3 py-2 text-xs text-warning-strong">
               Bu ortamda test ödeme sağlayıcısı kullanılıyor. Gerçek kart bilgisi girilmez
               ve hiçbir tutar tahsil edilmez.
@@ -262,7 +328,7 @@ const addressLine = (address: Record<string, string | null> | null): string =>
             </fieldset>
           </template>
 
-          <p v-else class="mt-2 text-sm text-ink-secondary">
+          <p v-else-if="chosenGateway === 'card'" class="mt-2 text-sm text-ink-secondary">
             Kart bilgileriniz ödeme sağlayıcısının kendi sayfasında alınır; RefConcept kart
             numaranızı hiçbir zaman görmez ve saklamaz.
           </p>
@@ -303,7 +369,8 @@ const addressLine = (address: Record<string, string | null> | null): string =>
           :disabled="paying || session.totals.grand_total_minor <= 0"
           @click="pay"
         >
-          {{ money(session.totals.grand_total_minor, session.currency) }} öde
+          <template v-if="chosenGateway === 'bank_transfer'">Havale bilgilerini al</template>
+          <template v-else>{{ money(session.totals.grand_total_minor, session.currency) }} öde</template>
         </RcButton>
 
         <RcButton class="mt-2 w-full" variant="ghost" :disabled="paying" @click="cancel">

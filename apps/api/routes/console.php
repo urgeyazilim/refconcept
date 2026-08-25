@@ -64,3 +64,15 @@ Schedule::command('refconcept:expire-checkouts')
     ->everyMinute()
     ->withoutOverlapping()
     ->runInBackground();
+
+/*
+ * Transfers nobody paid are closed and their stock returned.
+ *
+ * Every ten minutes rather than every minute: the window is measured in days, so nothing
+ * is gained by checking it sixty times an hour, and a customer who transfers at the last
+ * moment deserves the benefit of a few minutes' grace.
+ */
+Schedule::command('refconcept:expire-bank-transfers')
+    ->everyTenMinutes()
+    ->withoutOverlapping()
+    ->runInBackground();
