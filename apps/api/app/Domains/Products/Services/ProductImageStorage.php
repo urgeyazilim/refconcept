@@ -70,7 +70,21 @@ final class ProductImageStorage
         }
 
         try {
-            Storage::disk($disk)->put($path, $stream, 'public');
+            /*
+             * Cached hard, and safely.
+             *
+             * The key contains a UUID, so a given URL always names the same bytes — the
+             * image is never replaced, only superseded by a new row with a new key. That is
+             * what makes a year's immutable caching correct rather than reckless: there is
+             * no version of this file that a browser could be holding and be wrong about.
+             *
+             * Without it every catalogue grid re-downloads every thumbnail on every visit,
+             * which is bandwidth for us and a slow page on a phone for the customer.
+             */
+            Storage::disk($disk)->put($path, $stream, [
+                'visibility' => 'public',
+                'CacheControl' => 'public, max-age=31536000, immutable',
+            ]);
         } finally {
             if (is_resource($stream)) {
                 fclose($stream);

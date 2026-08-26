@@ -12,20 +12,22 @@ WEB
 IN_PROGRESS
 
 ## Current Phase
-PHASE_21
+PHASE_22
 
 ## Current Task
-Not started — Phase 20 is closed; Phases 12 and 13 remain deferred (see below) and Phase 21 has not begun.
+Not started — Phase 21 is closed; Phases 12 and 13 remain deferred (see below) and Phase 22 has not begun.
 
 ## Last Completed Task
-P20-T006 — Phase 20 gate verified end to end (see `TEST_REPORT.md`).
+P21-T009 — Phase 21 gate verified end to end (see `TEST_REPORT.md`).
 
 ## Next Task
-Phase 21 — Hardening.
+Phase 22 — Web Release / Stabilization.
 
 ## Test State
-PASS — 775 backend tests / 2467 assertions, 76 Playwright E2E journeys across all three
+PASS — 805 backend tests / 2538 assertions, 76 Playwright E2E journeys across all three
 apps, PHPStan level 6, Pint, ESLint, vue-tsc and the design token guard all clean.
+Dependency audits clean (composer + npm). Load smoke, backup/restore drill, migration
+and rollback rehearsals all pass.
 
 ## Release State
 NOT_APPROVED
@@ -1294,6 +1296,79 @@ a terms page nobody agreed to; the footer now links them, along with the catalog
 **Three navigation links pointed at the homepage.** "Platform", "Nasıl çalışır" and
 "Profesyoneller" all resolved to `/` — a menu that lies about where it goes. Replaced with
 the destinations that exist.
+
+### PHASE_21_HARDENING — DONE (2026-08-26)
+
+```text
+UPDATED_AT: 2026-08-26
+COMMIT_OR_SNAPSHOT: phase-21-hardening
+PHASE: 21 — Hardening
+TASK: P21-T001 .. P21-T009
+STATUS: DONE
+FILES_CHANGED:
+  apps/api/app/Domains/Administration/Http/Middleware/{SecurityHeaders,AssignRequestId}.php
+  apps/api/app/Domains/Administration/Tests/{SecurityReadinessTest,OperationalReadinessTest}.php
+  apps/api/app/Domains/Finance/Services/PaymentReconciliation.php
+  apps/api/app/Domains/Finance/Console/ReconcilePaymentsCommand.php
+  apps/api/app/Domains/Finance/Tests/PaymentReconciliationTest.php
+  apps/api/app/Domains/Matching/Services/ProductEmbedder.php  (query vector cache)
+  apps/api/app/Domains/Matching/Tests/ProductMatchingTest.php
+  apps/api/app/Domains/Products/Services/ProductImageStorage.php  (immutable caching)
+  apps/api/app/Domains/Ai/Jobs/RunAiJob.php
+  apps/api/app/Domains/Projects/Jobs/GenerateDesignVersion.php
+  apps/api/app/Domains/Payments/Jobs/ProcessPaymentWebhook.php
+  apps/api/database/migrations/{0001_01_01_000020,0001_01_01_000023}_*.php  (duplicate indexes)
+  apps/api/bootstrap/app.php
+  docker-compose.yml  (a second queue worker)
+  scripts/{backup-drill.sh,load-smoke.mjs}
+  16_ENVIRONMENT_DEVOPS_RELEASE.md
+MIGRATIONS: none added — two duplicate indexes removed
+TESTS_RUN: php artisan test · phpstan level 6 · pint · eslint · vue-tsc
+  · check-design-tokens.mjs · playwright (full suite) · composer audit · npm audit
+  · scripts/load-smoke.mjs · scripts/backup-drill.sh · migrate:fresh · migrate:rollback
+TEST_RESULT: PASS (805 backend tests / 2538 assertions; 76 E2E journeys)
+BLOCKERS: none
+NEXT_ACTION: Phase 22 — Web Release / Stabilization
+```
+
+**A rule that lives only in a document is a rule somebody breaks in a hurry.** So the
+security rules are now properties the suite enforces: nowhere for a card number to go, no
+HTTP route that grants a platform role, the super-admin bypass kept away from customers'
+projects, no plaintext IBAN in a response or in a row, every append-only table actually
+append-only, and no credential shaped like a real provider key anywhere in the tree.
+
+**Security headers moved into the application.** nginx set them and that was not enough: a
+header added by infrastructure disappears the day somebody puts a different proxy in front,
+and nothing fails when it does.
+
+**Payment webhooks were queued behind ten-minute AI renders.** One worker, one queue, and a
+payment confirmation sitting behind somebody else's sofa. Two queues and two worker
+processes now, with a test that stops the next job from landing on the wrong one.
+
+**Every catalogue search made a live call to the embedding provider.** A network round trip
+on the most-used endpoint on the site, a cost per search, and a search box whose latency was
+somebody else's uptime. Query vectors are cached for an hour under a hashed key — search p50
+went from 2120ms to 602ms under concurrency, and the second identical search now reaches no
+provider at all.
+
+**Two duplicate indexes, one of them five phases old.** A duplicate index is invisible from
+the outside — no query is slower, the table simply pays for two index writes on every insert
+and holds two copies on disk. A test now fails on any pair with the same shape.
+
+**Reconciliation, because neither record can check itself.** The provider's transaction log
+and our journal are each internally consistent, which is precisely why comparing one to
+itself proves nothing. `refconcept:reconcile-payments` compares them and exits non-zero on
+anything critical, because a reconciliation nobody is alerted about is a report nobody reads.
+Nothing is corrected automatically: a mismatch means two systems disagree about money, and
+guessing which is right is how a small discrepancy becomes a large one.
+
+**A backup nobody has restored is a hope.** `scripts/backup-drill.sh` dumps, restores into a
+throwaway database, compares row counts on the tables whose loss would hurt, and cleans up
+after itself. Migration and rollback rehearsals were run for real.
+
+**The request id column had been null since Phase 1.** The audit logger read `X-Request-Id`
+and nothing ever set one — a field that looks like correlation and is not, which is worse
+than an absent one because somebody eventually trusts it.
 
 ---
 

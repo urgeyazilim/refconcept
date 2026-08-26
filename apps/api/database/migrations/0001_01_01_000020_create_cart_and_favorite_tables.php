@@ -169,23 +169,20 @@ return new class extends Migration
         SQL);
 
         /*
-         * A trigram index on the product name.
+         * The trigram index on the product name already exists.
          *
-         * The catalogue search matches on `name ILIKE '%…%'`, which without this is a
-         * sequential scan over every product — fine at a thousand rows, not at a hundred
-         * thousand. `pg_trgm` also survives the typos a search box actually receives.
+         * Phase 3's product migration creates `products_name_trgm_idx` — a GIN index on
+         * `name gin_trgm_ops`, which is exactly what the catalogue search needs. A second,
+         * identical one was created here and went unnoticed for five phases, because a
+         * duplicate index is invisible from the outside: no query is slower, the table is
+         * simply paying for two index writes on every insert and holding two copies on
+         * disk. Dropped rather than kept "just in case", since either one alone is enough.
          */
-        DB::statement(<<<'SQL'
-            CREATE INDEX products_name_trigram_idx
-            ON products
-            USING gin (name gin_trgm_ops)
-        SQL);
+        DB::statement('DROP INDEX IF EXISTS products_name_trigram_idx');
     }
 
     public function down(): void
     {
-        DB::statement('DROP INDEX IF EXISTS products_name_trigram_idx');
-
         Schema::dropIfExists('cart_items');
         Schema::dropIfExists('carts');
         Schema::dropIfExists('favorites');

@@ -2,12 +2,15 @@
 
 declare(strict_types=1);
 
+use App\Domains\Administration\Http\Middleware\AssignRequestId;
 use App\Domains\Administration\Http\Middleware\EnforceAdminPermission;
+use App\Domains\Administration\Http\Middleware\SecurityHeaders;
 use App\Domains\Ai\Exceptions\AiJobRefused;
 use App\Domains\Commerce\Exceptions\CartRefused;
 use App\Domains\Credits\Console\SweepExpiredCreditsCommand;
 use App\Domains\Credits\Exceptions\InsufficientCredits;
 use App\Domains\Finance\Console\BuildSettlementsCommand;
+use App\Domains\Finance\Console\ReconcilePaymentsCommand;
 use App\Domains\Finance\Exceptions\SettlementRefused;
 use App\Domains\Fulfilment\Exceptions\FulfilmentRefused;
 use App\Domains\Identity\Console\GrantRoleCommand;
@@ -41,6 +44,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ExpireCheckoutSessionsCommand::class,
         ExpireBankTransfersCommand::class,
         BuildSettlementsCommand::class,
+        ReconcilePaymentsCommand::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         // The three Nuxt clients are separate origins; CORS is configured in config/cors.php.
@@ -55,6 +59,23 @@ return Application::configure(basePath: dirname(__DIR__))
          * added without a decision about who may call it is closed rather than open.
          */
         $middleware->api(append: [EnforceAdminPermission::class]);
+
+        /*
+         * Security headers on every response, including the ones nginx also sets.
+         *
+         * Duplicated on purpose: a header added by infrastructure disappears the day
+         * somebody puts a different proxy in front, and nothing fails when it does.
+         */
+        $middleware->append(SecurityHeaders::class);
+
+        /*
+         * And an id on every request.
+         *
+         * Prepended rather than appended: it has to be set before anything that might log,
+         * which is everything. The audit log has had a request_id column since Phase 1 and
+         * nothing was filling it.
+         */
+        $middleware->prepend(AssignRequestId::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Everything under /api answers JSON, including validation and auth failures.

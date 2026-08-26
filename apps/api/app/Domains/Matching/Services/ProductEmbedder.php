@@ -11,6 +11,7 @@ use App\Domains\Matching\Enums\EmbeddingSource;
 use App\Domains\Matching\Models\ProductEmbedding;
 use App\Domains\Products\Models\Product;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -32,6 +33,14 @@ use RuntimeException;
  */
 final class ProductEmbedder
 {
+    /**
+     * How long a search phrase keeps its vector.
+     *
+     * Long enough to collapse a busy afternoon of repeated terms, short enough that the
+     * store is not a record of what people searched for.
+     */
+    private const QUERY_VECTOR_TTL = 3600;
+
     public function __construct(private readonly AiJobDispatcher $dispatcher) {}
 
     /**
@@ -89,13 +98,48 @@ final class ProductEmbedder
     /**
      * Embeds a customer's phrase, for searching with.
      *
-     * Not stored. A query is asked once and thrown away, and keeping a table of everything
-     * anybody has ever typed into a search box would be a privacy liability with no
-     * corresponding use.
+     * Never stored in a table. Keeping a row of everything anybody has ever typed into a
+     * search box would be a privacy liability with no corresponding use.
+     *
+     * Cached for an hour, though, and the difference matters. Before this, **every**
+     * catalogue search made a synchronous call to the embedding provider: a network round
+     * trip on the most-used endpoint on the site, a cost per search, and a search box whose
+     * latency was somebody else's uptime. Search terms repeat enormously — "koltuk" is not
+     * a phrase one person types once — so a cache collapses almost all of it.
+     *
+     * The key is a hash and the value is a vector, so nothing readable is written down, and
+     * an hour is short enough that a busy afternoon's terms are gone by the evening. That
+     * is a deliberate trade rather than a free win: it is a smaller exposure than a table
+     * of phrases, and it is not zero.
      *
      * @return array<int, float>
      */
     public function embedQuery(string $text): array
+    {
+        $key = 'search-vector:'.hash('sha256', mb_strtolower(trim($text)));
+
+        /** @var array<int, float>|null $cached */
+        $cached = Cache::get($key);
+
+        if (is_array($cached) && $cached !== []) {
+            return $cached;
+        }
+
+        $vector = $this->requestQueryVector($text);
+
+        if ($vector !== []) {
+            Cache::put($key, $vector, self::QUERY_VECTOR_TTL);
+        }
+
+        return $vector;
+    }
+
+    /**
+     * The call itself, separated so the caching above reads as caching.
+     *
+     * @return array<int, float>
+     */
+    private function requestQueryVector(string $text): array
     {
         $job = $this->dispatcher->runInline(
             task: AiTask::TextEmbedding,

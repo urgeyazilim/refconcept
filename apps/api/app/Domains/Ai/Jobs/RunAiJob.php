@@ -47,7 +47,18 @@ final class RunAiJob implements ShouldQueue
      */
     public int $timeout = 600;
 
-    public function __construct(public readonly string $jobId) {}
+    /**
+     * The slow queue, worked by its own process.
+     *
+     * A job that can hold a worker for ten minutes must not share one with work somebody
+     * is waiting on — a payment webhook, a verification e-mail, an order confirmation.
+     * They used to share `default`, and the symptom was a customer watching a spinner for
+     * reasons that had nothing to do with what they were doing.
+     */
+    public function __construct(public readonly string $jobId)
+    {
+        $this->onQueue('ai');
+    }
 
     public function handle(AiGateway $gateway, AiJobCredits $credits): void
     {

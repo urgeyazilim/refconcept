@@ -238,6 +238,50 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a demo product page claimed six in stock while the stock screen was empty. Opening
   stock is now booked as a receipt through the ledger.
 
+### Added — Phase 21 (Hardening)
+
+- **The security rules are properties now, not prose.** A rule that lives only in a document
+  is a rule somebody breaks in a hurry six months from now with nothing to stop them. The
+  suite asserts that a card number has nowhere to go, that no HTTP route grants a platform
+  role, that the super-admin bypass never reaches a customer's project, that no plaintext
+  IBAN leaves the server or sits in a row, that every append-only table really is, and that
+  nothing shaped like a provider key is committed anywhere.
+- **Security headers set by the application**, not only by nginx — including
+  `Permissions-Policy` and HSTS over TLS. A header added by infrastructure disappears the
+  day somebody puts a different proxy in front, and nothing fails when it does.
+- **A request id on every response**, honouring one the caller already assigned and
+  replacing one that could not safely be logged. The audit log's `request_id` column had
+  been null since Phase 1.
+- **Payment reconciliation** (`refconcept:reconcile-payments`): the provider's transaction
+  log against the journal, because each is internally consistent and neither can be checked
+  against itself. Non-zero exit on anything critical, so a scheduler can alert; warnings do
+  not fail the run, because an alert that fires on normal business gets turned off. Nothing
+  is corrected automatically — a mismatch means two systems disagree about money.
+- **A backup and restore drill** (`scripts/backup-drill.sh`) that dumps, restores into a
+  throwaway database, compares row counts on the tables whose loss would hurt, and cleans up
+  after itself. A backup nobody has restored is a hope.
+- **A load smoke test** (`scripts/load-smoke.mjs`) that fails on any 5xx or dropped request
+  under concurrency and only reports slow percentiles — the question is whether anything
+  collapses, not how fast a laptop is.
+- **Product media cached immutably.** The keys contain a UUID, so a URL always names the
+  same bytes; that is what makes a year's caching correct rather than reckless.
+
+### Fixed — Phase 21
+
+- **Payment webhooks were queued behind ten-minute AI renders**, on a single worker. A
+  customer's payment confirmation could sit behind somebody else's sofa. Split into two
+  queues and two worker processes, with a test that stops the next job landing on the wrong
+  one.
+- **Every catalogue search made a live call to the embedding provider** — a network round
+  trip on the most-used endpoint on the site, a cost per search, and a search box whose
+  latency was somebody else's uptime. Query vectors are cached for an hour under a hashed
+  key; search p50 under concurrency went from 2120ms to 602ms.
+- **Two duplicate indexes**, one of them five phases old. Invisible from outside — no query
+  is slower, the table simply pays for two index writes on every insert and holds two copies
+  on disk.
+- **Product images were served with no cache headers**, so every catalogue grid
+  re-downloaded every thumbnail on every visit.
+
 ### Added — Phase 20 (Storefront complete + approved design language)
 
 - **A phone can use the site.** The desktop navigation is hidden below `lg` and nothing

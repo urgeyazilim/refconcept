@@ -138,6 +138,11 @@ services:
       - api
     networks: [refconcept]
 
+  # Short work: payment webhooks, notifications, everything a person is waiting on.
+  #
+  # Separated from the AI worker because they were sharing a queue, and an AI render can
+  # hold a worker for ten minutes. A payment confirmation queued behind one is a customer
+  # staring at a spinner for reasons that have nothing to do with their payment.
   queue:
     build:
       context: .
@@ -148,7 +153,34 @@ services:
     # No env_file here on purpose: Laravel reads .env from the synced source volume.
     # Injecting it as real process environment would override PHPUnit's test values
     # and point the suite at the development database.
-    command: ["php", "artisan", "queue:work", "--tries=3", "--max-time=3600", "--sleep=1"]
+    #
+    # Payments first in the list: with one worker, order is priority.
+    command: ["php", "artisan", "queue:work", "--queue=payments,default", "--tries=3", "--max-time=3600", "--sleep=1"]
+    volumes:
+      - api-app:/var/www/html
+      - api-vendor:/var/www/html/vendor
+    depends_on:
+      api:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [refconcept]
+
+  # Long work: AI renders and design generation.
+  #
+  # Its own process, so a ten-minute job blocks only other ten-minute jobs. One retry
+  # here rather than three — the gateway already retries with a policy that knows a
+  # timeout from a refusal, and a queue retry on top multiplies the two into a bill.
+  queue-ai:
+    build:
+      context: .
+      dockerfile: infra/docker/php/Dockerfile
+    container_name: refconcept-queue-ai
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: ["php", "artisan", "queue:work", "--queue=ai", "--tries=1", "--timeout=960", "--max-time=3600", "--sleep=1"]
     volumes:
       - api-app:/var/www/html
       - api-vendor:/var/www/html/vendor

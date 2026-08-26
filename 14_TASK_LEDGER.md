@@ -133,7 +133,16 @@
 | P20-T003 | 20 | FRONTEND_AGENT | P20-T001 | DONE | SEO surface | One useSeo composable: canonical, Open Graph, noindex behind a sign-in |
 | P20-T004 | 20 | FRONTEND_AGENT | P20-T003 | DONE | robots + sitemap | Generated from the router and the catalogue, paged to the API limit |
 | P20-T005 | 20 | FRONTEND_AGENT | P20-T003 | DONE | product structured data | Price and availability, taken from what the page itself shows |
-| P20-T006 | 20 | INDEPENDENT_TEST_AGENT | P20-T001..005 | DONE | Phase 20 gate | 775 backend tests, 76 E2E journeys, 3 defects found and fixed (see TEST_REPORT.md) |
+| P20-T006 | 20 | INDEPENDENT_TEST_AGENT | P20-T001..005 | DONE | Phase 20 gate | 775 backend tests, 76 E2E journeys, 4 defects found and fixed (see TEST_REPORT.md) |
+| P21-T001 | 21 | BACKEND_AGENT | P20-T006 | DONE | security review | Every rule in 06_SECURITY_… turned into a property the suite enforces |
+| P21-T002 | 21 | BACKEND_AGENT | P21-T001 | DONE | dependency scan | composer audit and npm audit both clean |
+| P21-T003 | 21 | BACKEND_AGENT | P21-T001 | DONE | security headers | Moved into the application; a proxy change must not lose them |
+| P21-T004 | 21 | BACKEND_AGENT | P20-T006 | DONE | load smoke | No 5xx and no dropped requests under concurrency; search was 3.5× slow and is not |
+| P21-T005 | 21 | BACKEND_AGENT | P21-T004 | DONE | DB/index tuning | Two duplicate indexes removed; hot paths asserted to have an index |
+| P21-T006 | 21 | BACKEND_AGENT | P21-T004 | DONE | queue tuning | Payments and AI split across two workers; the split is now a test |
+| P21-T007 | 21 | BACKEND_AGENT | P20-T006 | DONE | observability + CDN | A request id on every response; product media cached immutably |
+| P21-T008 | 21 | BACKEND_AGENT | P16-T007 | DONE | payment reconciliation | Provider log against the journal, with an exit code a scheduler can alert on |
+| P21-T009 | 21 | INDEPENDENT_TEST_AGENT | P21-T001..008 | DONE | Phase 21 gate | 805 backend tests, 76 E2E journeys, P0/P1 = 0 after 6 defects fixed (see TEST_REPORT.md) |
 
 ## Scope notes
 

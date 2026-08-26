@@ -46,7 +46,11 @@ final class GenerateDesignVersion implements ShouldQueue
      */
     public int $timeout = 900;
 
-    public function __construct(public readonly string $versionId) {}
+    /** The slow queue: see RunAiJob. A design render is minutes, not milliseconds. */
+    public function __construct(public readonly string $versionId)
+    {
+        $this->onQueue('ai');
+    }
 
     public function handle(DesignGenerationPipeline $pipeline): void
     {

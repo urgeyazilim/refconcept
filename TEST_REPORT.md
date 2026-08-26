@@ -1471,6 +1471,97 @@ own account and a person confirms it against a statement.
 
 ---
 
+## Phase 21 — Hardening
+
+**Date:** 2026-08-26
+**Scope:** the properties nobody checks, because nothing fails when they are wrong.
+
+### Gate criteria (04_WEB_PHASE_PLAN.md: P0/P1 = 0 + all readiness tests)
+
+| # | Criterion | Method | Result |
+|---|---|---|---|
+| 1 | **No card number has anywhere to go** | Pest (source scan) | **PASS** — no field, no column, nowhere |
+| 2 | **No HTTP route grants a platform role** | Pest (router scan) | **PASS** — console only, and now enforced |
+| 3 | **The super-admin bypass never reaches a customer's project** | Pest | **PASS** — support that needs one asks the customer |
+| 4 | **No plaintext IBAN in a response or in a row** | Pest (HTTP) | **PASS** — last four only, encrypted at rest |
+| 5 | Security headers are sent by the application | Pest (HTTP) | **PASS** — no longer only by nginx |
+| 6 | Private responses are never proxy-cacheable | Pest (HTTP) | **PASS** — `no-store, private` |
+| 7 | **The audit trail cannot be edited or deleted** | Pest | **PASS** — by trigger, including by whoever wrote the row |
+| 8 | Every append-only table has its trigger | Pest | **PASS** — nine tables, checked as a set |
+| 9 | **No credential shaped like a provider key is committed** | Pest (tree scan) | **PASS** — env examples and source |
+| 10 | An AI provider key is never written into a stored request | Pest | **PASS** |
+| 11 | **composer audit** | `composer audit` | **PASS** — no advisories |
+| 12 | **npm audit** | `npm audit` | **PASS** — 0 vulnerabilities |
+| 13 | **No 5xx under concurrency** | `scripts/load-smoke.mjs` | **PASS** — 25 concurrent × 4 rounds × 5 endpoints |
+| 14 | No dropped request under concurrency | `scripts/load-smoke.mjs` | **PASS** |
+| 15 | **Every hot query path has an index** | Pest (pg_indexes) | **PASS** — eight tables |
+| 16 | **No duplicate index** | Pest (pg_indexes) | **PASS** — two were found and removed |
+| 17 | **Payments are not queued behind AI work** | Pest | **PASS** — separate queues, separate workers |
+| 18 | Slow jobs get one attempt, fast ones several | Pest | **PASS** — a queue retry on top of a gateway retry is a bill |
+| 19 | A failing webhook backs off rather than hammering | Pest | **PASS** — growing delays |
+| 20 | **Every response carries a request id** | Pest (HTTP) | **PASS** — the audit column had been null since Phase 1 |
+| 21 | A caller's own id is honoured | Pest (HTTP) | **PASS** — joins our logs to theirs |
+| 22 | An unsafe id is replaced rather than logged | Pest (HTTP) | **PASS** |
+| 23 | The health probe names every dependency | Pest (HTTP) | **PASS** |
+| 24 | **Reconciliation reports a clean day as clean** | Pest | **PASS** — the baseline the rest depends on |
+| 25 | **It catches money taken and never posted** | Pest | **PASS** — the worst case in the system |
+| 26 | It catches a provider transaction recorded twice | Pest | **PASS** |
+| 27 | It catches a payment pending far too long | Pest | **PASS** — as a warning, not a failure |
+| 28 | It subtracts refunds rather than flagging them | Pest | **PASS** — an alert on normal business gets turned off |
+| 29 | **The command exits non-zero on a critical finding** | Pest | **PASS** — a scheduler can only alert on an exit code |
+| 30 | …and zero on a warning alone | Pest | **PASS** |
+| 31 | **A backup restores** | `scripts/backup-drill.sh` | **PASS** — dumped, restored, row counts compared, cleaned up |
+| 32 | **Migration rehearsal** | `migrate:fresh --seed` | **PASS** — from empty to seeded |
+| 33 | **Rollback rehearsal** | `migrate:rollback` + `migrate` | **PASS** — down and back up, and it proved its own release step: the re-applied migration comes back empty, so reference data must be re-seeded after every migration. The E2E run failed on exactly that until the seeders were re-run |
+| 34 | Product media is cached immutably | Code review | **PASS** — UUID keys make a year's caching correct rather than reckless |
+| 35 | Every earlier phase still passes | Pest + Playwright | **PASS** — 805 tests, 76 journeys |
+
+### Defects found and fixed in this phase
+
+| Id | Severity | Defect | Fix |
+|---|---|---|---|
+| P21-D001 | **P1** | Payment webhooks shared a queue with AI renders, on a single worker. An AI job can hold that worker for ten minutes, so a payment confirmation could sit behind somebody else's sofa — the customer sees a spinner and has no idea their payment was fine. | Two queues and two worker processes; payments drained first, and the split is now a test |
+| P21-D002 | **P1** | Every catalogue search made a synchronous call to the embedding provider. That is a network round trip on the most-used endpoint on the site, a cost per search, and a search box whose latency is somebody else's uptime. Measured: search p50 2120ms against 623ms for the same listing without a term. | Query vectors cached for an hour under a hashed key; p50 602ms, and a repeat search reaches no provider at all |
+| P21-D003 | P2 | Security headers came only from nginx. A header added by infrastructure disappears the day somebody puts a different proxy in front, or routes an internal call straight to PHP-FPM — and nothing fails when it does. | Set by the application as well, and asserted |
+| P21-D004 | P2 | The audit log's `request_id` column had been null since Phase 1: the logger read `X-Request-Id` and nothing ever assigned one. A field that looks like correlation and is not is worse than an absent one, because somebody eventually trusts it. | Middleware assigns one, honours a caller's, and puts it on the response and in the log context |
+| P21-D005 | P3 | Two duplicate indexes — `products_name_trigram_idx` alongside `products_name_trgm_idx` (five phases old), and a plain `(order_id, seller_id)` index alongside the unique one that covers the same columns. Invisible from outside: no query is slower, the table simply pays twice on every insert. | Both removed; a test now fails on any pair with the same shape |
+| P21-D006 | P3 | Product media was stored with no cache headers, so every catalogue grid re-downloaded every thumbnail on every visit. | `public, max-age=31536000, immutable` — correct because the keys contain a UUID and a URL never names different bytes |
+
+### Known limitations
+
+- **No CDN in front of object storage.** The cache headers are correct and there is nothing
+  distributing them yet; that is an infrastructure decision for the production environment
+  rather than something the repository can carry.
+- **No automated accessibility sweep.** Carried over from Phase 20 and still open: the
+  manual properties are tested (skip link, focus, landmarks, keyboard paths) and no axe run
+  is wired in.
+- **The load smoke is a smoke test, not a benchmark.** It fails on 5xx and dropped requests
+  and only *reports* slow percentiles, because a shared development machine is not a
+  production host and a timing gate here would fail for reasons unrelated to the code.
+- **Backups are drilled, not scheduled.** `scripts/backup-drill.sh` proves a dump restores;
+  taking dumps on a schedule and shipping them off-host is production infrastructure.
+- **Reconciliation compares our own two records.** Until iyzico and QNB are live there is no
+  third-party settlement file to compare against, which is the version that catches a
+  provider disagreeing with itself.
+
+### Test suite state after Phase 21
+
+| Suite | Command | Result |
+|---|---|---|
+| Backend | `php artisan test` | **805 passed**, 2538 assertions |
+| Static analysis | `phpstan analyse` (level 6) | **No errors** |
+| Style | `pint --test` | **PASS** — 518 files |
+| Frontend lint | `npm run lint` | **PASS** — three apps |
+| Frontend types | `npm run typecheck` | **PASS** — vue-tsc, three apps |
+| Design tokens | `node scripts/check-design-tokens.mjs` | **PASS** |
+| PHP dependencies | `composer audit` | **PASS** — no advisories |
+| JS dependencies | `npm audit` | **PASS** — 0 vulnerabilities |
+| Load smoke | `node scripts/load-smoke.mjs` | **PASS** — no 5xx, no dropped requests |
+| Backup drill | `bash scripts/backup-drill.sh` | **PASS** — restored and compared |
+| E2E | `npx playwright test` | **76 passed** |
+
+---
+
 ## Phase 20 — Storefront complete + approved design language
 
 **Date:** 2026-08-26

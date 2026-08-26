@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Domains\Ai\Enums\AiTask;
+use App\Domains\Ai\Models\AiJob;
 use App\Domains\Ai\Providers\FakeAiProvider;
 use App\Domains\Catalog\Models\Category;
 use App\Domains\Matching\Enums\EmbeddingSource;
@@ -17,6 +18,7 @@ use App\Domains\Products\Models\Product;
 use App\Domains\Products\Models\ProductDimension;
 use App\Domains\Products\Models\ProductSku;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 /**
@@ -138,6 +140,35 @@ it('keeps the seller and the delivery terms out of the embedded text', function 
     expect($text)->toStartWith('Kanepe')
         ->and($text)->toContain('İskandinav meşe kanepe')
         ->and($text)->not->toContain('Eşleştirme Test');
+});
+
+it('asks the provider once for a search phrase and then remembers it', function (): void {
+    Cache::flush();
+
+    $embeddings = static fn (): int => AiJob::query()
+        ->where('task', AiTask::TextEmbedding->value)
+        ->count();
+
+    $before = $embeddings();
+
+    $first = $this->embedder->embedQuery('meşe kanepe');
+    $afterFirst = $embeddings();
+
+    $second = $this->embedder->embedQuery('  MEŞE KANEPE  ');
+    $afterSecond = $embeddings();
+
+    /*
+     * Every catalogue search used to make a synchronous call to the embedding provider —
+     * a network round trip on the most-used endpoint on the site, a cost per search, and a
+     * search box whose latency was somebody else's uptime. Search terms repeat enormously,
+     * so the second ask must not reach the provider at all.
+     *
+     * Case and surrounding space are normalised, because "Koltuk" and "koltuk " are the
+     * same question and paying twice for them is the same waste.
+     */
+    expect($afterFirst)->toBe($before + 1)
+        ->and($afterSecond)->toBe($afterFirst)
+        ->and($second)->toBe($first);
 });
 
 it('finds sofas for a sofa, and nothing else', function (): void {

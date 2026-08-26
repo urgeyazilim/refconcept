@@ -36,7 +36,20 @@ final class ProcessPaymentWebhook implements ShouldQueue
     /** @var list<int> */
     public array $backoff = [5, 15, 60, 120, 300, 600, 900];
 
-    public function __construct(private readonly string $eventId) {}
+    /**
+     * Its own queue, drained before anything else.
+     *
+     * A payment confirmation used to sit behind whatever was already running, which for a
+     * while meant a ten-minute AI render. The customer waiting for it has no idea their
+     * payment is fine and their order is behind somebody else's sofa.
+     *
+     * Set here rather than as a property: the Queueable trait already declares `$queue`,
+     * and redeclaring it with a type is a fatal composition error.
+     */
+    public function __construct(private readonly string $eventId)
+    {
+        $this->onQueue('payments');
+    }
 
     public function handle(WebhookProcessor $processor): void
     {

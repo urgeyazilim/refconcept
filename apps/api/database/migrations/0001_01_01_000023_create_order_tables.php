@@ -157,7 +157,11 @@ return new class extends Migration
             $table->timestampsTz();
 
             $table->index(['seller_id', 'status']);
-            $table->index(['order_id', 'seller_id']);
+
+            // No plain index on (order_id, seller_id): the unique index below covers the
+            // same columns in the same order, and a second copy would only add a write on
+            // every insert. A duplicate index is invisible from the outside, which is why
+            // it survives — nothing gets slower, the table just pays twice.
         });
 
         DB::statement(<<<'SQL'
