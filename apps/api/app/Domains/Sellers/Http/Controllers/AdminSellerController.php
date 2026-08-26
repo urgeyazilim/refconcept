@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domains\Sellers\Http\Controllers;
 
 use App\Domains\Audit\Services\AuditLogger;
+use App\Domains\Identity\Models\User;
 use App\Domains\Sellers\Models\Seller;
 use App\Domains\Sellers\Services\ApplicationWorkflow;
 use Illuminate\Http\JsonResponse;
@@ -74,7 +75,38 @@ final class AdminSellerController
         ]);
     }
 
+    /**
+     * A seller's own record, for the seller.
+     *
+     * A separate route rather than a shared one under `/admin`, because the two audiences
+     * are answered by different questions. An administrative endpoint asks "does this
+     * person hold the platform permission"; this one asks "is this their seller". Serving
+     * both from one path meant the second could only be expressed as an exception to the
+     * first, and an authorisation rule with an exception in it is a rule nobody can state.
+     *
+     * The policy still decides. The route only settles which question is being asked.
+     */
+    public function mine(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        abort_unless($user instanceof User, 401);
+
+        $seller = Seller::query()
+            ->whereHas('organization.memberships', fn ($query) => $query->where('user_id', $user->getKey()))
+            ->first();
+
+        abort_if($seller === null, 404, 'Bu hesaba bağlı bir satıcı kaydı yok.');
+
+        return $this->sellerPayload($request, $seller);
+    }
+
     public function show(Request $request, Seller $seller): JsonResponse
+    {
+        return $this->sellerPayload($request, $seller);
+    }
+
+    private function sellerPayload(Request $request, Seller $seller): JsonResponse
     {
         abort_unless($request->user()?->can('view', $seller) === true, 403);
 

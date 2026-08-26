@@ -12,19 +12,19 @@ WEB
 IN_PROGRESS
 
 ## Current Phase
-PHASE_18
+PHASE_19
 
 ## Current Task
-Not started — Phase 17 is closed; Phases 12 and 13 remain deferred (see below) and Phase 18 has not begun.
+Not started — Phase 18 is closed; Phases 12 and 13 remain deferred (see below) and Phase 19 has not begun.
 
 ## Last Completed Task
-P17-T006 — Phase 17 gate verified end to end (see `TEST_REPORT.md`).
+P18-T007 — Phase 18 gate verified end to end (see `TEST_REPORT.md`).
 
 ## Next Task
-Phase 18 — Super Admin Complete, shipping its own UI slice alongside its API.
+Phase 19 — Seller Portal Complete, shipping its own UI slice alongside its API.
 
 ## Test State
-PASS — 709 backend tests / 2164 assertions, 55 Playwright E2E journeys across all three
+PASS — 747 backend tests / 2372 assertions, 61 Playwright E2E journeys across all three
 apps, PHPStan level 6, Pint, ESLint, vue-tsc and the design token guard all clean.
 
 ## Release State
@@ -1076,6 +1076,93 @@ platform earns on a sale that did not happen.
 **An open return holds the payout** — E2E-09 — and the settlement hold can never be shorter
 than the return window, because a configuration where it was would pay a seller while the
 customer could still send everything back.
+
+### PHASE_18_SUPER_ADMIN_COMPLETE — DONE (2026-08-26)
+
+```text
+UPDATED_AT: 2026-08-26
+COMMIT_OR_SNAPSHOT: phase-18-super-admin
+PHASE: 18 — Super Admin Complete
+TASK: P18-T001 .. P18-T007
+STATUS: DONE
+FILES_CHANGED:
+  apps/api/database/migrations/0001_01_01_000026_create_platform_settings_tables.php
+  apps/api/app/Domains/Administration/Services/{AdminPermissionMatrix,PlatformSettings,Features}.php
+  apps/api/app/Domains/Administration/Http/Middleware/EnforceAdminPermission.php
+  apps/api/app/Domains/Administration/Http/Controllers/{AdminAnalyticsController,AdminAuditController,
+    AdminOrderController,AdminSystemController}.php
+  apps/api/app/Domains/Administration/Models/{FeatureFlag,SystemSetting}.php
+  apps/api/app/Domains/Administration/Tests/{AdminPermissionMatrixTest,CriticalActionAuditTest,
+    PlatformSwitchesTest}.php
+  apps/api/app/Domains/Identity/Enums/{Permission,SystemRole}.php
+  apps/api/app/Domains/Ai/Services/AiJobDispatcher.php  (the platform kill switch)
+  apps/api/app/Domains/Payments/Services/GatewayRegistry.php  (a payment method an operator can close)
+  apps/api/app/Domains/Finance/Services/SettlementEligibility.php  (hold days from the settings)
+  apps/api/app/Domains/Fulfilment/Services/ReturnService.php  (window days from the settings)
+  apps/api/app/Domains/Sellers/Http/Controllers/AdminSellerController.php  (the seller's own record)
+  apps/api/database/seeders/{PlatformSettingsSeeder,DatabaseSeeder}.php
+  apps/api/routes/domains/{administration,sellers}.php, routes/api.php, bootstrap/app.php
+  packages/ui/src/runtime/types.ts
+  apps/admin-panel/app/pages/{analytics,orders,audit,system}/index.vue, app/layouts/default.vue
+  tests/e2e/super-admin.spec.ts
+MIGRATIONS: 2 tables — feature_flags, system_settings
+TESTS_RUN: php artisan test · phpstan level 6 · pint · eslint · vue-tsc
+  · check-design-tokens.mjs · playwright (full suite)
+TEST_RESULT: PASS (747 backend tests / 2372 assertions; 61 E2E journeys)
+BLOCKERS: none
+NEXT_ACTION: Phase 19 — Seller Portal Complete
+```
+
+**The gate is a property, not a checklist.** "These endpoints are protected" is a list
+somebody has to keep up to date, and the entry that is missing is invisible. What is
+enforced instead is **no administrative endpoint can exist without a decision about who may
+call it**: a matrix maps route-name prefixes to permissions, middleware on the whole API
+group consults it, and a route with no entry is refused at runtime and fails the suite at
+build time. `uncovered()` returning anything is a build failure.
+
+**Failing closed is the whole design.** An unknown admin route is a 403 — not a 404 and not
+a pass — because "we have not decided who may do this yet" is much closer to "nobody" than
+to "everybody". The middleware self-selects on the path rather than being attached route by
+route, because a check that has to be remembered is a check that is invisible when it is
+missing.
+
+**The longest prefix wins.** Reading a settlement and approving one live under the same
+prefix and are different powers; a matrix that could not express that would hand the second
+to everybody who needed the first.
+
+**An operator may not touch the platform's own switches.** Everything else on their screen
+has a blast radius of one order or one seller; turning a feature on for everybody is a
+release decision, and it is the one power here whose blast radius is the whole platform.
+The audit screen therefore also shows the caller their own permissions, so a button they
+cannot press is explained by a page rather than by a 403.
+
+**Every critical action leaves a record with a reason.** Money leaving, goods released,
+access changed, the platform's behaviour altered — thirteen cases perform the action for
+real and then assert the trail: what happened, who did it, and, where it costs somebody
+something, why. The trail is append-only at the database level, so the record of a decision
+cannot be edited by whoever made it.
+
+**A settings screen that writes rows nothing reads is worse than no screen.** It tells
+whoever used it that they changed the platform, and they will act on that belief. So the
+hold period, the return window and each flag are read by the services that obey them, with
+the environment as the floor and a stored row as the override — one order, stated once, and
+cleared from cache on write so a change made during an incident takes effect on the next
+click.
+
+**A missing flag is on.** A feature that switched itself off because somebody forgot to
+seed a row would be an outage caused by the safety mechanism, which is the worst way to
+have one. Turning something off is a decision, and a decision has a row. A partial rollout
+buckets on a stable hash of key and user, so somebody who has the feature keeps it.
+
+**A secret is never echoed back**, not to the screen and not into the audit log — an audit
+trail is read by more people than a secret store is. And an unverified webhook is never
+replayed: anybody can post one, and replaying it would let them fabricate a payment.
+
+**Phase 18 found a real collision and fixed it properly.** A seller reading their own
+record went through `/admin/sellers/{id}`, where the new rule asks whether the caller holds
+a platform permission — which a seller never does. Rather than carve an exception into the
+authorisation rule (a rule with an exception in it is a rule nobody can state), the seller
+got `/api/v1/seller/profile`, and the administrative path stayed administrative.
 
 ---
 

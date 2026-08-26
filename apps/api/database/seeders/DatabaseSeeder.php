@@ -37,6 +37,10 @@ final class DatabaseSeeder extends Seeder
         // commission is a guess.
         $this->call(CommissionSeeder::class);
 
+        // The switches an operator may reach. Reference data: their screen should look
+        // the same in production as it does here.
+        $this->call(PlatformSettingsSeeder::class);
+
         if (app()->environment('production')) {
             $this->command?->info('Production environment: demo data skipped.');
 

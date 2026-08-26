@@ -175,9 +175,20 @@ it('lets a seller owner read their own seller record', function (): void {
 
     $aliceSeller = Seller::query()->firstOrFail();
 
-    // Isolation must not become a wall around the seller's own data.
+    /*
+     * Isolation must not become a wall around the seller's own data — but they read it
+     * from their own route rather than from the administrative one. The admin path asks
+     * whether the caller holds a platform permission, which a seller never does.
+     */
+    // The seller routes require a verified address, as every applicant-facing route does.
+    $this->alice->forceFill(['email_verified_at' => now()])->save();
+
     $this->actingAs($this->alice)
-        ->getJson("/api/v1/admin/sellers/{$aliceSeller->getKey()}")
+        ->getJson('/api/v1/seller/profile')
         ->assertOk()
         ->assertJsonPath('data.seller_code', $aliceSeller->seller_code);
+
+    $this->actingAs($this->alice)
+        ->getJson("/api/v1/admin/sellers/{$aliceSeller->getKey()}")
+        ->assertForbidden();
 });

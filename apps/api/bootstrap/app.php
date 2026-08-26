@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Domains\Administration\Http\Middleware\EnforceAdminPermission;
 use App\Domains\Ai\Exceptions\AiJobRefused;
 use App\Domains\Commerce\Exceptions\CartRefused;
 use App\Domains\Credits\Console\SweepExpiredCreditsCommand;
@@ -43,6 +44,16 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         // The three Nuxt clients are separate origins; CORS is configured in config/cors.php.
         $middleware->trustProxies(at: '*');
+
+        /*
+         * Every administrative request passes the permission matrix.
+         *
+         * Applied here rather than route by route, because a check that has to be
+         * remembered is a check that is invisible when it is missing. The middleware
+         * refuses anything under /admin that the matrix does not claim, so a new endpoint
+         * added without a decision about who may call it is closed rather than open.
+         */
+        $middleware->api(append: [EnforceAdminPermission::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Everything under /api answers JSON, including validation and auth failures.

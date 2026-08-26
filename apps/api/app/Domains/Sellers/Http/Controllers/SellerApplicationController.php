@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domains\Sellers\Http\Controllers;
 
+use App\Domains\Administration\Services\Features;
 use App\Domains\Audit\Services\AuditLogger;
 use App\Domains\Sellers\Enums\ApplicationStatus;
 use App\Domains\Sellers\Exceptions\InvalidTransition;
@@ -33,6 +34,7 @@ final class SellerApplicationController
         private readonly OnboardingChecklist $checklist,
         private readonly ApplicationWorkflow $workflow,
         private readonly AuditLogger $audit,
+        private readonly Features $features,
     ) {}
 
     /** The applicant's current application, if they have one. */
@@ -53,6 +55,17 @@ final class SellerApplicationController
     public function store(StoreApplicationRequest $request): JsonResponse
     {
         $user = $request->user();
+
+        /*
+         * New applications can be closed without touching anybody who already has one.
+         * The switch exists for the week a review team is behind: refusing at the door is
+         * honest, while accepting applications nobody will read is not.
+         */
+        if ($this->features->disabled('seller.self-onboarding', $user->getKey())) {
+            throw ValidationException::withMessages([
+                'application' => ['Yeni satıcı başvuruları şu anda alınmıyor.'],
+            ]);
+        }
 
         // A partial unique index enforces this too; checking here turns a database
         // exception into a message the applicant can act on.

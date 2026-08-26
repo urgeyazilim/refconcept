@@ -1471,6 +1471,93 @@ own account and a person confirms it against a statement.
 
 ---
 
+## Phase 18 — Super admin complete
+
+**Date:** 2026-08-26
+**Scope:** who may do what on the platform, and what is left behind when they do it.
+
+### Gate criteria (04_WEB_PHASE_PLAN.md: admin permission matrix + critical action audit)
+
+| # | Criterion | Method | Result |
+|---|---|---|---|
+| 1 | **No administrative route is unclaimed** | Pest | **PASS** — the gate; `uncovered()` returns `[]` and a non-empty list fails the build |
+| 2 | Every admin route the router knows has a permission | Pest | **PASS** — 80 named routes, none missing |
+| 3 | A route the matrix has never heard of is refused | Pest | **PASS** — registered at runtime, 403; the safety net under #1 |
+| 4 | A more specific rule outranks a broader one | Pest | **PASS** — reading a settlement and approving one are different powers |
+| 5 | An analyst reads and cannot press a verb | Pest (HTTP) | **PASS** |
+| 6 | An operator works the queues | Pest (HTTP) + Playwright | **PASS** — credits, transfers, failed jobs |
+| 7 | **An operator cannot reach the platform's switches** | Pest (HTTP) + Playwright | **PASS** — flags and settings are a release decision |
+| 8 | A super admin passes everywhere | Pest (HTTP) + Playwright | **PASS** |
+| 9 | A customer reaches no administrative surface | Pest (HTTP) + Playwright | **PASS** — eight paths, all 403 |
+| 10 | A signed-out caller is refused before permissions are asked about | Pest (HTTP) | **PASS** — 401, not 403 |
+| 11 | An operator is told what they may do | Pest (HTTP) + Playwright | **PASS** — a page rather than a 403 |
+| 12 | **A bank transfer confirmation records who and against which statement** | Pest (HTTP) | **PASS** |
+| 13 | **A settlement approval and its payment are two records** | Pest (HTTP) | **PASS** — a merged trail could not say which came first |
+| 14 | **A manual refund records the reason that justified it** | Pest (HTTP) | **PASS** |
+| 15 | **A credit adjustment records its reason** | Pest (HTTP) | **PASS** — a hand adjustment is indistinguishable from theft without one |
+| 16 | **A seller suspension records the reason given** | Pest (HTTP) | **PASS** — it stops their income |
+| 17 | A return decision records who made it | Pest (HTTP) | **PASS** |
+| 18 | An order status change records the actor and their role | Pest (HTTP) | **PASS** |
+| 19 | A feature flag change records before and after | Pest (HTTP) | **PASS** |
+| 20 | A setting change records before and after | Pest (HTTP) | **PASS** |
+| 21 | A webhook replay is recorded | Pest (HTTP) | **PASS** |
+| 22 | **The audit trail cannot be edited or deleted** | Pest | **PASS** — append-only triggers, including for whoever wrote the row |
+| 23 | An operator can read the trail they are entitled to | Pest (HTTP) + Playwright | **PASS** |
+| 24 | **Turning the AI flag off stops new jobs at the door** | Pest | **PASS** — refused before the row is written; running work is left alone |
+| 25 | **Turning the bank-transfer flag off removes it from checkout** | Pest + Playwright | **PASS** — flipped in the browser, verified against the API |
+| 26 | A payment already taken still reaches its adapter | Pest | **PASS** — switching a method off must not strand money |
+| 27 | Turning self-onboarding off closes new applications | Pest (HTTP) | **PASS** — approved sellers unaffected |
+| 28 | **A flag with no row is on** | Pest | **PASS** — a forgotten seed must not become an outage |
+| 29 | A partial rollout keeps a user on the same side | Pest | **PASS** — stable hash of key and user id |
+| 29a | The service and the model bucket a rollout identically | Pest | **PASS** — twelve users; a rollout that disagreed with itself would move people in and out |
+| 29b | A flag survives a round trip through the cache | Pest | **PASS** — regression for P18-D002 |
+| 30 | **Changing the return window changes the return service** | Pest | **PASS** — the settings screen is not decorative |
+| 31 | Changing the return window moves the payout hold with it | Pest | **PASS** — the hold covers the window |
+| 32 | A setting with no value falls back to the environment | Pest | **PASS** — one source of truth, stated once |
+| 33 | A value of the wrong type is refused and nothing half-applies | Pest (HTTP) | **PASS** |
+| 34 | **A secret value is never returned** | Pest (HTTP) | **PASS** — not even to whoever set it |
+| 35 | **A secret never enters the audit log** | Pest (HTTP) | **PASS** — a trail is read by more people than a secret store |
+| 36 | An unverified webhook cannot be replayed | Pest (HTTP) | **PASS** — anybody can post one |
+| 37 | The dashboard leads with the queue, and each item is a way in | Playwright | **PASS** |
+| 38 | The order screen searches by number and is read-only | Playwright | **PASS** |
+
+### Defects found and fixed in this phase
+
+| Id | Severity | Defect | Fix |
+|---|---|---|---|
+| P18-D001 | **P1** | A seller could no longer read their own seller record. It was served from `/admin/sellers/{id}`, and the new matrix asks whether the caller holds a platform permission — which a seller never does. The two audiences were answered by different questions on one path, so the seller's case could only be expressed as an exception to the administrative rule. | `GET /api/v1/seller/profile`, with the policy still deciding; the administrative path stayed administrative |
+| P18-D002 | **P1** | Caching the flag model itself. A feature check reads from a shared cache, and an Eloquent object put through one comes back as whatever the reading process can reconstruct — an `__PHP_Incomplete_Class` and a fatal `TypeError` inside the check. Seller onboarding, AI jobs and the bank-transfer method all failed at once, and the full E2E run is what caught it. | Two scalars are cached instead of the model, and a test asserts the service and the model bucket a rollout identically |
+| P18-D003 | P2 | The audit viewer read `subject_type` / `subject_id`, but the table stores `auditable_type` / `auditable_id` — so the one screen an investigation starts from answered 500. | Mapped to the real columns |
+| P18-D004 | P3 | Two unsound assumptions in the new code: the route collection was iterated through an interface that only promises countability, and the settings model returned an untyped array. | `->getRoutes()` and a typed return; PHPStan level 6 clean |
+
+### Known limitations
+
+- **No admin UI for granting roles**, deliberately. Platform roles are granted by console
+  command only (`refconcept:grant-role`); an HTTP endpoint that hands out `super-admin`
+  is a privilege-escalation endpoint whatever guard sits in front of it.
+- **Flags are boolean plus percentage.** No targeting by segment, country or plan. That is
+  a real product need eventually, and the row shape would change when it arrives; shipping
+  a half-general targeting language now would make the later one harder.
+- **Settings are a short list on purpose.** Every key is read by something. Growing it into
+  a general key–value store for the application would recreate, without types or review,
+  the configuration file it sits beside.
+- **The dashboard's series is drawn as bars, not as a chart.** The question it answers is
+  "did anything stop", and a row of heights answers it without a dependency.
+
+### Test suite state after Phase 18
+
+| Suite | Command | Result |
+|---|---|---|
+| Backend | `php artisan test` | **747 passed**, 2372 assertions |
+| Static analysis | `phpstan analyse` (level 6) | **No errors** |
+| Style | `pint --test` | **PASS** — 505 files |
+| Frontend lint | `npm run lint` | **PASS** — three apps |
+| Frontend types | `npm run typecheck` | **PASS** — vue-tsc, three apps |
+| Design tokens | `node scripts/check-design-tokens.mjs` | **PASS** — no foreign colours |
+| E2E | `npx playwright test` | **61 passed** |
+
+---
+
 ## Phase 17 — Shipping, returns and refunds
 
 **Date:** 2026-08-26

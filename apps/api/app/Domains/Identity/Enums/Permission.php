@@ -35,6 +35,23 @@ enum Permission: string
     case PaymentsView = 'platform.payments.view';
     case PaymentsSettle = 'platform.payments.settle';
 
+    /*
+     * The rest of the platform surface, one permission per thing an operator can do.
+     *
+     * Split by *consequence*, not by screen. Reading a seller's file and suspending them
+     * are different powers even though they live on the same page, and a permission named
+     * after the page would grant both to anybody who needs either.
+     */
+    case SellersView = 'platform.sellers.view';
+    case SellersManage = 'platform.sellers.manage';
+    case CatalogModerate = 'platform.catalog.moderate';
+    case OrdersView = 'platform.orders.view';
+    case CreditsManage = 'platform.credits.manage';
+    case AiManage = 'platform.ai.manage';
+    case FlagsManage = 'platform.flags.manage';
+    case JobsManage = 'platform.jobs.manage';
+    case AnalyticsView = 'platform.analytics.view';
+
     // --- seller-scoped -----------------------------------------------------------
     case SellerProfileView = 'seller.profile.view';
     case SellerProfileManage = 'seller.profile.manage';
@@ -60,6 +77,15 @@ enum Permission: string
             self::SystemSettingsManage => 'Sistem ayarlarını yönetme',
             self::PaymentsView => 'Ödemeleri ve havaleleri görüntüleme',
             self::PaymentsSettle => 'Havale onaylama ve reddetme',
+            self::SellersView => 'Satıcıları ve başvuruları görüntüleme',
+            self::SellersManage => 'Satıcı onaylama, askıya alma ve komisyon değiştirme',
+            self::CatalogModerate => 'Ürün moderasyonu',
+            self::OrdersView => 'Siparişleri görüntüleme',
+            self::CreditsManage => 'Kredi paketleri, promosyonlar ve bakiye düzeltme',
+            self::AiManage => 'Yapay zekâ sağlayıcı ve görev yönetimi',
+            self::FlagsManage => 'Özellik anahtarları ve sistem ayarları',
+            self::JobsManage => 'Başarısız işler ve bildirimleri yönetme',
+            self::AnalyticsView => 'Platform raporlarını görüntüleme',
             self::SellerProfileView => 'Satıcı profilini görüntüleme',
             self::SellerProfileManage => 'Satıcı profilini düzenleme',
             self::SellerUsersView => 'Satıcı kullanıcılarını görüntüleme',

@@ -40,6 +40,11 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, EnsureEmailIsVerif
         Route::post('application/submit', [SellerApplicationController::class, 'submit'])->name('application.submit');
         Route::post('application/withdraw', [SellerApplicationController::class, 'withdraw'])->name('application.withdraw');
 
+        // The seller's own record. Deliberately not the admin route: that one asks whether
+        // the caller holds a platform permission, and this one asks whether the seller is
+        // theirs. See AdminSellerController::mine().
+        Route::get('profile', [AdminSellerController::class, 'mine'])->name('profile.show');
+
         Route::get('agreements', [SellerAgreementController::class, 'index'])->name('agreements.index');
         Route::post('agreements/{agreement}/accept', [SellerAgreementController::class, 'accept'])
             ->name('agreements.accept');

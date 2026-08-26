@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domains\Fulfilment\Services;
 
+use App\Domains\Administration\Services\PlatformSettings;
 use App\Domains\Audit\Services\AuditLogger;
 use App\Domains\Fulfilment\Enums\ReturnStatus;
 use App\Domains\Fulfilment\Exceptions\FulfilmentRefused;
@@ -278,7 +279,10 @@ final class ReturnService
     /** How many days after delivery a customer may still ask. */
     public function windowDays(): int
     {
-        return (int) config('refconcept.returns.window_days', 14);
+        return app(PlatformSettings::class)->integer(
+            'returns.window_days',
+            (int) config('refconcept.returns.window_days', 14),
+        );
     }
 
     // --- internals -----------------------------------------------------------

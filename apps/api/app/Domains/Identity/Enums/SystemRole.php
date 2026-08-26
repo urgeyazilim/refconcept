@@ -68,6 +68,19 @@ enum SystemRole: string
                 Permission::AuditView,
                 Permission::PaymentsView,
                 Permission::PaymentsSettle,
+                Permission::SellersView,
+                Permission::SellersManage,
+                Permission::CatalogModerate,
+                Permission::OrdersView,
+                Permission::CreditsManage,
+                Permission::AiManage,
+                Permission::JobsManage,
+                Permission::AnalyticsView,
+                /*
+                 * Not FlagsManage. Turning a feature on for everybody, or changing a
+                 * system setting, is a release decision rather than an operational one —
+                 * and the one power on this list whose blast radius is the whole platform.
+                 */
             ],
 
             self::Analyst => [
@@ -75,8 +88,12 @@ enum SystemRole: string
                 Permission::OrganizationsView,
                 Permission::AuditView,
                 // Reads payments, cannot settle one: an analyst answering "did it arrive"
-                // does not also get to decide that it did.
+                // does not also get to decide that it did. The same shape runs through the
+                // rest of the list — every view, no verbs.
                 Permission::PaymentsView,
+                Permission::SellersView,
+                Permission::OrdersView,
+                Permission::AnalyticsView,
             ],
 
             self::SellerOwner => [

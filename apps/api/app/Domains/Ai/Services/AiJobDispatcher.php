@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domains\Ai\Services;
 
+use App\Domains\Administration\Services\Features;
 use App\Domains\Ai\Enums\AiFailureKind;
 use App\Domains\Ai\Enums\AiJobStatus;
 use App\Domains\Ai\Enums\AiTask;
@@ -42,6 +43,7 @@ final class AiJobDispatcher
     public function __construct(
         private readonly AiGateway $gateway,
         private readonly AiJobCredits $credits,
+        private readonly Features $features,
     ) {}
 
     /**
@@ -73,6 +75,22 @@ final class AiJobDispatcher
             if ($existing !== null) {
                 return $existing;
             }
+        }
+
+        /*
+         * The platform-wide switch, before the per-route one.
+         *
+         * The route's pause reason answers "this task is broken"; the flag answers "stop
+         * spending money at the provider right now", which is a decision somebody takes
+         * during an incident and needs to be one click rather than a deploy. Jobs already
+         * running are left alone: killing work a customer has paid credits for would turn
+         * a provider problem into a refund queue.
+         */
+        if ($this->features->disabled('ai.design-generation', $user?->getKey())) {
+            throw AiJobRefused::unavailable(
+                $task,
+                'Yapay zekâ özellikleri şu anda geçici olarak kapalı.',
+            );
         }
 
         $job = new AiJob([

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domains\Finance\Services;
 
+use App\Domains\Administration\Services\PlatformSettings;
 use App\Domains\Finance\Enums\LedgerAccount;
 use App\Domains\Finance\Enums\SettlementStatus;
 use App\Domains\Orders\Enums\SellerOrderStatus;
@@ -33,7 +34,10 @@ use Illuminate\Support\Facades\DB;
  */
 final class SettlementEligibility
 {
-    public function __construct(private readonly Ledger $ledger) {}
+    public function __construct(
+        private readonly Ledger $ledger,
+        private readonly PlatformSettings $settings,
+    ) {}
 
     /**
      * The seller orders that could be settled today.
@@ -168,8 +172,8 @@ final class SettlementEligibility
          * misconfiguration harmless instead of expensive.
          */
         return max(
-            (int) config('refconcept.settlement.hold_days', 14),
-            (int) config('refconcept.returns.window_days', 14),
+            $this->settings->integer('settlement.hold_days', (int) config('refconcept.settlement.hold_days', 14)),
+            $this->settings->integer('returns.window_days', (int) config('refconcept.returns.window_days', 14)),
         );
     }
 

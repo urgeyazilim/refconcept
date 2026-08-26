@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Domains\Administration\Services\Features;
 use App\Domains\Ai\Models\AiJob;
 use App\Domains\Ai\Models\AiTaskRoute;
 use App\Domains\Ai\Policies\AiJobPolicy;
@@ -73,7 +74,7 @@ class AppServiceProvider extends ServiceProvider
          * separate, configured question — see GatewayRegistry::isEnabled().
          */
         $this->app->singleton(GatewayRegistry::class, function (): GatewayRegistry {
-            $registry = new GatewayRegistry;
+            $registry = new GatewayRegistry($this->app->make(Features::class));
 
             $registry->register($this->app->make(FakePaymentGateway::class));
             $registry->register($this->app->make(BankTransferGateway::class));

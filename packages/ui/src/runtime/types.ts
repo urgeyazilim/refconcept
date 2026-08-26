@@ -1089,3 +1089,131 @@ export interface ReturnReason {
   code: string
   label: string
 }
+
+// --- platform administration (Phase 18) ------------------------------------------
+
+export interface AdminOverview {
+  period_days: number
+  orders: {
+    count: number
+    gross_minor: number
+    average_minor: number
+    by_status: Record<string, number>
+  }
+  money: {
+    is_balanced: boolean
+    cash_minor: number
+    commission_minor: number
+    refunds_owed_minor: number
+    sellers_owed_minor: number
+  }
+  marketplace: {
+    active_sellers: number
+    live_products: number
+    pending_moderation: number
+    new_customers: number
+  }
+  /**
+   * The queue of things a person still has to decide. Kept apart from the totals
+   * because a dashboard that mixes "what happened" with "what is waiting for you"
+   * makes the second invisible.
+   */
+  waiting: {
+    seller_orders_unconfirmed: number
+    open_returns: number
+    transfers_to_check: number
+    settlements_open: number
+    failed_refunds: number
+    failed_jobs: number
+  }
+  ai: {
+    jobs: number
+    failed: number
+  }
+}
+
+export interface AdminOrderSeriesPoint {
+  day: string
+  orders: number
+  gross_minor: number
+}
+
+export interface AdminOrderRow extends OrderSummary {
+  customer_email: string | null
+  seller_count: number
+}
+
+export interface AdminAuditRow {
+  id: string
+  action: string
+  actor: string | null
+  actor_type: string | null
+  subject_type: string
+  subject_id: string | null
+  reason: string | null
+  changes: Record<string, unknown> | null
+  context: Record<string, unknown> | null
+  created_at: string | null
+}
+
+export interface AdminPermissionRow {
+  value: string
+  description: string
+  granted: boolean
+}
+
+export interface AdminPermissionMatrix {
+  routes: Record<string, string>
+  permissions: AdminPermissionRow[]
+  uncovered_routes: string[]
+}
+
+export interface FeatureFlagRow {
+  id: string
+  key: string
+  name: string
+  description: string | null
+  is_enabled: boolean
+  rollout_percentage: number
+  updated_at: string | null
+}
+
+export interface SystemSettingRow {
+  id: string
+  key: string
+  group: string
+  label: string
+  description: string | null
+  type: 'string' | 'integer' | 'boolean' | 'json'
+  /** Null for a secret: the value never leaves the server. */
+  value: string | null
+  is_secret: boolean
+  is_set: boolean
+  updated_at: string | null
+}
+
+export interface FailedJobRow {
+  id: number
+  uuid: string
+  queue: string
+  job: string
+  error: string
+  failed_at: string
+}
+
+export interface WebhookEventRow {
+  id: string
+  gateway: string
+  event_type: string | null
+  status: string
+  signature_verified: boolean
+  attempts: number
+  error_message: string | null
+  received_at: string
+}
+
+export interface SystemHealth {
+  failed_jobs: FailedJobRow[]
+  webhooks: WebhookEventRow[]
+  failed_job_count: number
+}

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domains\Payments\Services;
 
+use App\Domains\Administration\Services\Features;
 use App\Domains\Payments\Contracts\PaymentGateway;
 use App\Domains\Payments\Exceptions\GatewayUnavailable;
 
@@ -21,8 +22,21 @@ use App\Domains\Payments\Exceptions\GatewayUnavailable;
  */
 final class GatewayRegistry
 {
+    /**
+     * Which payment methods an operator may switch off from the admin panel.
+     *
+     * A method with no flag is governed by configuration alone. That is deliberate: the
+     * card gateway is not something to turn off by accident during an incident, and a
+     * checkout with no way to pay is a worse outage than a slow one.
+     *
+     * @var array<string, string>
+     */
+    private const FLAGS = ['bank_transfer' => 'checkout.bank-transfer'];
+
     /** @var array<string, PaymentGateway> */
     private array $gateways = [];
+
+    public function __construct(private readonly Features $features) {}
 
     public function register(PaymentGateway $gateway): void
     {
@@ -75,7 +89,22 @@ final class GatewayRegistry
 
     public function isEnabled(string $name): bool
     {
-        return (bool) config("payments.gateways.{$name}.enabled", false);
+        if (! (bool) config("payments.gateways.{$name}.enabled", false)) {
+            return false;
+        }
+
+        /*
+         * Configuration says which providers this deployment has at all; a flag says which
+         * of them are taking money right now. The second is an operational decision — a
+         * bank that has stopped answering, a receiving account being changed — and it
+         * needs to be one click rather than a deploy.
+         *
+         * Only starting a payment is gated. `forExistingPayment()` stays open, so a refund
+         * or a late notification for a payment already taken still reaches its adapter.
+         */
+        $flag = self::FLAGS[$name] ?? null;
+
+        return $flag === null || $this->features->enabled($flag);
     }
 
     /**

@@ -238,6 +238,74 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a demo product page claimed six in stock while the stock screen was empty. Opening
   stock is now booked as a receipt through the ledger.
 
+### Added — Phase 18 (Super admin complete)
+
+- **A permission matrix that no administrative endpoint can escape.** The guarantee is not
+  "these endpoints are protected" — that is a list somebody has to keep up to date, and the
+  entry that is missing is invisible. It is that *no admin route can exist without a
+  decision about who may call it*: route-name prefixes map to permissions, middleware on the
+  whole API group consults the map, and a route with no entry is refused at runtime and
+  fails the suite at build time.
+- **Failing closed.** An unknown admin route is a 403 — not a 404 and not a pass — because
+  "we have not decided who may do this yet" is much closer to "nobody" than to "everybody".
+  The middleware recognises its own territory by path rather than being attached route by
+  route, because a check that has to be remembered is a check that is invisible when it is
+  missing.
+- **The longest prefix wins**, so reading a settlement and approving one can be different
+  powers even though they live under the same prefix.
+- **Nine new platform permissions and three roles that mean something.** An analyst reads
+  and cannot press a single verb; an operator works every queue but cannot touch the
+  platform's own switches; a super admin can. Turning a feature on for everybody is a
+  release decision rather than an operational one, and it is the only power on these
+  screens whose blast radius is the whole platform.
+- **A critical-action audit gate.** Thirteen cases perform an action for real — a bank
+  transfer confirmed, a settlement approved and paid, a manual refund, a credit adjustment,
+  a seller suspended, a return decided, an order moved, a feature flag flipped, a setting
+  changed, a webhook replayed — and then assert the trail: what happened, who did it, and
+  where it costs somebody something, why. The trail is append-only in the database, so the
+  record of a decision cannot be edited by whoever made it.
+- **Feature flags and platform settings that actually do something.** The settlement hold
+  period, the return window and three flags are read by the services that obey them, with
+  the environment as the floor and a stored row as the override. A settings screen that
+  writes rows nothing reads is worse than no screen: it tells whoever used it that they
+  changed the platform, and they will act on that belief.
+- **A missing flag is on.** A feature that switched itself off because somebody forgot to
+  seed a row would be an outage caused by the safety mechanism. Turning something off is a
+  decision, and a decision has a row. A partial rollout buckets on a stable hash of key and
+  user id, so somebody who has the feature keeps it rather than losing it mid-journey.
+- **Switching a payment method off does not strand the money already taken through it.**
+  Only *starting* a payment is gated; refunds and late notifications still reach the adapter
+  that understands them.
+- **A secret is never echoed back** — not to the settings screen, not to whoever set it, and
+  not into the audit log, which is read by more people than a secret store is. An unverified
+  webhook is never replayed either: anybody can post one, and replaying it would let them
+  fabricate a payment.
+- **The admin panel's own screens.** A dashboard that leads with the queue of things still
+  waiting for a person rather than with totals, an order search by the two things a caller
+  on the phone actually has, an audit viewer with the caller's own permissions beside it —
+  so a button they cannot press is explained by a page rather than by a 403 — and a system
+  screen for flags, settings, failed jobs and unprocessed webhooks.
+
+### Fixed — Phase 18
+
+- **A feature check could crash the feature it guards.** The flag model was cached, and an
+  Eloquent object read back out of a shared cache by another process comes back as whatever
+  that process can reconstruct — here an incomplete class and a fatal error, which took out
+  seller onboarding, AI jobs and the bank-transfer method together. Two scalars are cached
+  now, and a test pins the service and the model to the same rollout arithmetic.
+- **The audit list read columns that do not exist.** The viewer mapped `subject_type` and
+  `subject_id`; the table stores `auditable_type` and `auditable_id`, so the one screen an
+  investigation starts from answered 500.
+- **A seller could no longer read their own record.** It was served from
+  `/admin/sellers/{id}`, where the new rule asks whether the caller holds a platform
+  permission — which a seller never does. Rather than carve an exception into the
+  authorisation rule, the seller got `/api/v1/seller/profile` and the administrative path
+  stayed administrative. An authorisation rule with an exception in it is a rule nobody can
+  state.
+- **PHPStan caught two unsound assumptions** in the new code: iterating the route collection
+  through an interface that only promises countability, and an untyped array return on the
+  settings model.
+
 ### Added — Phase 17 (Shipping, returns and refunds)
 
 - **Shipments as parcels, not as a status.** A seller order can ship in several — a sofa

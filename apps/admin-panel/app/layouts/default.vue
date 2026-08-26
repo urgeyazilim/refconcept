@@ -1,11 +1,17 @@
 <script setup lang="ts">
 /**
  * Super Admin shell — operational density, same design family.
- * Full navigation is built out in Phase 18; these are the section anchors.
+ *
+ * Ordered the way a shift is actually worked rather than by importance: the dashboard
+ * first because it says what is waiting, then the queues somebody clears, then the
+ * records they consult, and the platform's own switches last. Sistem sits at the bottom
+ * because an operator cannot open it at all — the matrix reserves it for a super admin,
+ * and a link they can only be refused from is worse than no link.
  */
 const { isAuthenticated, logout } = useAuth()
 
 const nav = [
+  { label: 'Gösterge paneli', to: '/analytics', icon: 'M4 19V5m0 14h16M8 19v-6m4 6V9m4 10v-4' },
   { label: 'Başvurular', to: '/', icon: 'M8 4h8a1 1 0 0 1 1 1v15l-5-3-5 3V5a1 1 0 0 1 1-1Zm2 5h4m-4 4h4' },
   { label: 'Satıcılar', to: '/sellers', icon: 'M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20M10 11.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z' },
   { label: 'Ürünler', to: '/products', icon: 'M20.5 7.5 12 3 3.5 7.5m17 0L12 12m8.5-4.5v9L12 21m0-9L3.5 7.5m8.5 4.5v9' },
@@ -13,6 +19,9 @@ const nav = [
   { label: 'Krediler', to: '/credits', icon: 'M3 8.5h18M3 8.5A1.5 1.5 0 0 1 4.5 7h15A1.5 1.5 0 0 1 21 8.5m-18 0v8A1.5 1.5 0 0 0 4.5 18h15a1.5 1.5 0 0 0 1.5-1.5v-8M7 14h3' },
   { label: 'Ödemeler', to: '/payments', icon: 'M4 6h16v12H4zM4 10h16M8 15h4' },
   { label: 'Finans', to: '/finance', icon: 'M12 3v18M8 7h6a2 2 0 0 1 0 4h-4a2 2 0 0 0 0 4h6' },
+  { label: 'Siparişler', to: '/orders', icon: 'M6 2h9l3 3v17H6zM9 9h6M9 13h6M9 17h4' },
+  { label: 'Denetim', to: '/audit', icon: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14Zm5 12 4 4' },
+  { label: 'Sistem', to: '/system', icon: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm7.4-3a7.4 7.4 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.5 7.5 0 0 0-2-1.2l-.4-2.5h-4l-.4 2.5c-.7.3-1.4.7-2 1.2l-2.3-1-2 3.4 2 1.5a7.4 7.4 0 0 0 0 2.4l-2 1.5 2 3.4 2.3-1c.6.5 1.3.9 2 1.2l.4 2.5h4l.4-2.5c.7-.3 1.4-.7 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z' },
 ]
 </script>
 

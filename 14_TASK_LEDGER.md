@@ -115,6 +115,13 @@
 | P17-T004 | 17 | BACKEND_AGENT | P17-T003 | DONE | provider failure tests | A refused refund is retryable and posts nothing until the money moves |
 | P17-T005 | 17 | BACKEND_AGENT | P17-T004 | DONE | settlement hold | E2E-09: an open return blocks the payout and releases it when resolved |
 | P17-T006 | 17 | INDEPENDENT_TEST_AGENT | P17-T001..005 | DONE | Phase 17 gate | 709 backend tests, 55 E2E journeys, 3 defects found and fixed (see TEST_REPORT.md) |
+| P18-T001 | 18 | ARCHITECT_AGENT | P17-T006 | DONE | permission matrix design | Route-name prefixes to permissions, longest match wins, unclaimed means refused |
+| P18-T002 | 18 | BACKEND_AGENT | P18-T001 | DONE | matrix + middleware | Registered on the whole API group and self-selecting, so it cannot be forgotten |
+| P18-T003 | 18 | BACKEND_AGENT | P18-T002 | DONE | admin surfaces | Analytics, orders, audit trail, feature flags, settings, failed jobs and webhooks |
+| P18-T004 | 18 | BACKEND_AGENT | P18-T003 | DONE | the switches do something | Hold days, return window and three flags read by the services that obey them |
+| P18-T005 | 18 | FRONTEND_AGENT | P18-T003 | DONE | admin UI slice | Dashboard leading with the queue, order search, audit viewer with the permission matrix, system screen |
+| P18-T006 | 18 | BACKEND_AGENT | P18-T004 | DONE | critical action audit | Thirteen actions performed for real, each asserting who and why |
+| P18-T007 | 18 | INDEPENDENT_TEST_AGENT | P18-T001..006 | DONE | Phase 18 gate | 747 backend tests, 61 E2E journeys, 4 defects found and fixed (see TEST_REPORT.md) |
 
 ## Scope notes
 
