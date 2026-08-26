@@ -110,6 +110,55 @@ it('records a parcel and moves the order with it', function (): void {
         ->and($response->json('data.seller_order.status'))->toBe('confirmed');
 });
 
+it('tells the seller what is still on the shelf', function (): void {
+    $this->statuses->advance($this->sellerOrder, SellerOrderStatus::Confirmed);
+
+    $ordered = $this->item->quantity;
+
+    $before = $this->actingAs($this->sellerOwner)
+        ->getJson('/api/v1/seller/orders/'.$this->sellerOrder->seller_order_number.'/shipments')
+        ->assertOk();
+
+    expect($before->json('meta.pending.0.remaining'))->toBe($ordered);
+
+    $this->actingAs($this->sellerOwner)
+        ->postJson('/api/v1/seller/orders/'.$this->sellerOrder->seller_order_number.'/shipments', [
+            'items' => [['order_item_id' => (string) $this->item->getKey(), 'quantity' => 1]],
+        ])
+        ->assertCreated();
+
+    /*
+     * Sent rather than left to the caller. The alternative is every client subtracting
+     * shipment lines from order lines itself — arithmetic that has to be right in three
+     * places, and that a seller would otherwise do in their head while looking at a
+     * screen that already knows the answer.
+     */
+    $after = $this->actingAs($this->sellerOwner)
+        ->getJson('/api/v1/seller/orders/'.$this->sellerOrder->seller_order_number.'/shipments')
+        ->assertOk();
+
+    expect($after->json('meta.pending.0.remaining'))->toBe($ordered - 1)
+        ->and($after->json('meta.pending.0.ordered'))->toBe($ordered);
+});
+
+it('drops a line from the pending list once it has all gone', function (): void {
+    $this->statuses->advance($this->sellerOrder, SellerOrderStatus::Confirmed);
+
+    $this->actingAs($this->sellerOwner)
+        ->postJson('/api/v1/seller/orders/'.$this->sellerOrder->seller_order_number.'/shipments', [
+            'items' => [['order_item_id' => (string) $this->item->getKey(), 'quantity' => $this->item->quantity]],
+        ])
+        ->assertCreated();
+
+    // A finished line is dropped rather than sent as a zero: a seller shipping the last of
+    // four parcels should see one row, not hunt for it among three that are done.
+    $response = $this->actingAs($this->sellerOwner)
+        ->getJson('/api/v1/seller/orders/'.$this->sellerOrder->seller_order_number.'/shipments')
+        ->assertOk();
+
+    expect($response->json('meta.pending'))->toBe([]);
+});
+
 it('will not let one seller ship another seller order', function (): void {
     [, $otherOwner] = makeApprovedSeller('Başka Kargo', 'baska-kargo');
 

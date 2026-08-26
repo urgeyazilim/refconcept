@@ -122,6 +122,12 @@
 | P18-T005 | 18 | FRONTEND_AGENT | P18-T003 | DONE | admin UI slice | Dashboard leading with the queue, order search, audit viewer with the permission matrix, system screen |
 | P18-T006 | 18 | BACKEND_AGENT | P18-T004 | DONE | critical action audit | Thirteen actions performed for real, each asserting who and why |
 | P18-T007 | 18 | INDEPENDENT_TEST_AGENT | P18-T001..006 | DONE | Phase 18 gate | 747 backend tests, 61 E2E journeys, 4 defects found and fixed (see TEST_REPORT.md) |
+| P19-T001 | 19 | ARCHITECT_AGENT | P18-T007 | DONE | portal gap analysis | Missing: a team, a real dashboard, a parcel screen, and remaining quantities per line |
+| P19-T002 | 19 | BACKEND_AGENT | P19-T001 | DONE | seller team API | Two roles, membership and role written together, the last owner refused |
+| P19-T003 | 19 | BACKEND_AGENT | P19-T001 | DONE | seller dashboard API | The queue first, the money from the ledger projection, everything scoped to the caller |
+| P19-T004 | 19 | BACKEND_AGENT | P19-T001 | DONE | pending shipment lines | What is still on the shelf, sent rather than left to each client to work out |
+| P19-T005 | 19 | FRONTEND_AGENT | P19-T002..004 | DONE | portal UI slice | Dashboard, team screen, parcel screen; buttons absent rather than disabled, with the reason said |
+| P19-T006 | 19 | INDEPENDENT_TEST_AGENT | P19-T001..005 | DONE | Phase 19 gate | 775 backend tests, 67 E2E journeys, 3 defects found and fixed (see TEST_REPORT.md) |
 
 ## Scope notes
 

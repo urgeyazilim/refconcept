@@ -12,19 +12,19 @@ WEB
 IN_PROGRESS
 
 ## Current Phase
-PHASE_19
+PHASE_20
 
 ## Current Task
-Not started — Phase 18 is closed; Phases 12 and 13 remain deferred (see below) and Phase 19 has not begun.
+Not started — Phase 19 is closed; Phases 12 and 13 remain deferred (see below) and Phase 20 has not begun.
 
 ## Last Completed Task
-P18-T007 — Phase 18 gate verified end to end (see `TEST_REPORT.md`).
+P19-T006 — Phase 19 gate verified end to end (see `TEST_REPORT.md`).
 
 ## Next Task
-Phase 19 — Seller Portal Complete, shipping its own UI slice alongside its API.
+Phase 20 — Storefront Complete + Approved Design Language.
 
 ## Test State
-PASS — 747 backend tests / 2372 assertions, 61 Playwright E2E journeys across all three
+PASS — 775 backend tests / 2467 assertions, 67 Playwright E2E journeys across all three
 apps, PHPStan level 6, Pint, ESLint, vue-tsc and the design token guard all clean.
 
 ## Release State
@@ -1163,6 +1163,75 @@ record went through `/admin/sellers/{id}`, where the new rule asks whether the c
 a platform permission — which a seller never does. Rather than carve an exception into the
 authorisation rule (a rule with an exception in it is a rule nobody can state), the seller
 got `/api/v1/seller/profile`, and the administrative path stayed administrative.
+
+### PHASE_19_SELLER_PORTAL_COMPLETE — DONE (2026-08-26)
+
+```text
+UPDATED_AT: 2026-08-26
+COMMIT_OR_SNAPSHOT: phase-19-seller-portal
+PHASE: 19 — Seller Portal Complete
+TASK: P19-T001 .. P19-T006
+STATUS: DONE
+FILES_CHANGED:
+  apps/api/app/Domains/Sellers/Services/SellerTeam.php
+  apps/api/app/Domains/Sellers/Exceptions/TeamRefused.php
+  apps/api/app/Domains/Sellers/Http/Controllers/{SellerTeamController,SellerDashboardController}.php
+  apps/api/app/Domains/Sellers/Tests/{SellerTeamTest,SellerDashboardTest}.php
+  apps/api/app/Domains/Fulfilment/Http/Controllers/SellerFulfilmentController.php  (pending lines)
+  apps/api/app/Domains/Fulfilment/Tests/FulfilmentHttpTest.php
+  apps/api/app/Domains/Identity/Enums/SystemRole.php  (staff may read the team)
+  apps/api/routes/domains/sellers.php, bootstrap/app.php
+  packages/ui/src/runtime/types.ts
+  apps/seller-portal/app/pages/{index,team,shipping}.vue, app/layouts/default.vue
+  tests/e2e/seller-portal.spec.ts
+MIGRATIONS: none — the membership and role tables have been in place since Phase 1
+TESTS_RUN: php artisan test · phpstan level 6 · pint · eslint · vue-tsc
+  · check-design-tokens.mjs · playwright (full suite)
+TEST_RESULT: PASS (775 backend tests / 2467 assertions; 67 E2E journeys)
+BLOCKERS: none
+NEXT_ACTION: Phase 20 — Storefront Complete + Approved Design Language
+```
+
+**A seller is a company, not a person.** Somebody dispatches parcels, somebody else answers
+returns, and the person whose name is on the bank account does neither. A platform that
+does not model that has not removed the problem — the company solves it by sharing one
+login, and then every audit entry says "the seller" and means nobody.
+
+**Two roles, and no third.** An owner can change the team and the payout account; staff work
+the day-to-day and cannot. A third rung would need a permission editor, and a permission
+editor a seller can use is a way for a seller to lock themselves out of their own account.
+
+**The last owner is refused.** A company with no owner is a company where nobody can add one
+back, and the only way out is a support ticket and a console command. The API refuses it and
+the screen refuses it first, so the refusal arrives as an explanation rather than as an error.
+
+**One person, one seller.** Somebody on two teams would see two companies' orders through
+one session, and every isolation guarantee in this platform is written per organization.
+
+**Membership and role are written together.** A membership with no role is somebody who can
+sign in and see nothing; a role with no membership is a permission pointing at a company the
+person does not belong to. Neither state means anything, so neither is reachable.
+
+**A removed member is marked, not deleted.** The orders they confirmed and the returns they
+decided still name them, and an audit trail pointing at a row that no longer exists has lost
+the answer it was kept for.
+
+**The dashboard leads with the queue.** A seller already knows roughly what they sold; what
+they do not know is that four orders have been sitting unconfirmed since Friday. Revenue
+first would look impressive and bury the only part that needed acting on this morning. Low
+stock and nothing-on-the-shelf are counted separately, because one is a reminder and the
+other is a listing that has stopped selling.
+
+**The parcel screen knows what is left.** The remaining quantity per line comes from the
+server rather than from each client subtracting shipment lines from order lines — arithmetic
+that would have to be right in three places, and that a seller would otherwise do in their
+head while looking at a screen that already knows the answer.
+
+**A permission added to the enum is not a permission granted.** The map lives in
+`SystemRole`, the grants live in the database, and `RolesAndPermissionsSeeder` is what
+reconciles them — with `sync()`, so a permission *removed* from the enum is removed from the
+role too. Phase 19's E2E run caught the deployment consequence: the code was right and the
+environment was stale.
 
 ---
 

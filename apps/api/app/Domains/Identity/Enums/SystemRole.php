@@ -105,6 +105,16 @@ enum SystemRole: string
 
             self::SellerStaff => [
                 Permission::SellerProfileView,
+
+                /*
+                 * Reading the team, but never changing it.
+                 *
+                 * Somebody working a returns queue sees "kim onayladı" next to a decision,
+                 * and a name they cannot look up is worse than no name. Who may *join* the
+                 * company, and what they may do once they have, stays with the owner —
+                 * that is the whole distinction between the two roles.
+                 */
+                Permission::SellerUsersView,
             ],
         };
     }

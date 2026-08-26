@@ -87,10 +87,24 @@ Main:
 all checks
 → deploy staging
 → migrate
+→ seed reference data
 → E2E
 → smoke
 → release gate
 ```
+
+### Reference data is part of a deploy, not part of setup
+
+`RolesAndPermissionsSeeder` and `PlatformSettingsSeeder` run on **every** deploy, not only
+on a fresh stack. Both are idempotent, and the roles seeder uses `sync()` so a permission
+removed from `SystemRole` is removed from the role rather than lingering as a grant nobody
+intended.
+
+The reason is that the role → permission map lives in code and the grants live in rows. A
+permission added to the enum and not seeded is a feature that fails for exactly the people
+it was written for, with nothing in the logs to say why — Phase 19 shipped a screen staff
+could not open on a stale environment while every test passed. The code was right and the
+database was old, which is the hardest version of this bug to recognise.
 
 ## Observability
 - trace/request ID

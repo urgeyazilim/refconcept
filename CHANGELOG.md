@@ -238,6 +238,52 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a demo product page claimed six in stock while the stock screen was empty. Opening
   stock is now booked as a receipt through the ledger.
 
+### Added — Phase 19 (Seller portal complete)
+
+- **A seller can have colleagues.** Somebody dispatches parcels, somebody else answers
+  returns, and the person whose name is on the bank account does neither. Two roles, and no
+  third: an owner changes the team and the payout account, staff work the day-to-day. A
+  third rung would need a permission editor, and a permission editor a seller can use is a
+  way for a seller to lock themselves out of their own account.
+- **The last owner cannot demote or remove themselves.** A company with no owner is a
+  company where nobody can add one back, and the only way out is a support ticket and a
+  console command. Refused by the API and by the screen, so the refusal arrives as an
+  explanation rather than as an error.
+- **One person belongs to one seller.** Somebody on two teams would see two companies'
+  orders through one session, and every isolation guarantee in this platform is written per
+  organization.
+- **The person being added must already have an account.** Creating one from a team screen
+  would let a seller set a password for an address they do not control, and "somebody added
+  me to their company" is not a reason to hand over an account.
+- **A removed member is marked, not deleted**, because the orders they confirmed and the
+  returns they decided still name them — and they can be added back, since somebody
+  returning from leave is not a new company.
+- **A real seller dashboard**, leading with the queue rather than with revenue: orders not
+  yet confirmed, parcels not yet sent, returns nobody has answered, stock running out,
+  listings still in moderation. Each one is a way in rather than a number to write down.
+  Low stock and nothing-on-the-shelf are counted separately, because one is a reminder and
+  the other is a listing that has stopped selling.
+- **A parcel screen.** A shipment is a physical thing with a carrier and a tracking number,
+  and one order can have several. The remaining quantity per line comes from the server, so
+  no client has to subtract shipment lines from order lines and no seller has to do it in
+  their head. Delivery is marked per parcel; the order becomes "kargoya verildi" on its own
+  once everything has actually gone.
+- **Staff can read the team and change nothing.** Somebody working a returns queue sees
+  "kim onayladı" next to a decision, and a name they cannot look up is worse than no name.
+  The management controls are absent rather than disabled, and the page says why — a
+  greyed-out button nobody can explain reads as a bug.
+
+### Fixed — Phase 19
+
+- **The seller's dashboard queried a column that does not exist.** Listings are owned by an
+  organization rather than by a seller row, so every catalogue count answered 500.
+- **A team listing was a lazy-load away from failing.** `displayName()` reads the profile,
+  lazy loading is disabled on purpose, and a list of twenty members would otherwise have
+  been twenty extra queries.
+- **A permission added to the enum is not a permission granted.** The E2E run caught the
+  deployment consequence: the role map is code and the grants are rows, and
+  `RolesAndPermissionsSeeder` is what reconciles them.
+
 ### Added — Phase 18 (Super admin complete)
 
 - **A permission matrix that no administrative endpoint can escape.** The guarantee is not

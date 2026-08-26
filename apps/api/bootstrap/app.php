@@ -18,6 +18,7 @@ use App\Domains\Payments\Console\ExpireBankTransfersCommand;
 use App\Domains\Payments\Console\ExpireCheckoutSessionsCommand;
 use App\Domains\Payments\Exceptions\CheckoutRefused;
 use App\Domains\Payments\Exceptions\GatewayUnavailable;
+use App\Domains\Sellers\Exceptions\TeamRefused;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -115,6 +116,12 @@ return Application::configure(basePath: dirname(__DIR__))
         // Shipping, returns and refunds. A closed return window is a 422 the customer can
         // read; a return that is not theirs is a 404 that confirms nothing.
         $exceptions->render(function (FulfilmentRefused $e) {
+            return response()->json(['message' => $e->getMessage()], $e->status);
+        });
+
+        // And a seller's own team. "You are the last owner" is a 409 rather than a 422:
+        // the request was well formed and the platform is refusing on the seller's behalf.
+        $exceptions->render(function (TeamRefused $e) {
             return response()->json(['message' => $e->getMessage()], $e->status);
         });
 

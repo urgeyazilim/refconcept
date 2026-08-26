@@ -8,6 +8,7 @@ const { isAuthenticated, logout } = useAuth()
 const nav = [
   { label: 'Panel', to: '/', icon: 'M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-16v5h6V4h-6Z' },
   { label: 'Siparişlerim', to: '/orders', icon: 'M6 2h9l3 3v17H6zM9 8h6M9 12h6M9 16h4' },
+  { label: 'Kargo', to: '/shipping', icon: 'M3 8h13v9H3zM16 11h3l2 3v3h-5zM7 20a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm11 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z' },
   { label: 'İadeler', to: '/returns', icon: 'M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3' },
   { label: 'Hakedişlerim', to: '/earnings', icon: 'M12 3v18M8 7h6a2 2 0 0 1 0 4h-4a2 2 0 0 0 0 4h6' },
   { label: 'Ürünlerim', to: '/products', icon: 'M20.5 7.5 12 3 3.5 7.5m17 0L12 12m8.5-4.5v9L12 21m0-9L3.5 7.5m8.5 4.5v9' },
@@ -15,6 +16,7 @@ const nav = [
   { label: 'Stok', to: '/stock', icon: 'M3 7.5 12 3l9 4.5v9L12 21l-9-4.5v-9Zm0 0 9 4.5m0 0 9-4.5m-9 4.5V21' },
   { label: 'Toplu aktarma', to: '/imports', icon: 'M12 15V4m0 0L8 8m4-4 4 4M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2' },
   { label: 'Entegrasyonlar', to: '/integrations', icon: 'M15 7a4 4 0 1 1-3.9 5H7v3H4v-3.1A4 4 0 0 1 11.1 8H15Z' },
+  { label: 'Ekibim', to: '/team', icon: 'M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20M10 11.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm10 8.5v-1.5a3.5 3.5 0 0 0-2.6-3.4M15 4.6a3.5 3.5 0 0 1 0 6.8' },
   { label: 'Başvurum', to: '/onboarding', icon: 'M8 4h8a1 1 0 0 1 1 1v15l-5-3-5 3V5a1 1 0 0 1 1-1Zm2 5h4m-4 4h4' },
 ]
 </script>

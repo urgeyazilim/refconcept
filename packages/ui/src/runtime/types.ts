@@ -1217,3 +1217,68 @@ export interface SystemHealth {
   webhooks: WebhookEventRow[]
   failed_job_count: number
 }
+
+// --- seller team and shipping (Phase 19) ------------------------------------------
+
+export interface SellerTeamMember {
+  id: string
+  user_id: string
+  email: string | null
+  name: string | null
+  status: 'invited' | 'active'
+  role: string | null
+  role_label: string | null
+  invited_at: string | null
+  joined_at: string | null
+}
+
+export interface SellerTeamRole {
+  value: string
+  label: string
+  description: string
+}
+
+export interface SellerTeamMeta {
+  /** What the caller may do, so a missing button can be explained rather than 403. */
+  can_manage: boolean
+  your_role: string | null
+  roles: SellerTeamRole[]
+}
+
+/** A line with something still on the shelf. Fully shipped lines are not sent. */
+export interface PendingShipmentLine {
+  order_item_id: string
+  product_name: string
+  sku_code: string | null
+  ordered: number
+  remaining: number
+}
+
+export interface SellerDashboard {
+  waiting: {
+    unconfirmed_orders: number
+    to_ship: number
+    open_returns: number
+    low_stock: number
+    pending_moderation: number
+  }
+  sales: {
+    period_days: number
+    orders: number
+    gross_minor: number
+    commission_minor: number
+    payable_minor: number
+  }
+  earnings: {
+    currency: string
+    available_minor: number
+    pending_minor: number
+    in_settlement_minor: number
+    paid_minor: number
+  }
+  catalogue: {
+    live: number
+    draft: number
+    out_of_stock: number
+  }
+}

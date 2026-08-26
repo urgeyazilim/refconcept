@@ -77,7 +77,19 @@ final class SellerFulfilmentController
             ->orderBy('created_at')
             ->get();
 
-        return $this->json(['data' => $shipments->map->toArray()->all()]);
+        return $this->json([
+            'data' => $shipments->map->toArray()->all(),
+
+            /*
+             * What is still on the shelf, per line.
+             *
+             * Sent rather than left to the caller, because the alternative is every client
+             * subtracting shipment lines from order lines itself — arithmetic that has to
+             * be right in three places, and that a seller would otherwise do in their head
+             * while looking at a screen that already knows the answer.
+             */
+            'meta' => ['pending' => $this->pendingLines($sellerOrder)],
+        ]);
     }
 
     public function markDelivered(Request $request, string $number, Shipment $shipment): JsonResponse
@@ -172,6 +184,40 @@ final class SellerFulfilmentController
     }
 
     // --- internals -----------------------------------------------------------
+
+    /**
+     * The lines that still have something on them, with what is left.
+     *
+     * Lines that are fully out are dropped rather than sent with a zero, so a seller
+     * shipping the last of four parcels sees one row instead of hunting for the row that
+     * is not finished among three that are.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function pendingLines(SellerOrder $sellerOrder): array
+    {
+        $sellerOrder->loadMissing('items');
+
+        $pending = [];
+
+        foreach ($sellerOrder->items as $item) {
+            $remaining = $item->quantity - $this->shipments->shippedQuantity($item);
+
+            if ($remaining <= 0) {
+                continue;
+            }
+
+            $pending[] = [
+                'order_item_id' => $item->id,
+                'product_name' => $item->product_name,
+                'sku_code' => $item->sku_code,
+                'ordered' => $item->quantity,
+                'remaining' => $remaining,
+            ];
+        }
+
+        return $pending;
+    }
 
     private function ownedOrder(Request $request, string $number): SellerOrder
     {

@@ -1471,6 +1471,84 @@ own account and a person confirms it against a statement.
 
 ---
 
+## Phase 19 — Seller portal complete
+
+**Date:** 2026-08-26
+**Scope:** a seller's whole working day, and the wall around it.
+
+### Gate criteria (04_WEB_PHASE_PLAN.md: full seller E2E and isolation)
+
+| # | Criterion | Method | Result |
+|---|---|---|---|
+| 1 | **An owner adds a colleague who already has an account** | Pest (HTTP) + Playwright | **PASS** |
+| 2 | The membership and the role are written together | Pest (HTTP) | **PASS** — neither half means anything alone |
+| 3 | An address with no account behind it is refused | Pest (HTTP) | **PASS** — a seller must not set a password for an address they do not control |
+| 4 | The same person cannot be added twice | Pest (HTTP) | **PASS** — 409 |
+| 5 | **A platform role cannot be granted from the team screen** | Pest (HTTP) | **PASS** — otherwise it is a privilege-escalation endpoint wearing a team screen |
+| 6 | **The last owner cannot demote themselves** | Pest (HTTP) + Playwright | **PASS** — the refusal that saves somebody their account |
+| 7 | **The last owner cannot remove themselves** | Pest (HTTP) + Playwright | **PASS** — no button at all, not a disabled one |
+| 8 | An owner can step back once there is a second one | Pest (HTTP) | **PASS** |
+| 9 | A removed member is marked rather than deleted | Pest (HTTP) | **PASS** — their decisions still name them |
+| 10 | A removed member loses access immediately | Pest (HTTP) | **PASS** — the role went with the membership |
+| 11 | A removed member can be added back | Pest (HTTP) | **PASS** — somebody back from leave is not a new company |
+| 12 | **Staff read the team and change nothing** | Pest (HTTP) + Playwright | **PASS** — controls absent, with the reason said out loud |
+| 13 | **One seller cannot touch another seller team** | Pest (HTTP) + Playwright | **PASS** — 404, not 403 |
+| 14 | Somebody who already works elsewhere is refused | Pest (HTTP) | **PASS** — one person, one seller |
+| 15 | A customer reaches no team endpoint at all | Pest (HTTP) | **PASS** |
+| 16 | Every team change is audited | Pest (HTTP) | **PASS** — who let somebody in, and who changed what they may do |
+| 17 | **The dashboard counts an unconfirmed order** | Pest (HTTP) + Playwright | **PASS** — the number somebody opens the page for |
+| 18 | Confirming moves it to the parcel queue | Pest (HTTP) | **PASS** — confirming does not finish the work |
+| 19 | Stock running low is counted | Pest (HTTP) | **PASS** |
+| 20 | **Nothing-on-the-shelf is counted separately from low stock** | Pest (HTTP) | **PASS** — one is a reminder, the other has stopped selling |
+| 21 | **The seller is shown what is theirs, not what the customer paid** | Pest (HTTP) | **PASS** — gross minus commission |
+| 22 | The balances come from the ledger projection | Pest (HTTP) | **PASS** — four states, because the money is in four |
+| 23 | **The dashboard never counts another seller work** | Pest (HTTP) + Playwright | **PASS** — and has no id to ask with |
+| 24 | It answers a member of staff as well as an owner | Pest (HTTP) + Playwright | **PASS** — staff have no application of their own |
+| 25 | An account with no seller behind it is refused | Pest (HTTP) | **PASS** — 404 |
+| 26 | Per-seller figures are never cached in a shared store | Pest (HTTP) | **PASS** — `no-store, private` |
+| 27 | **A parcel carries part of an order** | Pest (HTTP) + Playwright | **PASS** |
+| 28 | **The remaining quantity per line comes from the server** | Pest (HTTP) + Playwright | **PASS** — the gate's other half; no client does the arithmetic |
+| 29 | A finished line drops out of the pending list | Pest (HTTP) | **PASS** — not sent as a zero to hunt through |
+| 30 | The order does not become "shipped" until everything has gone | Playwright | **PASS** — a customer told otherwise waits on a lie |
+| 31 | A colleague added on the screen can do the work | Playwright | **PASS** — the point of the whole feature |
+| 32 | One seller sees an empty parcel screen for another's orders | Playwright | **PASS** |
+
+### Defects found and fixed in this phase
+
+| Id | Severity | Defect | Fix |
+|---|---|---|---|
+| P19-D001 | **P1** | The seller dashboard queried `products.seller_id`, a column that does not exist — listings are owned by an organization. Every catalogue and stock figure answered 500, which is to say the new front page did not load at all. | Scoped by `organization_id`, matching how the rest of the catalogue is owned |
+| P19-D002 | P2 | The team listing lazy-loaded the user profile through `displayName()`. Lazy loading is disabled deliberately, so the listing threw; without that guard it would have been twenty extra queries for a twenty-person team. | Eager-loaded `user.profile` |
+| P19-D003 | P2 | A permission added to `SystemRole` is not a permission granted: the map is code and the grants are rows. Staff could not open the team screen on a stack whose roles had not been re-seeded — the code was right and the environment was stale. | Re-seeded; `RolesAndPermissionsSeeder` uses `sync()`, so removals propagate too. Recorded as a release step |
+
+### Known limitations
+
+- **No invitation e-mail.** A colleague must already have a RefConcept account, and the
+  owner adds them by address. An invite flow that creates the account would mean a seller
+  setting a password for somebody else's e-mail; doing it properly needs a signed
+  invitation link and its own expiry rules, which is a feature rather than a detail.
+- **Two roles only.** No per-screen permissions for sellers. A permission editor a seller
+  can operate is a way for a seller to lock themselves out, and the shape of a third role
+  is not yet known from real use.
+- **Low stock is a fixed threshold** (five). A per-product reorder point is a warehouse
+  feature and belongs with one.
+- **No carrier integration**, unchanged from Phase 17: carrier and tracking number are free
+  text and the seller arranges the parcel.
+
+### Test suite state after Phase 19
+
+| Suite | Command | Result |
+|---|---|---|
+| Backend | `php artisan test` | **775 passed**, 2467 assertions |
+| Static analysis | `phpstan analyse` (level 6) | **No errors** |
+| Style | `pint --test` | **PASS** — 510 files |
+| Frontend lint | `npm run lint` | **PASS** — three apps |
+| Frontend types | `npm run typecheck` | **PASS** — vue-tsc, three apps |
+| Design tokens | `node scripts/check-design-tokens.mjs` | **PASS** — no foreign colours |
+| E2E | `npx playwright test` | **67 passed** |
+
+---
+
 ## Phase 18 — Super admin complete
 
 **Date:** 2026-08-26

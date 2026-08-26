@@ -306,6 +306,13 @@ test.describe('seller review', () => {
     // --- the applicant sees their live seller account -------------------------
     await signIn(page, applicant.email)
 
-    await expect(page.getByText('Satıcı hesabınız aktif')).toBeVisible()
+    /*
+     * Approval swaps the front page rather than adding a banner to it. Somebody whose
+     * account has just opened does not need to be told again that it opened; they need
+     * to know what is waiting for them, which from this moment is the only question the
+     * page exists to answer.
+     */
+    await expect(page.getByRole('heading', { name: 'Sizi bekleyenler' })).toBeVisible()
+    await expect(page.getByTestId('seller-queue-unconfirmed')).toBeVisible()
   })
 })
