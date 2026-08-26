@@ -9,6 +9,8 @@ export interface ListedProduct {
   skuId: string
   slug: string
   sellerToken: string
+  /** The seller owner's own address, for tests that sign into the portal as them. */
+  sellerEmail: string
   operatorToken: string
 }
 
@@ -115,6 +117,7 @@ export async function listProduct(
     skuId,
     slug,
     sellerToken: seller.account.token,
+    sellerEmail: seller.account.email,
     operatorToken: seller.operator.token,
   }
 }

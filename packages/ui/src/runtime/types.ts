@@ -807,3 +807,114 @@ export interface BankTransferRow {
   is_decidable: boolean
   receipt_count: number
 }
+
+/*
+ * Orders.
+ *
+ * A marketplace order is read two ways: the customer sees one order made of several
+ * parcels, and each seller sees only their own. The two shapes are separate on purpose —
+ * a seller's payload must not be a filtered view of the customer's, because a filter is
+ * something somebody can forget to apply.
+ */
+
+export type OrderStatus =
+  | 'paid'
+  | 'processing'
+  | 'partially_shipped'
+  | 'shipped'
+  | 'delivered'
+  | 'cancelled'
+  | 'refunded'
+  | 'partially_refunded'
+
+export type SellerOrderStatus =
+  | 'awaiting_confirmation'
+  | 'confirmed'
+  | 'preparing'
+  | 'shipped'
+  | 'delivered'
+  | 'cancelled'
+  | 'returned'
+
+export interface OrderLine {
+  id: string
+  product_name: string
+  sku_code: string | null
+  variant_label: string | null
+  image_url: string | null
+  quantity: number
+  unit_price_minor: number
+  line_total_minor: number
+  tax_minor: number
+  design_match_id: string | null
+}
+
+export interface OrderSellerGroup {
+  id: string
+  seller_order_number: string
+  seller_name: string | null
+  status: SellerOrderStatus
+  status_label: string
+  total_minor: number
+  shipped_at: string | null
+  delivered_at: string | null
+  items: OrderLine[]
+}
+
+export interface OrderSummary {
+  id: string
+  order_number: string
+  status: OrderStatus
+  status_label: string
+  currency: string
+  item_count: number
+  totals: {
+    subtotal_minor: number
+    discount_minor: number
+    shipping_minor: number
+    tax_minor: number
+    grand_total_minor: number
+  }
+  placed_at: string
+}
+
+export interface OrderDetail extends OrderSummary {
+  shipping_address: Record<string, string | null> | null
+  billing_address: Record<string, string | null> | null
+  customer_note: string | null
+  sellers: OrderSellerGroup[]
+}
+
+export interface SellerOrderSummary {
+  id: string
+  seller_order_number: string
+  order_number: string | null
+  status: SellerOrderStatus
+  status_label: string
+  currency: string
+  subtotal_minor: number
+  tax_minor: number
+  total_minor: number
+  commission_minor: number
+  payable_minor: number
+  item_count: number
+  placed_at: string | null
+  confirmed_at: string | null
+  shipped_at: string | null
+  delivered_at: string | null
+  next_statuses: Array<{ value: SellerOrderStatus, label: string }>
+}
+
+export interface SellerOrderDetail extends SellerOrderSummary {
+  recipient: {
+    name: string | null
+    phone: string | null
+    city: string | null
+    district: string | null
+    address_line1: string | null
+    address_line2: string | null
+    postal_code: string | null
+  }
+  cancellation_reason: string | null
+  items: OrderLine[]
+}

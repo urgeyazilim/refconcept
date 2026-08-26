@@ -96,6 +96,12 @@
 | P14-T004 | 14 | DEVOPS_SECURITY_AGENT | P14-T001 | DONE | access tests | payments.view and payments.settle split; receipts only via short-lived signed links |
 | P14-T005 | 14 | STOREFRONT_AGENT | P14-T002..004 | DONE | transfer E2E | Method choice, reference page, receipt upload; finance queue in the admin panel |
 | P14-T006 | 14 | INDEPENDENT_TEST_AGENT | P14-T001..005 | DONE | Phase 14 gate | 619 backend tests, 42 E2E journeys, 2 defects found and fixed (see TEST_REPORT.md) |
+| P15-T001 | 15 | ARCHITECT_AGENT | P14-T006 | DONE | schema review | Master order per payment, seller order per seller, everything on a line snapshotted, append-only history |
+| P15-T002 | 15 | BACKEND_AGENT | P15-T001 | DONE | split tests | E2E-06: one payment, one order, one seller order per seller, each with their own total |
+| P15-T003 | 15 | BACKEND_AGENT | P15-T001 | DONE | status machine tests | Declared transitions per seller order; master status derived; partially_shipped is real |
+| P15-T004 | 15 | BACKEND_AGENT | P15-T003 | DONE | stock tests | Cancelling before shipping returns the stock; shipped cannot be cancelled |
+| P15-T005 | 15 | STOREFRONT_AGENT | P15-T002..004 | DONE | orders E2E | Customer list and detail grouped by seller; seller queue with payable next to gross |
+| P15-T006 | 15 | INDEPENDENT_TEST_AGENT | P15-T001..005 | DONE | Phase 15 gate | 645 backend tests, 46 E2E journeys, 2 defects found and fixed (see TEST_REPORT.md) |
 
 ## Scope notes
 

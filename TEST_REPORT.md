@@ -1332,3 +1332,70 @@ own account and a person confirms it against a statement.
 - **One currency in practice.** The schema carries a currency on both the account and the
   transfer, and the account lookup filters on it, but nothing else in the platform sells in
   anything but TRY yet.
+
+---
+
+## Phase 15 — Orders and seller orders
+
+**Date:** 2026-08-26
+**Scope:** what was bought, from whom, and how far along it is.
+
+### Gate criteria (04_WEB_PHASE_PLAN.md: multi-seller E2E · E2E-06)
+
+| # | Criterion | Method | Result |
+|---|---|---|---|
+| 1 | **One payment becomes one master order** | Pest + Playwright | **PASS** |
+| 2 | **One seller order per seller in the basket** | Pest + Playwright | **PASS** — two sellers, two parcels, two statuses |
+| 3 | Each seller's total is their own goods | Pest + Playwright | **PASS** — not a share of the basket |
+| 4 | The customer gets one number, each seller their own | Pest + Playwright | **PASS** — derived from the master, so support can tell they are the same order |
+| 5 | **A duplicate confirmation makes one order** | Pest + unique index | **PASS** — the fulfiller re-run produces nothing new |
+| 6 | Each seller is told about their own part only | Pest | **PASS** — two notifications, neither mentioning the other seller |
+| 7 | **The product name is frozen** | Pest | **PASS** — renaming the product afterwards does not change the order |
+| 8 | **The price is frozen** | Pest | **PASS** |
+| 9 | **The commission is snapshotted at order time** | Pest | **PASS** — renegotiating the rate afterwards does not change what was earned |
+| 10 | The address is copied, not linked | Pest | **PASS** — editing the address book does not move last month's parcel |
+| 11 | **The master status is derived from its parts** | Pest + Playwright | **PASS** |
+| 12 | One parcel shipped reads as partially shipped | Pest + Playwright | **PASS** — the failure mode this exists to prevent |
+| 13 | All parcels shipped reads as shipped | Pest | **PASS** |
+| 14 | All parcels delivered reads as delivered | Pest | **PASS** |
+| 15 | A cancelled part does not strand the order | Pest | **PASS** — excluded from "have they all shipped" |
+| 16 | Every part cancelled cancels the order | Pest | **PASS** |
+| 17 | **A shipped parcel cannot be cancelled** | Pest + Playwright | **PASS** — after the van it is a return, with different rights |
+| 18 | A cancellation demands a reason | Pest + Playwright (HTTP) | **PASS** |
+| 19 | The same status twice is a no-op | Pest | **PASS** — a double-clicked button is not an event |
+| 20 | **Cancelling puts the stock back** | Pest + Playwright | **PASS** — the ledger and the warehouse stay in agreement |
+| 21 | Every change is recorded with who and why | Pest | **PASS** |
+| 22 | The history is append-only | Pest (raw `UPDATE`) | **PASS** — enforced by a trigger |
+| 23 | The history starts at the order's creation | Pest | **PASS** — a record that omits the first event has a hole in it |
+| 24 | **A seller sees only their own orders** | Pest + Playwright | **PASS** |
+| 25 | A seller cannot open a competitor's order | Pest + Playwright | **PASS** — 404, not 403 |
+| 26 | A seller gets the delivery address | Pest | **PASS** — a courier label needs it |
+| 27 | A seller learns nothing about the rest of the basket | Pest | **PASS** |
+| 28 | A customer cannot open somebody else's order | Pest | **PASS** |
+| 29 | A customer cannot reach the seller endpoints | Pest | **PASS** |
+| 30 | An illegal transition names both states | Pest (HTTP) | **PASS** — a seller on a stale screen learns what it is now |
+| 31 | A credit purchase does not become an order | Pest | **PASS** — no seller, no parcel |
+
+### Defects found and fixed in this phase
+
+| Id | Severity | Defect | Fix |
+|---|---|---|---|
+| P15-D001 | P2 | Recomputing the master status crashed with a `TypeError`: `pluck('status')` applies the Eloquent enum cast, so the mapping was handed an enum where it expected a string. Every status change on a seller order would have failed. | `toBase()->pluck('status')` so the values come back as the strings the column holds |
+| P15-D002 | P3 | An order's history began at its first *change*, so "when was this placed" had to be inferred from a timestamp on another table. | The factory writes the opening entry |
+
+### Known limitations
+
+- **No shipping details yet.** A seller marks a parcel shipped; there is no carrier, no
+  tracking number and no delivery estimate. That is Phase 17, along with returns — which is
+  also why `returned` exists as a status with nothing that can reach it yet.
+- **No commission hierarchy.** The snapshot is taken correctly and at the right moment, but
+  it is resolved from the seller's own rate falling back to the platform default. The full
+  priority order from `06_SECURITY_PAYMENT_FINANCE_RULES.md` — order item, campaign,
+  seller+category, seller, category, default — and the double-entry ledger behind it are
+  Phase 16's.
+- **No cancellation refund.** Cancelling returns the stock and records why; giving the
+  customer their money back is a refund against the payment, which finance does by hand
+  until the admin screens arrive in Phase 18.
+- **No order documents.** An invoice compliant with Turkish e-Arşiv rules is a tax
+  integration rather than a PDF, and belongs with that work. The order detail page is
+  printable and carries everything a customer needs to see.

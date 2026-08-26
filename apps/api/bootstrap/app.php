@@ -9,6 +9,7 @@ use App\Domains\Credits\Exceptions\InsufficientCredits;
 use App\Domains\Identity\Console\GrantRoleCommand;
 use App\Domains\Inventory\Console\ReleaseExpiredReservationsCommand;
 use App\Domains\Matching\Console\EmbedCatalogueCommand;
+use App\Domains\Orders\Exceptions\OrderRefused;
 use App\Domains\Payments\Console\ExpireBankTransfersCommand;
 use App\Domains\Payments\Console\ExpireCheckoutSessionsCommand;
 use App\Domains\Payments\Exceptions\CheckoutRefused;
@@ -81,6 +82,12 @@ return Application::configure(basePath: dirname(__DIR__))
         // The same shape once more for checkout: an expired session is a 409 because the
         // world moved on, a missing address a 422 because the request was incomplete.
         $exceptions->render(function (CheckoutRefused $e) {
+            return response()->json(['message' => $e->getMessage()], $e->status);
+        });
+
+        // And for orders: an illegal transition is a 409 naming both states, so a seller
+        // on a stale screen learns what the order actually is now.
+        $exceptions->render(function (OrderRefused $e) {
             return response()->json(['message' => $e->getMessage()], $e->status);
         });
 

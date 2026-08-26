@@ -8,6 +8,7 @@ use App\Domains\Commerce\Enums\CartStatus;
 use App\Domains\Credits\Enums\CreditLotSource;
 use App\Domains\Credits\Services\CreditLedger;
 use App\Domains\Inventory\Services\InventoryLedger;
+use App\Domains\Orders\Services\OrderFactory;
 use App\Domains\Payments\Enums\CheckoutPurpose;
 use App\Domains\Payments\Enums\CheckoutStatus;
 use App\Domains\Payments\Models\CheckoutSession;
@@ -36,6 +37,7 @@ final class CheckoutFulfiller
     public function __construct(
         private readonly CreditLedger $credits,
         private readonly InventoryLedger $stock,
+        private readonly OrderFactory $orders,
     ) {}
 
     public function fulfil(PaymentIntent $intent): void
@@ -147,5 +149,12 @@ final class CheckoutFulfiller
         }
 
         $cart->forceFill(['status' => CartStatus::Ordered])->save();
+
+        /*
+         * The seam this method was left as one call for. The factory is idempotent through
+         * a unique index on the session, so a confirmation delivered four times produces
+         * one order — the same guarantee that protects the credit load above.
+         */
+        $this->orders->fromSession($session);
     }
 }

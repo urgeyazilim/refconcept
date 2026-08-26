@@ -4,6 +4,7 @@ const { logout, displayName } = useAuth()
 const nav = [
   { label: 'Projelerim', to: '/projects' },
   { label: 'Hesabım', to: '/account' },
+  { label: 'Siparişlerim', to: '/account/orders' },
   { label: 'Kredilerim', to: '/account/credits' },
   { label: 'Adreslerim', to: '/account/addresses' },
 ]

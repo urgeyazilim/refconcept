@@ -238,6 +238,46 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a demo product page claimed six in stock while the stock screen was empty. Opening
   stock is now booked as a receipt through the ledger.
 
+### Added — Phase 15 (Orders and seller orders)
+
+- **One order for the customer, one per seller inside it.** A marketplace order is two
+  things at once: the customer paid once for a basket and will ask about it by one number,
+  while each seller received a separate instruction with their own parcel, their own status
+  and their own money. Modelling only the first leaves every seller screen filtering a
+  shared table by hand; modelling only the second leaves a customer with three orders they
+  never placed.
+- **Every line is a snapshot.** The product name, the SKU code, the price, the tax rate and
+  the commission are copied at the moment of the order. A product renamed next month must
+  not change what an invoice from last month says it was, and a seller who renegotiates
+  their rate must not retroactively change what they earned. An order is a record of an
+  event, not a view over the current catalogue.
+- **A status machine per seller order, and a master status derived from them.** Nobody sets
+  the customer's status by hand — it is computed after every change, because a summary that
+  can be written independently of what it summarises will eventually disagree with it.
+  `partially_shipped` exists because telling a customer their order has shipped while two
+  parcels are still on shelves is technically true and practically a lie.
+- **A seller cannot cancel what has already left.** After the van it is a return, with a
+  different set of rights. Cancelling before that puts the stock back on the shelf, because
+  the stock left when the payment was captured and a warehouse that disagrees with the
+  ledger only reveals it weeks later as a sale nobody can fulfil.
+- **One payment makes one order**, guaranteed by a unique index on the checkout session
+  rather than by the caller being careful — the same defence that protects the credit load
+  beside it.
+- **An append-only status history** with who changed it, when, in what role and why. "When
+  did this become shipped, and who said so" is the question every dispute starts with, and
+  a table that can be edited cannot answer it.
+- **Order numbers people can read out.** `RC-2026-001234` for the customer and
+  `RC-2026-001234-2` for the second seller in it, so a seller and a customer on the phone
+  are obviously talking about the same order. Allocated from a database sequence, because a
+  count is a race and a random string is unreadable.
+- **Orders screens** in the storefront — a list and a detail grouped by seller — and a
+  working queue in the seller portal that opens on what still needs packing, shows what the
+  seller will actually be paid next to what the customer paid, and takes its available
+  moves from the server rather than from a second copy of the rules in a Vue file.
+- **Sellers are told when they have something to pack**, and customers when one of their
+  parcels leaves — by name, because "kargoya verildi" without one raises more questions
+  than it answers on a three-seller order.
+
 ### Added — Phase 14 (Havale / EFT)
 
 - **A payment method with no provider in it.** The customer transfers money to one of the

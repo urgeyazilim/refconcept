@@ -12,19 +12,19 @@ WEB
 IN_PROGRESS
 
 ## Current Phase
-PHASE_15
+PHASE_16
 
 ## Current Task
-Not started — Phase 14 is closed; Phases 12 and 13 remain deferred (see below) and Phase 15 has not begun.
+Not started — Phase 15 is closed; Phases 12 and 13 remain deferred (see below) and Phase 16 has not begun.
 
 ## Last Completed Task
-P14-T006 — Phase 14 gate verified end to end (see `TEST_REPORT.md`).
+P15-T006 — Phase 15 gate verified end to end (see `TEST_REPORT.md`).
 
 ## Next Task
-Phase 15 — Orders / Seller Orders, shipping its own UI slice alongside its API.
+Phase 16 — Commission / Ledger / Settlement, shipping its own UI slice alongside its API.
 
 ## Test State
-PASS — 619 backend tests / 1894 assertions, 42 Playwright E2E journeys across all three
+PASS — 645 backend tests / 1963 assertions, 46 Playwright E2E journeys across all three
 apps, PHPStan level 6, Pint, ESLint, vue-tsc and the design token guard all clean.
 
 ## Release State
@@ -877,6 +877,70 @@ arrive" is a support job and deciding that it did releases goods and cannot be u
 IBANs are encrypted at rest. That rule protects sellers' payout details, which are personal
 data. These are the platform's own accounts, printed on the checkout page for every
 customer to copy — encrypting a number we publish would be theatre.
+
+### PHASE_15_ORDERS_SELLER_ORDERS — DONE (2026-08-26)
+
+```text
+UPDATED_AT: 2026-08-26
+COMMIT_OR_SNAPSHOT: phase-15-orders
+PHASE: 15 — Orders / Seller Orders
+TASK: P15-T001 .. P15-T006
+STATUS: DONE
+FILES_CHANGED:
+  apps/api/database/migrations/0001_01_01_000023_create_order_tables.php
+  apps/api/app/Domains/Orders/Enums/{OrderStatus,SellerOrderStatus}.php
+  apps/api/app/Domains/Orders/Models/{Order,SellerOrder,OrderItem,OrderStatusChange}.php
+  apps/api/app/Domains/Orders/Services/{OrderFactory,OrderNumbers,OrderStatusService}.php
+  apps/api/app/Domains/Orders/Http/Controllers/{OrderController,SellerOrderController}.php
+  apps/api/app/Domains/Orders/Notifications/{SellerOrderPlaced,SellerOrderShipped}.php
+  apps/api/app/Domains/Orders/Exceptions/OrderRefused.php
+  apps/api/app/Domains/Orders/Tests/{MultiSellerOrderTest,OrderHttpTest}.php
+  apps/api/app/Domains/Payments/Services/CheckoutFulfiller.php  (the order seam)
+  apps/api/routes/domains/orders.php, routes/api.php, bootstrap/app.php
+  packages/ui/src/runtime/types.ts
+  apps/storefront/app/pages/account/orders/{index,[number]}.vue
+  apps/storefront/app/layouts/account.vue
+  apps/seller-portal/app/pages/orders/index.vue, app/layouts/default.vue
+  tests/e2e/multi-seller-order.spec.ts, tests/e2e/support/catalog.ts
+MIGRATIONS: 4 tables + 1 sequence — orders (one per checkout, enforced by a unique index),
+  seller_orders (one per seller per order), order_items, order_status_history (append-only)
+TESTS_RUN: php artisan test · phpstan level 6 · pint · eslint · vue-tsc
+  · check-design-tokens.mjs · playwright (full suite)
+TEST_RESULT: PASS (645 backend tests / 1963 assertions; 46 E2E journeys)
+BLOCKERS: none
+NEXT_ACTION: Phase 16 — Commission / Ledger / Settlement
+```
+
+**A marketplace order is two things at once, and the schema says so.** The customer bought
+one thing: they paid once, for a basket, and will ask about it by one number. The sellers
+each received a separate instruction: their own parcel, their own warehouse, their own
+courier, their own money. Modelling only the first leaves every seller screen filtering a
+shared table by hand; modelling only the second leaves a customer with three orders they
+never placed.
+
+**Everything on a line is a snapshot.** The product name, the SKU code, the price, the tax
+rate and the commission are copied at the moment of the order. A product renamed next month
+must not change what an invoice from last month says it was, and a seller who renegotiates
+their rate must not retroactively change what they earned. An order is a record of an
+event, not a view over the current state of the catalogue.
+
+**The master status is derived, never set.** It is computed from the seller orders after
+every change, because a summary that can be written independently of what it summarises
+will eventually disagree with it — and then nobody can tell which of the two is lying.
+`partially_shipped` exists for the same reason the split does: telling a customer their
+order has shipped while two parcels are still on shelves is technically true and
+practically a lie.
+
+**One payment makes one order**, guaranteed by a unique index on the checkout session
+rather than by the caller being careful. A confirmation delivered four times reaches the
+factory four times and produces one order — the same defence that protects the credit load
+beside it.
+
+**A seller cannot cancel what has already left.** What happens after a parcel is in a van
+is a return, with a different set of rights; allowing "cancel" there would leave the money
+and the goods in disagreement. Cancelling before that puts the stock back on the shelf,
+because the stock left when the payment was captured and a warehouse that disagrees with
+the ledger only reveals it weeks later as a sale nobody can fulfil.
 
 ---
 
