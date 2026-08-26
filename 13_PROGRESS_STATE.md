@@ -12,19 +12,19 @@ WEB
 IN_PROGRESS
 
 ## Current Phase
-PHASE_17
+PHASE_18
 
 ## Current Task
-Not started — Phase 16 is closed; Phases 12 and 13 remain deferred (see below) and Phase 17 has not begun.
+Not started — Phase 17 is closed; Phases 12 and 13 remain deferred (see below) and Phase 18 has not begun.
 
 ## Last Completed Task
-P16-T007 — Phase 16 gate verified end to end (see `TEST_REPORT.md`).
+P17-T006 — Phase 17 gate verified end to end (see `TEST_REPORT.md`).
 
 ## Next Task
-Phase 17 — Shipping / Return / Refund, shipping its own UI slice alongside its API.
+Phase 18 — Super Admin Complete, shipping its own UI slice alongside its API.
 
 ## Test State
-PASS — 678 backend tests / 2063 assertions, 50 Playwright E2E journeys across all three
+PASS — 709 backend tests / 2164 assertions, 55 Playwright E2E journeys across all three
 apps, PHPStan level 6, Pint, ESLint, vue-tsc and the design token guard all clean.
 
 ## Release State
@@ -1009,6 +1009,73 @@ Collapsing them would turn a mistake in the arithmetic into a bank transfer.
 **A seller sees four figures, not one** — ready, pending, in payout, paid — because the
 money genuinely is in four states, and each unpaid order carries a sentence rather than a
 status: "12.09.2026 tarihinde hakedişe girer" is something a seller can plan around.
+
+### PHASE_17_SHIPPING_RETURN_REFUND — DONE (2026-08-26)
+
+```text
+UPDATED_AT: 2026-08-26
+COMMIT_OR_SNAPSHOT: phase-17-fulfilment
+PHASE: 17 — Shipping / Return / Refund
+TASK: P17-T001 .. P17-T006
+STATUS: DONE
+FILES_CHANGED:
+  apps/api/database/migrations/0001_01_01_000025_create_shipping_return_tables.php
+  apps/api/app/Domains/Fulfilment/Enums/{ReturnStatus,RefundStatus}.php
+  apps/api/app/Domains/Fulfilment/Models/{Shipment,ShipmentItem,ReturnRequest,ReturnItem,Refund}.php
+  apps/api/app/Domains/Fulfilment/Services/{ShipmentService,ReturnService,RefundService}.php
+  apps/api/app/Domains/Fulfilment/Http/Controllers/{ReturnController,SellerFulfilmentController,
+    AdminRefundController}.php
+  apps/api/app/Domains/Fulfilment/Exceptions/FulfilmentRefused.php
+  apps/api/app/Domains/Fulfilment/Tests/{ReturnRefundTest,FulfilmentHttpTest}.php
+  apps/api/app/Domains/Finance/Services/SettlementEligibility.php  (the return hold)
+  apps/api/app/Domains/Orders/Models/SellerOrder.php  (returns and shipments)
+  apps/api/app/Domains/Payments/Gateways/FakePaymentGateway.php  (a refusable refund)
+  apps/api/app/Domains/Payments/Services/PaymentProcessor.php  (a failed refund is retryable)
+  apps/api/config/refconcept.php, routes/domains/fulfilment.php, routes/api.php, bootstrap/app.php
+  packages/ui/src/runtime/types.ts
+  apps/storefront/app/pages/account/returns/{index,new}.vue
+  apps/storefront/app/pages/account/orders/[number].vue, app/layouts/account.vue
+  apps/seller-portal/app/pages/returns.vue, app/layouts/default.vue
+  tests/e2e/return-refund.spec.ts
+MIGRATIONS: 5 tables — shipments, shipment_items, returns, return_items, refunds
+TESTS_RUN: php artisan test · phpstan level 6 · pint · eslint · vue-tsc
+  · check-design-tokens.mjs · playwright (full suite)
+TEST_RESULT: PASS (709 backend tests / 2164 assertions; 55 E2E journeys)
+BLOCKERS: none
+NEXT_ACTION: Phase 18 — Super Admin Complete
+```
+
+**Three things that look like one and are not.** A *shipment* is a physical parcel with a
+carrier and a tracking number, and a seller order can have several — a sofa and its
+cushions leave on different days, so "shipped" is a property of a parcel. A *return* is a
+customer asking, with its own lifecycle and its own clock. A *refund* is money moving, and
+it is deliberately separate from the return because goods and money travel on different
+timetables: a return can be approved and the refund fail at the provider, and a refund can
+be issued as goodwill with nothing coming back. Folding them into one field makes both
+impossible to represent and therefore impossible to fix.
+
+**Everything is per line and per quantity.** A customer who bought four chairs and wants
+to return one is the ordinary case; an order-level model turns it into a support
+conversation. Every return line carries both a requested and an approved quantity, because
+a seller opening the box and accepting two of three is normal.
+
+**`received` and `completed` are separate states**, and so are the two buttons. A parcel
+arriving is a physical fact; deciding the return is finished is what releases money. One
+button would turn a courier's delivery scan into a refund.
+
+**A failed refund is a state, not a swallowed exception.** A provider outage is the
+commonest cause, the operation is safe to repeat, and the customer is owed the money either
+way. Nothing is posted to the ledger until the money has actually gone — the books must
+never say a refund happened when it did not.
+
+**The reversal is posted per share**: the seller's payable down by their part, commission
+down by its part, at the rate that was charged. Posting the whole refund against commission
+would make the platform pay for the seller's return; keeping the commission would mean the
+platform earns on a sale that did not happen.
+
+**An open return holds the payout** — E2E-09 — and the settlement hold can never be shorter
+than the return window, because a configuration where it was would pay a seller while the
+customer could still send everything back.
 
 ---
 

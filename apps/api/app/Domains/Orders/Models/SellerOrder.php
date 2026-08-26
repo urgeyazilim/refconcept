@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domains\Orders\Models;
 
+use App\Domains\Fulfilment\Models\ReturnRequest;
+use App\Domains\Fulfilment\Models\Shipment;
 use App\Domains\Orders\Enums\SellerOrderStatus;
 use App\Domains\Sellers\Models\Seller;
 use App\Support\Concerns\HasUuidV7;
@@ -108,16 +110,16 @@ class SellerOrder extends Model
         return $this->hasMany(OrderStatusChange::class, 'seller_order_id');
     }
 
-    /** @return HasMany<\App\Domains\Fulfilment\Models\ReturnRequest, $this> */
+    /** @return HasMany<ReturnRequest, $this> */
     public function returns(): HasMany
     {
-        return $this->hasMany(\App\Domains\Fulfilment\Models\ReturnRequest::class, 'seller_order_id');
+        return $this->hasMany(ReturnRequest::class, 'seller_order_id');
     }
 
-    /** @return HasMany<\App\Domains\Fulfilment\Models\Shipment, $this> */
+    /** @return HasMany<Shipment, $this> */
     public function shipments(): HasMany
     {
-        return $this->hasMany(\App\Domains\Fulfilment\Models\Shipment::class, 'seller_order_id');
+        return $this->hasMany(Shipment::class, 'seller_order_id');
     }
 
     /** What the seller keeps once the platform's cut is taken. */

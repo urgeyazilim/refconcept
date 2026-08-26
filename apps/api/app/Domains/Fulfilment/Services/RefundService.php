@@ -17,10 +17,12 @@ use App\Domains\Fulfilment\Models\ReturnRequest;
 use App\Domains\Identity\Models\User;
 use App\Domains\Orders\Models\Order;
 use App\Domains\Orders\Models\SellerOrder;
+use App\Domains\Payments\Models\PaymentTransaction;
 use App\Domains\Payments\Services\PaymentProcessor;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -182,13 +184,39 @@ final class RefundService
             return $this->fail($refund, 'Ödeme kaydı bulunamadı.');
         }
 
+        /*
+         * A key per attempt, not per refund.
+         *
+         * The unique index on a payment transaction's operation key means a retry with the
+         * same key could not be recorded at all — and a retry is the whole point of a
+         * failed refund being a state. The refund's own status and row lock are what stop
+         * two attempts running at once.
+         */
+        $attemptKey = 'refund:'.$refund->getKey().':'.Str::lower((string) Str::ulid());
+
         try {
             $this->payments->refund(
                 $intent,
                 $refund->amount_minor,
                 $refund->reason,
-                'refund:'.$refund->getKey(),
+                $attemptKey,
             );
+
+            /*
+             * The processor records a provider refusal rather than throwing — a decline is
+             * an answer, not an error — so the outcome has to be read from the record it
+             * wrote. Assuming success because nothing was thrown is how a customer ends up
+             * told their money is on its way when the provider said no.
+             */
+            $attempt = PaymentTransaction::query()
+                ->where('payment_intent_id', $intent->getKey())
+                ->where('idempotency_key', $attemptKey)
+                ->latest('occurred_at')
+                ->first();
+
+            if ($attempt !== null && $attempt->status === 'failed') {
+                return $this->fail($refund, $attempt->error_message ?? 'Sağlayıcı iadeyi reddetti.');
+            }
         } catch (Throwable $e) {
             /*
              * A provider outage is the commonest cause and the operation is safe to
@@ -339,6 +367,6 @@ final class RefundService
             }
         }
 
-        throw new \RuntimeException('İade referansı üretilemedi.');
+        throw new RuntimeException('İade referansı üretilemedi.');
     }
 }

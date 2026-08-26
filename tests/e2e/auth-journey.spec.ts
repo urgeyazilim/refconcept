@@ -86,11 +86,30 @@ async function waitOutTheThrottle(page: Page): Promise<void> {
   }
 }
 
-async function signIn(page: Page, email: string, password: string): Promise<void> {
+async function signIn(page: Page, email: string, password: string, expectSuccess = true): Promise<void> {
   await gotoHydrated(page, '/auth/login')
   await fillStable(page, '#email', email)
   await fillStable(page, '#password', password)
-  await page.getByRole('button', { name: 'Giriş yap' }).click()
+
+  /*
+   * The response is read, not merely awaited.
+   *
+   * A sign-in that fails leaves the browser on the login page with a one-line notice, and
+   * every assertion after it then fails on a URL or a heading — fifteen seconds later,
+   * with no hint of why. Watching the request means a refusal fails here, carrying the
+   * status and the server's own words.
+   */
+  const [response] = await Promise.all([
+    page.waitForResponse(res => res.url().includes('/api/v1/auth/login') && res.request().method() === 'POST'),
+    page.getByRole('button', { name: 'Giriş yap' }).click(),
+  ])
+
+  // Two tests sign in wrongly on purpose; for them a refusal is the thing being asserted.
+  if (expectSuccess && !response.ok()) {
+    const body = await response.text().catch(() => '')
+
+    throw new Error(`giriş reddedildi (${response.status()}): ${body.slice(0, 300)}`)
+  }
 }
 
 /** Registers an account and follows the verification link out of the delivered mail. */
@@ -192,10 +211,10 @@ test.describe('customer identity journey', () => {
   })
 
   test('a wrong password is rejected without revealing whether the account exists', async ({ page }) => {
-    await signIn(page, 'admin@refconcept.local', 'kesinlikle-yanlis')
+    await signIn(page, 'admin@refconcept.local', 'kesinlikle-yanlis', false)
     const knownAccountError = await page.getByText(/hatalı/).textContent()
 
-    await signIn(page, uniqueEmail('nobody'), 'kesinlikle-yanlis')
+    await signIn(page, uniqueEmail('nobody'), 'kesinlikle-yanlis', false)
     const unknownAccountError = await page.getByText(/hatalı/).textContent()
 
     // Any difference here would turn the login form into an account-enumeration oracle.
@@ -228,7 +247,7 @@ test.describe('customer identity journey', () => {
     await expect(page.getByText('Parolanız güncellendi.')).toBeVisible()
 
     // --- the old password is dead, the new one works --------------------------
-    await signIn(page, email, PASSWORD)
+    await signIn(page, email, PASSWORD, false)
     await expect(page.getByText(/hatalı/)).toBeVisible()
 
     await signIn(page, email, newPassword)

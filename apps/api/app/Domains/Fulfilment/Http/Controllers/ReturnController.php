@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domains\Fulfilment\Http\Controllers;
 
+use App\Domains\Fulfilment\Enums\ReturnStatus;
 use App\Domains\Fulfilment\Exceptions\FulfilmentRefused;
 use App\Domains\Fulfilment\Models\ReturnRequest;
 use App\Domains\Fulfilment\Services\ReturnService;
@@ -89,7 +90,7 @@ final class ReturnController
 
         $cancelled = $this->returns->advance(
             $return,
-            \App\Domains\Fulfilment\Enums\ReturnStatus::Cancelled,
+            ReturnStatus::Cancelled,
             $this->user($request),
         );
 
@@ -103,7 +104,7 @@ final class ReturnController
 
         $updated = $this->returns->advance(
             $return,
-            \App\Domains\Fulfilment\Enums\ReturnStatus::InTransit,
+            ReturnStatus::InTransit,
             $this->user($request),
         );
 

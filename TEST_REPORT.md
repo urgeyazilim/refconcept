@@ -1468,3 +1468,71 @@ own account and a person confirms it against a statement.
   settlement needs a delivery past the hold, and the only ways to produce one in an E2E run
   are to wait a fortnight or to open a test-only endpoint that ages deliveries. An endpoint
   that moves money closer to leaving is not worth the coverage.
+
+---
+
+## Phase 17 — Shipping, returns and refunds
+
+**Date:** 2026-08-26
+**Scope:** getting goods to a customer, and back again when it goes wrong.
+
+### Gate criteria (04_WEB_PHASE_PLAN.md: partial return/refund + provider failure tests)
+
+| # | Criterion | Method | Result |
+|---|---|---|---|
+| 1 | **A parcel can carry part of an order** | Pest + Pest (HTTP) | **PASS** — three of four chairs today, the fourth on Thursday |
+| 2 | The order is not "shipped" until everything has gone | Pest + Pest (HTTP) | **PASS** — otherwise the customer waits a week on a status that was true |
+| 3 | Shipping more than was ordered is refused | Pest | **PASS** — it makes the return arithmetic unsolvable |
+| 4 | Delivery per parcel; the order follows the last one | Pest (HTTP) | **PASS** — the settlement hold starts from a complete delivery |
+| 5 | One seller cannot ship another's order | Pest (HTTP) | **PASS** — 404, not 403 |
+| 6 | **A return is per line and per quantity** | Pest + Playwright | **PASS** — the gate; one of four is the ordinary case |
+| 7 | Nothing undelivered can be returned | Pest | **PASS** |
+| 8 | The return window is enforced | Pest | **PASS** — with the number of days in the message |
+| 9 | The same unit cannot be returned twice | Pest + Playwright | **PASS** — counting open requests, not only refunded ones |
+| 10 | **A seller can accept part of a request** | Pest + Playwright | **PASS** — three sent back, two accepted |
+| 11 | The refunded amount follows the decision, not the request | Pest + Pest (HTTP) | **PASS** |
+| 12 | Refusing a return demands a reason | Pest + Pest (HTTP) | **PASS** |
+| 13 | A return cannot move backwards | Pest | **PASS** — a parcel with a courier will arrive whatever anybody now wants |
+| 14 | **Goods are restocked only when they arrive** | Pest | **PASS** — restocking on approval would put a sofa on sale while it is in a van |
+| 15 | Only the accepted quantity is restocked | Pest | **PASS** |
+| 16 | **A refused refund is recorded as retryable** | Pest | **PASS** — the other half of the gate; a state, not a swallowed exception |
+| 17 | **Nothing is posted while a refund has failed** | Pest | **PASS** — the books must not say money went back when it did not |
+| 18 | **A failed refund can be retried and then posts** | Pest | **PASS** |
+| 19 | Completing a return twice refunds once | Pest | **PASS** — partial unique index on the live refund |
+| 20 | **The reversal is split by share** | Pest | **PASS** — seller payable and commission each down by their part |
+| 21 | The ledger still balances after a refund | Pest | **PASS** |
+| 22 | A goodwill refund with no return works | Pest + Pest (HTTP) | **PASS** — split at the seller order's own rate |
+| 23 | A refund cannot exceed what is left | Pest + Pest (HTTP) | **PASS** — counting what has already gone back |
+| 24 | A manual refund demands a reason | Pest (HTTP) | **PASS** |
+| 25 | **An open return blocks the payout** | Pest + Playwright | **PASS** — E2E-09 |
+| 26 | Resolving it releases the payout | Pest + Playwright | **PASS** |
+| 27 | The settlement figure is recalculated after a refund | Pest | **PASS** — the ledger is the authority |
+| 28 | The hold can never be shorter than the return window | Code + Pest | **PASS** — a misconfiguration is made harmless rather than expensive |
+| 29 | A seller is told *why* the money is waiting | Pest (HTTP) + Playwright | **PASS** — the open return is said before the release date |
+| 30 | One customer cannot see another's return | Pest + Playwright | **PASS** |
+| 31 | One seller cannot see or decide another's | Pest (HTTP) | **PASS** |
+| 32 | A seller cannot reach the refund endpoints | Pest (HTTP) | **PASS** |
+
+### Defects found and fixed in this phase
+
+| Id | Severity | Defect | Fix |
+|---|---|---|---|
+| P17-D001 | **P1** | A refused refund could never be retried. The payment processor deduped refund attempts on an operation key including failed ones, so a retry short-circuited and reported success — and the unique index on that key would have refused the second row anyway. A provider outage would have left the customer permanently unrefunded with the record saying otherwise. | Failed attempts are excluded from the dedupe, and each attempt carries its own key |
+| P17-D002 | **P1** | The refund service treated "no exception" as success. The processor records a provider refusal rather than throwing — a decline is an answer — so a refused refund would have been marked succeeded and the reversal posted against money that never moved. | The recorded transaction is read back and a failed attempt fails the refund |
+| P17-D003 | P2 | A seller order with an open return was told a release date that the return would push past, so a seller planning around it would be owed an explanation twice. | The open return is reported before the date |
+
+### Known limitations
+
+- **No carrier integration.** The carrier and tracking number are free text, and the
+  tracking URL is whatever a seller pastes. A marketplace that accepts three carriers has
+  told its sellers how to run their warehouse; label printing and status polling are an
+  integration per carrier and belong with a logistics phase.
+- **No return shipping labels.** The customer arranges the return parcel. Prepaid labels
+  are a commercial decision with a carrier contract behind it.
+- **`lost` shipments are modelled, not handled.** The status exists on the shipment table
+  and nothing sets it: a lost parcel today is resolved as a return or a goodwill refund by
+  an operator.
+- **Refunds go back to the original payment only.** A bank transfer order refunds through
+  the same path and will fail there, because the fake gateway is the only one that can send
+  money back; refunding a transfer is a manual transfer by finance until Phase 12/13's
+  adapters exist.

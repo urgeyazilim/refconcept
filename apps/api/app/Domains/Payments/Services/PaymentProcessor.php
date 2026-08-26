@@ -245,11 +245,17 @@ final class PaymentProcessor
 
         $key = $idempotencyKey ?? 'refund:'.Str::uuid7()->toString();
 
-        // An already-recorded refund under this key is that refund, not a second one.
+        /*
+         * An already-recorded refund under this key is that refund, not a second one —
+         * unless it failed. A failed attempt is not a completed operation: a provider
+         * outage is the commonest cause and the customer is owed the money either way, so
+         * treating it as done would strand them.
+         */
         $existing = PaymentTransaction::query()
             ->where('payment_intent_id', $intent->getKey())
             ->where('type', 'refund')
             ->where('idempotency_key', $key)
+            ->where('status', '!=', 'failed')
             ->first();
 
         if ($existing !== null) {

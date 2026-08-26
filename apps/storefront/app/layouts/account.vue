@@ -5,6 +5,7 @@ const nav = [
   { label: 'Projelerim', to: '/projects' },
   { label: 'Hesabım', to: '/account' },
   { label: 'Siparişlerim', to: '/account/orders' },
+  { label: 'İadelerim', to: '/account/returns' },
   { label: 'Kredilerim', to: '/account/credits' },
   { label: 'Adreslerim', to: '/account/addresses' },
 ]

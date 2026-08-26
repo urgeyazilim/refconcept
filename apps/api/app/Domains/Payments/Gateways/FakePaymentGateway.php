@@ -164,8 +164,31 @@ final class FakePaymentGateway implements PaymentGateway
         );
     }
 
+    /**
+     * Sends money back, or refuses to.
+     *
+     * A refusal is asked for by flagging the intent rather than by an amount or a date,
+     * for the same reason the payment outcomes are chosen by token: a test that keys
+     * failure off "an amount ending in 13" reads like superstition and breaks the day
+     * somebody writes a fixture that happens to cost that.
+     *
+     * The refusal path matters more than most: a provider declining a refund on a payment
+     * that is too old is ordinary, and the customer is owed the money either way.
+     */
     public function refund(RefundRequest $request): RefundResult
     {
+        $details = $request->intent->details ?? [];
+
+        if (($details['refuse_refunds'] ?? false) === true) {
+            return new RefundResult(
+                succeeded: false,
+                amountMinor: $request->amountMinor,
+                errorCode: 'refund_window_expired',
+                errorMessage: 'Bu ödeme için iade süresi dolmuş.',
+                raw: ['simulated' => true],
+            );
+        }
+
         return new RefundResult(
             succeeded: true,
             amountMinor: $request->amountMinor,

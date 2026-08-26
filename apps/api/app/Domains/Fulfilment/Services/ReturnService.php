@@ -18,6 +18,7 @@ use App\Domains\Orders\Models\SellerOrder;
 use App\Domains\Products\Models\ProductSku;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 /**
  * Sending things back.
@@ -325,6 +326,6 @@ final class ReturnService
             }
         }
 
-        throw new \RuntimeException('İade referansı üretilemedi.');
+        throw new RuntimeException('İade referansı üretilemedi.');
     }
 }

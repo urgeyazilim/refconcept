@@ -238,6 +238,52 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a demo product page claimed six in stock while the stock screen was empty. Opening
   stock is now booked as a receipt through the ledger.
 
+### Added — Phase 17 (Shipping, returns and refunds)
+
+- **Shipments as parcels, not as a status.** A seller order can ship in several — a sofa
+  and its cushions leave on different days — so the quantities live on the shipment lines
+  and the order only becomes "shipped" once everything ordered has actually gone. A seller
+  who dispatches one of four chairs and sees "kargoya verildi" has been given a status that
+  will confuse their customer for a week.
+- **Returns per line and per quantity.** A customer who bought four chairs and wants to
+  return one is the ordinary case; an order-level model turns it into a support
+  conversation. Every line carries both a requested and an approved quantity, because a
+  seller opening the box and accepting two of three is normal.
+- **`received` and `completed` as separate states**, with separate buttons. A parcel
+  arriving is a physical fact; deciding the return is finished is what releases money. One
+  button would turn a courier's delivery scan into a refund.
+- **Refunds with their own lifecycle**, deliberately not folded into the return. Goods and
+  money travel on different timetables: a provider can refuse a refund on a payment that is
+  too old, a bank can take days, and a goodwill refund has no return behind it at all. A
+  failed refund is a state that can be retried, because the customer is owed the money
+  either way — and nothing is posted to the ledger until the money has actually gone.
+- **The reversal is split by share.** The seller's payable comes down by their part and
+  commission by its part, at the rate that was charged. Posting the whole refund against
+  commission would make the platform pay for the seller's return; keeping the commission
+  would mean the platform earns on a sale that did not happen.
+- **Goods are restocked when they arrive, not when the return is approved** — and only the
+  quantity that was accepted. Restocking on approval would put a sofa back on sale while it
+  is still in a courier's van.
+- **An open return holds the seller's payout** and says so on their earnings page, before
+  the release date rather than after it: a date on its own is misleading while a return is
+  running, and a seller who planned around it would be owed an explanation twice.
+- **The settlement hold can never be shorter than the return window.** A configuration
+  where it was would pay a seller while the customer could still send everything back, so
+  the larger of the two is taken and the misconfiguration is harmless instead of expensive.
+- **A returns section in the storefront** — a list that says where the goods are and,
+  separately, where the money is — and a returns queue in the seller portal where accepting
+  part of a request is a number per line rather than a yes or no.
+
+### Fixed — Phase 17
+
+- **A refused refund could never be retried.** Refund attempts were deduped on an operation
+  key that included failed ones, so a retry short-circuited and reported success — and the
+  unique index would have refused the row anyway. A provider outage would have left a
+  customer permanently unrefunded with the record saying otherwise.
+- **"No exception" was treated as success.** The payment processor records a provider
+  refusal rather than throwing, because a decline is an answer rather than an error; the
+  refund service now reads that record back instead of assuming.
+
 ### Added — Phase 16 (Commission, ledger and settlement)
 
 - **A double-entry journal, append-only.** Every financial event is a set of lines that sum

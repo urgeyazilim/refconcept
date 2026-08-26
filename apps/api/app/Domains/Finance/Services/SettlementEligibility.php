@@ -124,17 +124,24 @@ final class SettlementEligibility
             return 'Satıcı hesabı askıda olduğu için ödeme yapılamaz.';
         }
 
-        $releaseAt = $sellerOrder->delivered_at?->copy()->addDays($this->holdDays());
-
-        if ($releaseAt !== null && $releaseAt->isFuture()) {
-            return sprintf('%s tarihinde hakedişe girer.', $releaseAt->format('d.m.Y'));
-        }
-
+        /*
+         * The open return is said before the release date, deliberately.
+         *
+         * A date on its own is misleading while a return is running: the money will still
+         * be waiting when that date passes, and a seller who planned around it would be
+         * owed an explanation twice.
+         */
         if (DB::table('returns')
             ->where('seller_order_id', $sellerOrder->getKey())
             ->whereIn('status', ['requested', 'approved', 'in_transit', 'received'])
             ->exists()) {
             return 'Açık bir iade talebi var; sonuçlanınca hakedişe girer.';
+        }
+
+        $releaseAt = $sellerOrder->delivered_at?->copy()->addDays($this->holdDays());
+
+        if ($releaseAt !== null && $releaseAt->isFuture()) {
+            return sprintf('%s tarihinde hakedişe girer.', $releaseAt->format('d.m.Y'));
         }
 
         if (DB::table('settlement_items')->where('seller_order_id', $sellerOrder->getKey())->exists()) {
@@ -152,7 +159,18 @@ final class SettlementEligibility
      */
     public function holdDays(): int
     {
-        return (int) config('refconcept.settlement.hold_days', 14);
+        /*
+         * Never shorter than the return window.
+         *
+         * The hold exists to cover the window; a configuration where it is shorter would
+         * pay a seller while the customer can still send everything back, and the whole
+         * mechanism would be decorative. Taking the larger of the two makes that
+         * misconfiguration harmless instead of expensive.
+         */
+        return max(
+            (int) config('refconcept.settlement.hold_days', 14),
+            (int) config('refconcept.returns.window_days', 14),
+        );
     }
 
     /** What the ledger says the seller is owed in total, settled or not. */

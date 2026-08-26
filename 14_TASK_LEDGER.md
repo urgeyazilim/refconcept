@@ -109,6 +109,12 @@
 | P16-T005 | 16 | BACKEND_AGENT | P16-T004 | DONE | payout tests | Build, approve, pay as three acts; no double approval; no order in two runs |
 | P16-T006 | 16 | STOREFRONT_AGENT | P16-T003..005 | DONE | finance E2E | Seller earnings with four states; admin finance screen leading on "denk mi" |
 | P16-T007 | 16 | INDEPENDENT_TEST_AGENT | P16-T001..006 | DONE | Phase 16 gate | 678 backend tests, 50 E2E journeys, 3 defects found and fixed (see TEST_REPORT.md) |
+| P17-T001 | 17 | ARCHITECT_AGENT | P16-T007 | DONE | schema review | Shipments as parcels, returns and refunds as separate lifecycles, everything per line |
+| P17-T002 | 17 | BACKEND_AGENT | P17-T001 | DONE | partial shipping | A parcel carries part of an order; the order ships when everything has gone |
+| P17-T003 | 17 | BACKEND_AGENT | P17-T001 | DONE | partial return tests | Requested and approved quantities; restock on arrival; window and double-return refused |
+| P17-T004 | 17 | BACKEND_AGENT | P17-T003 | DONE | provider failure tests | A refused refund is retryable and posts nothing until the money moves |
+| P17-T005 | 17 | BACKEND_AGENT | P17-T004 | DONE | settlement hold | E2E-09: an open return blocks the payout and releases it when resolved |
+| P17-T006 | 17 | INDEPENDENT_TEST_AGENT | P17-T001..005 | DONE | Phase 17 gate | 709 backend tests, 55 E2E journeys, 3 defects found and fixed (see TEST_REPORT.md) |
 
 ## Scope notes
 

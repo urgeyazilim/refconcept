@@ -1007,3 +1007,85 @@ export interface LedgerEntryRow {
     memo: string | null
   }>
 }
+
+/*
+ * Shipping, returns and refunds.
+ *
+ * A return and its refund are separate objects with separate lifecycles, because goods and
+ * money travel on different timetables — a return can be approved and the refund fail at
+ * the provider, and a refund can be issued with nothing coming back.
+ */
+
+export type ReturnStatus =
+  | 'requested'
+  | 'approved'
+  | 'rejected'
+  | 'in_transit'
+  | 'received'
+  | 'completed'
+  | 'cancelled'
+
+export type RefundStatus = 'pending' | 'processing' | 'succeeded' | 'failed' | 'cancelled'
+
+export interface RefundSummary {
+  id: string
+  reference: string
+  status: RefundStatus
+  status_label: string
+  message: string
+  currency: string
+  amount_minor: number
+  seller_share_minor: number
+  commission_share_minor: number
+  reason: string | null
+  failure_reason: string | null
+  processed_at: string | null
+  created_at: string | null
+}
+
+export interface ReturnLine {
+  id: string
+  product_name: string | null
+  quantity: number
+  approved_quantity: number
+  unit_price_minor: number
+  refund_minor: number
+  condition_note: string | null
+}
+
+export interface ReturnDetail {
+  id: string
+  reference: string
+  status: ReturnStatus
+  status_label: string
+  message: string
+  reason_code: string
+  reason_note: string | null
+  currency: string
+  requested_minor: number
+  approved_minor: number
+  seller_order_number: string | null
+  seller_name: string | null
+  decision_note: string | null
+  decided_at: string | null
+  created_at: string | null
+  items: ReturnLine[]
+  refund: RefundSummary | null
+}
+
+export interface ShipmentSummary {
+  id: string
+  carrier: string | null
+  tracking_number: string | null
+  tracking_url: string | null
+  status: string
+  shipped_at: string | null
+  delivered_at: string | null
+  note: string | null
+  item_count: number
+}
+
+export interface ReturnReason {
+  code: string
+  label: string
+}

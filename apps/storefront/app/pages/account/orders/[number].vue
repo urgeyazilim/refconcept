@@ -72,6 +72,19 @@ const address = computed(() => {
             <p v-if="group.shipped_at" class="mt-1 text-xs text-muted">
               {{ when(group.shipped_at) }} tarihinde kargoya verildi
             </p>
+
+            <!--
+              The return link lives on the seller block, not on the order. A customer
+              returns to one shop, and being clear which avoids a parcel going to the
+              wrong warehouse.
+            -->
+            <NuxtLink
+              v-if="group.status === 'delivered'"
+              :to="`/account/returns/new?order=${order.order_number}&seller=${group.seller_order_number}`"
+              class="mt-2 inline-block text-xs underline"
+            >
+              İade talebi oluştur
+            </NuxtLink>
           </div>
         </div>
 
