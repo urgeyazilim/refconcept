@@ -15,7 +15,7 @@
 import type { PaymentSummary } from '@refconcept/ui/types'
 
 definePageMeta({ middleware: ['auth', 'verified'] })
-useHead({ title: 'Ödeme sonucu' })
+useSeo({ title: 'Ödeme sonucu', noindex: true })
 
 const api = useApi()
 const route = useRoute()

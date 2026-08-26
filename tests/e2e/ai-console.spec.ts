@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test'
 import { createVerifiedAccount, DEFAULT_PASSWORD, grantPlatformRole } from './support/accounts'
 import { fillStable } from './support/forms'
 import { gotoInteractive, waitForHydration } from './support/hydration'
+import { signInThrough } from './support/signin'
 
 /**
  * The Phase 6 gate: an operator can see what AI is doing and turn it off.
@@ -22,17 +23,9 @@ const ADMIN = process.env.E2E_ADMIN_PANEL_URL ?? 'http://localhost:3002'
 const API = process.env.E2E_API_URL ?? 'http://localhost:58000'
 
 async function signIn(page: Page, base: string, email: string): Promise<void> {
-  // Cookies are scoped by host and ignore the port, so the three dev apps share one
-  // jar; a stale session sends `guest` middleware to bounce the login form away.
-  await page.context().clearCookies()
-  await page.goto(`${base}/auth/login`)
-  await waitForHydration(page)
-
-  await fillStable(page, '#email', email)
-  await fillStable(page, '#password', DEFAULT_PASSWORD)
-  await page.getByRole('button', { name: 'Giriş yap' }).click()
-
-  await expect(page).toHaveURL(new RegExp(`${base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/?$`))
+  // Retries once through a rate-limit refusal. See tests/e2e/support/signin.ts — the
+  // limiter is production-strength on purpose, and a suite this long trips it.
+  await signInThrough(page, base, email)
 }
 
 test.describe.configure({ timeout: 300_000 })

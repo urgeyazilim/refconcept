@@ -9,7 +9,7 @@
 import type { OrderSummary } from '@refconcept/ui/types'
 
 definePageMeta({ layout: 'account', middleware: ['auth', 'verified'] })
-useHead({ title: 'Siparişlerim' })
+useSeo({ title: 'Siparişlerim', noindex: true })
 
 const api = useApi()
 

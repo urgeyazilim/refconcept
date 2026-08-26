@@ -4,6 +4,7 @@ import { createVerifiedAccount, DEFAULT_PASSWORD, grantPlatformRole } from './su
 import { pngBuffer } from './support/sellers'
 import { fillStable } from './support/forms'
 import { gotoInteractive, waitForHydration } from './support/hydration'
+import { signInThrough } from './support/signin'
 
 /**
  * The Phase 8 gate: a photograph becomes a design, and the customer is charged once.
@@ -26,15 +27,9 @@ const API = process.env.E2E_API_URL ?? 'http://localhost:58000'
 const PIPELINE_TASKS = ['room_analysis', 'design_plan', 'image_render_draft', 'text_embedding', 'product_match_rerank'] as const
 
 async function signIn(page: Page, email: string): Promise<void> {
-  await page.context().clearCookies()
-  await page.goto(`${STOREFRONT}/auth/login`)
-  await waitForHydration(page)
-
-  await fillStable(page, '#email', email)
-  await fillStable(page, '#password', DEFAULT_PASSWORD)
-  await page.getByRole('button', { name: 'Giriş yap' }).click()
-
-  await expect(page).toHaveURL(/\/account$/)
+  // Retries once through a rate-limit refusal. See tests/e2e/support/signin.ts — the
+  // limiter is production-strength on purpose, and a suite this long trips it.
+  await signInThrough(page, STOREFRONT, email, /\/account$/)
 }
 
 /**

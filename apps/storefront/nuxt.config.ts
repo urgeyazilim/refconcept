@@ -40,6 +40,10 @@ export default defineNuxtConfig({
     public: {
       apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:58000',
       appName: 'RefConcept',
+      // The public origin, used for canonical URLs, Open Graph and the sitemap. A wrong
+      // value here is worse than an empty one: it points crawlers at a host that is not
+      // the site.
+      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
       // Development convenience: a link to the local mail catcher so a developer can
       // open the verification e-mail without leaving the flow. Empty in production.
       mailUrl: process.env.NUXT_PUBLIC_MAIL_URL || 'http://localhost:58025',

@@ -4,6 +4,7 @@ import { createVerifiedAccount, DEFAULT_PASSWORD } from './support/accounts'
 import { listProduct } from './support/catalog'
 import { fillStable } from './support/forms'
 import { gotoInteractive, waitForHydration } from './support/hydration'
+import { signInThrough } from './support/signin'
 
 /**
  * The Phase 19 gate in a browser: a seller's whole working day, and the wall around it.
@@ -22,15 +23,9 @@ const SELLER_PORTAL = process.env.E2E_SELLER_PORTAL_URL ?? 'http://localhost:300
 const API = process.env.E2E_API_URL ?? 'http://localhost:58000'
 
 async function signIn(page: Page, email: string): Promise<void> {
-  await page.context().clearCookies()
-  await page.goto(`${SELLER_PORTAL}/auth/login`)
-  await waitForHydration(page)
-
-  await fillStable(page, '#email', email)
-  await fillStable(page, '#password', DEFAULT_PASSWORD)
-  await page.getByRole('button', { name: 'Giriş yap' }).click()
-
-  await expect(page).toHaveURL(/\/(account|)$/)
+  // Retries once through a rate-limit refusal. See tests/e2e/support/signin.ts — the
+  // limiter is production-strength on purpose, and a suite this long trips it.
+  await signInThrough(page, SELLER_PORTAL, email)
 }
 
 /** Buys from the listing and pays, leaving one seller order awaiting confirmation. */

@@ -238,6 +238,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a demo product page claimed six in stock while the stock screen was empty. Opening
   stock is now booked as a receipt through the ledger.
 
+### Added — Phase 20 (Storefront complete + approved design language)
+
+- **A phone can use the site.** The desktop navigation is hidden below `lg` and nothing
+  replaced it, so a phone visitor saw a logo and a sign-up button and no way to reach the
+  catalogue. The drawer that replaces it is a real dialog: focus moves into it, Escape
+  closes it, the page behind does not scroll, and it closes on navigation so it never reads
+  as a stuck overlay. The basket link now stays in the header at every width, because that
+  is truer on a phone than on a desktop.
+- **A skip link on all three apps**, first in the DOM and visible only when focused.
+  Tabbing through a whole header — or a whole admin sidebar — to reach the row you came for
+  is not navigation.
+- **One SEO composable** rather than a `useHead` block per page: canonical, Open Graph,
+  Twitter card, and a description trimmed at a word boundary, because a snippet cut
+  mid-word reads as machine output.
+- **Everything behind a sign-in refuses to be indexed.** An order page is not secret, it is
+  protected — but a URL a crawler can reach is a URL a search result can carry. Those pages
+  carry `noindex` and no canonical at all: a canonical asks a crawler to index one URL
+  rather than another, which is a contradiction on a page that must not be indexed.
+- **`robots.txt` and `sitemap.xml` are generated.** A static disallow list drifts from the
+  router the moment somebody adds a page, and a hand-kept sitemap is wrong the day after
+  somebody adds a product. The sitemap pages the catalogue at the API's own limit, and
+  falls back to the static pages rather than answering 500 where a crawler expected XML.
+- **Product structured data** — price, currency and availability — taken from what the page
+  itself displays, so a rich result can never contradict the page behind it.
+- **A footer that links the legal pages.** They existed and could only be opened by typing
+  the URL; a terms page nobody can find is a terms page nobody agreed to.
+
+### Fixed — Phase 20
+
+- **Three navigation links pointed at the homepage.** "Platform", "Nasıl çalışır" and
+  "Profesyoneller" all resolved to `/`. A menu that lies about where it goes is worse than
+  a shorter menu.
+- **A `<Teleport>` in the layout crashed the client app on unmount**, taking the page's
+  event handlers with it — the symptom was a product page whose "Sepete ekle" button did
+  nothing at all. The drawer is fixed-positioned and the layout root imposes no transform,
+  so the teleport bought nothing.
+- **The seller portal wiped its own confirmation.** Saving a parcel set a success message
+  and then refreshed the screen, which cleared it — the seller saw the parcel appear and no
+  word about whether it had worked.
+- **A head getter reached forward to a `const` declared later in the same file**, which
+  throws on the client and takes the whole page down with it. The product page lost its
+  canonical and its event handlers together.
+
 ### Added — Phase 19 (Seller portal complete)
 
 - **A seller can have colleagues.** Somebody dispatches parcels, somebody else answers

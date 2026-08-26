@@ -12,7 +12,7 @@
 import type { OrderDetail, ReturnReason } from '@refconcept/ui/types'
 
 definePageMeta({ layout: 'account', middleware: ['auth', 'verified'] })
-useHead({ title: 'İade talebi' })
+useSeo({ title: 'İade talebi', noindex: true })
 
 const api = useApi()
 const route = useRoute()

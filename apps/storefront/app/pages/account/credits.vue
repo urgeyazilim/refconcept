@@ -8,7 +8,7 @@
  * this page exists to prevent, and it cannot prevent it from the bottom of a list.
  */
 definePageMeta({ layout: 'account', middleware: 'auth' })
-useHead({ title: 'Kredilerim' })
+useSeo({ title: 'Kredilerim', noindex: true })
 
 interface ExpiringLot {
   credits: number

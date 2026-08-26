@@ -15,7 +15,7 @@
 import type { Address, BankAccountOption, CheckoutPurpose, CheckoutSession, PaymentMethodOption } from '@refconcept/ui/types'
 
 definePageMeta({ middleware: ['auth', 'verified'] })
-useHead({ title: 'Ödeme' })
+useSeo({ title: 'Ödeme', noindex: true })
 
 const api = useApi()
 const route = useRoute()

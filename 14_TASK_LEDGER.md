@@ -128,6 +128,12 @@
 | P19-T004 | 19 | BACKEND_AGENT | P19-T001 | DONE | pending shipment lines | What is still on the shelf, sent rather than left to each client to work out |
 | P19-T005 | 19 | FRONTEND_AGENT | P19-T002..004 | DONE | portal UI slice | Dashboard, team screen, parcel screen; buttons absent rather than disabled, with the reason said |
 | P19-T006 | 19 | INDEPENDENT_TEST_AGENT | P19-T001..005 | DONE | Phase 19 gate | 775 backend tests, 67 E2E journeys, 3 defects found and fixed (see TEST_REPORT.md) |
+| P20-T001 | 20 | ARCHITECT_AGENT | P19-T006 | DONE | storefront audit | Screens were complete; responsive, SEO and accessibility were not |
+| P20-T002 | 20 | FRONTEND_AGENT | P20-T001 | DONE | mobile navigation | A drawer that is a real dialog, plus a skip link in all three apps |
+| P20-T003 | 20 | FRONTEND_AGENT | P20-T001 | DONE | SEO surface | One useSeo composable: canonical, Open Graph, noindex behind a sign-in |
+| P20-T004 | 20 | FRONTEND_AGENT | P20-T003 | DONE | robots + sitemap | Generated from the router and the catalogue, paged to the API limit |
+| P20-T005 | 20 | FRONTEND_AGENT | P20-T003 | DONE | product structured data | Price and availability, taken from what the page itself shows |
+| P20-T006 | 20 | INDEPENDENT_TEST_AGENT | P20-T001..005 | DONE | Phase 20 gate | 775 backend tests, 76 E2E journeys, 3 defects found and fixed (see TEST_REPORT.md) |
 
 ## Scope notes
 

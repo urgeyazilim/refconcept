@@ -9,7 +9,7 @@ import type { Paginated, Product } from '@refconcept/ui/types'
  * shopping from is a worse shortlist for containing things nobody can buy.
  */
 definePageMeta({ middleware: 'auth' })
-useHead({ title: 'Favorilerim' })
+useSeo({ title: 'Favorilerim', noindex: true })
 
 const api = useApi()
 

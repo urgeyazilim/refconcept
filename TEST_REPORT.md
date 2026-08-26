@@ -1471,6 +1471,83 @@ own account and a person confirms it against a statement.
 
 ---
 
+## Phase 20 — Storefront complete + approved design language
+
+**Date:** 2026-08-26
+**Scope:** the storefront as a public website, not only as an application.
+
+### Gate criteria (04_WEB_PHASE_PLAN.md: full customer Playwright journey + visual/UI acceptance)
+
+| # | Criterion | Method | Result |
+|---|---|---|---|
+| 1 | **A phone visitor can reach the catalogue** | Playwright (390×844) | **PASS** — the gate's other half; without the drawer this was a dead end |
+| 2 | The drawer is a real dialog | Playwright | **PASS** — focus moves in, Escape closes, the page behind is still |
+| 3 | The drawer closes on navigation | Playwright | **PASS** — otherwise it reads as a stuck overlay |
+| 4 | **The skip link is the first thing a keyboard reaches** | Playwright | **PASS** — and it lands on a real `#main` |
+| 5 | **A customer can shop end to end from a phone** | Playwright | **PASS** — browse, add, basket |
+| 6 | Nothing overflows sideways on a phone | Playwright | **PASS** — a horizontally scrolling page moves buttons under a thumb |
+| 7 | The legal pages are reachable from the footer | Playwright | **PASS** — a terms page nobody can find is one nobody agreed to |
+| 8 | **`robots.txt` excludes everything behind a sign-in** | Playwright | **PASS** — account, cart, checkout, projects, auth |
+| 9 | It points at the sitemap | Playwright | **PASS** — the only way a crawler finds one |
+| 10 | **The sitemap lists the live catalogue** | Playwright | **PASS** — generated, not hand-kept |
+| 11 | The sitemap contains nothing private | Playwright | **PASS** |
+| 12 | **A product page carries a canonical** | Playwright | **PASS** — a page competing with itself ranks for neither URL |
+| 13 | Open Graph title and type are set | Playwright | **PASS** — a share card that says nothing is one nobody clicks |
+| 14 | **Product structured data carries price and availability** | Playwright | **PASS** — read from what the page itself shows |
+| 15 | **A page behind a sign-in carries `noindex`** | Playwright | **PASS** — an order number must never reach a search result |
+| 16 | …and carries no canonical at all | Playwright | **PASS** — the two requests contradict each other |
+| 17 | Every customer journey from Phases 1–17 still passes | Playwright | **PASS** — 76 journeys total |
+| 18 | Homepage follows the approved structure | Review vs `21_DESIGN_SYSTEM_UI_SPEC.md` §8.2 | **PASS** — hero, pillars, workflow, rooms, modules, FAQ, final CTA |
+| 19 | Palette and shape language unchanged | `check-design-tokens.mjs` | **PASS** — no colour outside the approved palette |
+| 20 | Focus ring visible on every control | Review + Playwright | **PASS** — `:focus-visible` uses the gold accent (spec §4) |
+| 21 | A saved parcel confirms itself and the confirmation survives the refresh | Playwright | **PASS** — regression for P20-D003 |
+
+### Defects found and fixed in this phase
+
+| Id | Severity | Defect | Fix |
+|---|---|---|---|
+| P20-D001 | **P1** | A `<Teleport>` in the storefront layout threw on unmount and took the client-side app down with it. The visible symptom was a product page whose "Sepete ekle" button did nothing at all — no request, no error, no message. A crash in a layout is the worst kind, because every page inherits it. | The drawer is fixed-positioned and the layout root imposes no transform, so it renders in place |
+| P20-D002 | **P1** | A head getter on the product page referenced a `const` declared later in the same file. On the client that is a temporal-dead-zone error, so the page lost its canonical *and* its event handlers together. | The getter reads the product it already has rather than reaching forward |
+| P20-D003 | P2 | The seller portal wiped its own confirmation. Saving a parcel set a success banner and then refreshed the screen, and the refresh cleared it — so the seller saw the parcel appear and no word about whether it had worked. | The refresh no longer touches the banner, and the banner is set after it |
+| P20-D004 | P2 | The sitemap asked the catalogue API for two hundred products at once. The API caps a page at sixty and answers 422, so the sitemap silently listed no products at all — the exact failure a sitemap exists to prevent. | Paged at the API's own limit, bounded, with the static pages served whatever happens |
+
+### Known limitations
+
+- **No social proof or statistics section**, both of which the design spec lists in the
+  recommended homepage order. Inventing customer counts or partner logos to fill a layout
+  is fabricating claims about the business; the sections belong with the first real numbers
+  and the first real partners.
+- **No product dashboard preview on the homepage** — a marketing screenshot of a product
+  that is still changing weekly would be out of date before it shipped.
+- **SEO is on-page only.** No hreflang (the storefront is Turkish-only today), no sitemap
+  index (one sitemap holds the catalogue comfortably at this size), and no server-side
+  rendering of review or rating data, because neither exists yet.
+- **Accessibility is the stated minimum** from `09_FRONTEND_UX_RULES.md`: semantic
+  controls, labels, keyboard navigation on critical flows, focus states, error association.
+  No automated axe sweep and no screen-reader pass — both belong with Phase 21 hardening,
+  where a real audit has somewhere to report to.
+- **Signing in through the browser now retries once through a rate-limit refusal.** The
+  limiter is five attempts a minute per IP, which is right in production and awkward for a
+  suite that signs dozens of accounts in from one machine — one journey in a thirty-minute
+  run was refused. Turning the limit down for the test environment would mean the suite no
+  longer runs against the configuration that ships, so the helper waits the window out
+  instead. `auth-journey.spec.ts` deliberately does not use it: proving the limiter works
+  is that file's whole job, and a helper that hides a 429 would hide the assertion too.
+
+### Test suite state after Phase 20
+
+| Suite | Command | Result |
+|---|---|---|
+| Backend | `php artisan test` | **775 passed**, 2467 assertions |
+| Static analysis | `phpstan analyse` (level 6) | **No errors** |
+| Style | `pint --test` | **PASS** — 510 files |
+| Frontend lint | `npm run lint` | **PASS** — three apps |
+| Frontend types | `npm run typecheck` | **PASS** — vue-tsc, three apps |
+| Design tokens | `node scripts/check-design-tokens.mjs` | **PASS** — no foreign colours |
+| E2E | `npx playwright test` | **76 passed** |
+
+---
+
 ## Phase 19 — Seller portal complete
 
 **Date:** 2026-08-26

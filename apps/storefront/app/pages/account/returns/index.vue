@@ -9,7 +9,7 @@
 import type { ReturnDetail } from '@refconcept/ui/types'
 
 definePageMeta({ layout: 'account', middleware: ['auth', 'verified'] })
-useHead({ title: 'İadelerim' })
+useSeo({ title: 'İadelerim', noindex: true })
 
 const api = useApi()
 

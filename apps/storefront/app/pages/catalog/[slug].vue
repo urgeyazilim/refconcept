@@ -38,15 +38,53 @@ try {
   else loadError.value = error instanceof ApiError ? error.message : 'Ürün yüklenemedi.'
 }
 
-useHead(() => ({
+useSeo(() => ({
   title: product.value?.name ?? 'Ürün',
-  meta: [
-    {
-      name: 'description',
-      content: (product.value?.description ?? '').slice(0, 160),
-    },
-  ],
+  description: product.value?.description ?? '',
+  image: product.value?.media?.[0]?.url ?? null,
+  type: 'product',
 }))
+
+/**
+ * Structured data, so a search result can show the price and whether it is in stock.
+ *
+ * Only what the page itself displays. A listing that claims availability the page does not
+ * show is the kind of mismatch that gets a whole site's rich results turned off — and the
+ * customer who clicked through deserves the page to agree with the result they clicked.
+ */
+useHead(() => {
+  const item = product.value
+
+  if (item === null || item.from_price === null) {
+    return {}
+  }
+
+  return {
+    script: [{
+      type: 'application/ld+json',
+      innerHTML: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'Product',
+        name: item.name,
+        description: trimForSnippet(item.description ?? '', 300),
+        image: (item.media ?? []).map(media => media.url).filter(Boolean),
+        sku: item.skus?.[0]?.sku ?? undefined,
+        brand: item.brand ? { '@type': 'Brand', name: item.brand.name } : undefined,
+        offers: {
+          '@type': 'Offer',
+          price: (item.from_price.amount_minor / 100).toFixed(2),
+          priceCurrency: item.from_price.currency,
+          // Read from the product itself rather than from the `offers` computed below:
+          // a getter that reaches forward to a `const` declared later in the file throws on
+          // the client, and takes the page's event handlers down with it.
+          availability: (item.skus ?? []).some(sku => sku.is_available)
+            ? 'https://schema.org/InStock'
+            : 'https://schema.org/OutOfStock',
+        },
+      }),
+    }],
+  }
+})
 
 const images = computed(() => product.value?.media ?? [])
 const offers = computed(() => product.value?.skus ?? [])

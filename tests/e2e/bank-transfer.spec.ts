@@ -4,6 +4,7 @@ import { createVerifiedAccount, DEFAULT_PASSWORD } from './support/accounts'
 import { listProduct } from './support/catalog'
 import { fillStable } from './support/forms'
 import { gotoInteractive, waitForHydration } from './support/hydration'
+import { signInThrough } from './support/signin'
 
 /**
  * The Phase 14 gate, in a browser: paying by transfer, and the two ways it goes wrong.
@@ -19,18 +20,9 @@ const STOREFRONT = process.env.E2E_STOREFRONT_URL ?? 'http://localhost:3000'
 const API = process.env.E2E_API_URL ?? 'http://localhost:58000'
 
 async function signIn(page: Page, email: string): Promise<void> {
-  await page.context().clearCookies()
-  await page.goto(`${STOREFRONT}/auth/login`)
-  await waitForHydration(page)
-
-  await fillStable(page, '#email', email)
-  await fillStable(page, '#password', DEFAULT_PASSWORD)
-  await page.getByRole('button', { name: 'Giriş yap' }).click()
-
-  // Waited for, not assumed: navigating while the sign-in is still in flight lands on
-  // the login redirect instead of the page under test, and the failure that produces is
-  // a locator timeout three steps later with no hint of the cause.
-  await expect(page).toHaveURL(/\/account$/)
+  // Retries once through a rate-limit refusal. See tests/e2e/support/signin.ts — the
+  // limiter is production-strength on purpose, and a suite this long trips it.
+  await signInThrough(page, STOREFRONT, email, /\/account$/)
 }
 
 test.describe.configure({ timeout: 300_000 })

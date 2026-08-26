@@ -2,7 +2,7 @@
 import type { Address } from '@refconcept/ui/types'
 
 definePageMeta({ layout: 'account', middleware: ['auth', 'verified'] })
-useHead({ title: 'Adreslerim' })
+useSeo({ title: 'Adreslerim', noindex: true })
 
 const api = useApi()
 

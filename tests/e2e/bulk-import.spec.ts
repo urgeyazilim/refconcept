@@ -4,6 +4,7 @@ import { DEFAULT_PASSWORD } from './support/accounts'
 import { createApprovedSeller } from './support/sellers'
 import { fillStable } from './support/forms'
 import { gotoInteractive, waitForHydration } from './support/hydration'
+import { signInThrough } from './support/signin'
 
 /**
  * The Phase 4 gate: a spreadsheet becomes a catalogue, and a machine keeps it current.
@@ -24,15 +25,9 @@ const API = process.env.E2E_API_URL ?? 'http://localhost:58000'
 test.describe.configure({ timeout: 300_000 })
 
 async function signIn(page: Page, base: string, email: string): Promise<void> {
-  await page.context().clearCookies()
-  await page.goto(`${base}/auth/login`)
-  await waitForHydration(page)
-
-  await fillStable(page, '#email', email)
-  await fillStable(page, '#password', DEFAULT_PASSWORD)
-  await page.getByRole('button', { name: 'Giriş yap' }).click()
-
-  await expect(page).toHaveURL(new RegExp(`${base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/?$`))
+  // Retries once through a rate-limit refusal. See tests/e2e/support/signin.ts — the
+  // limiter is production-strength on purpose, and a suite this long trips it.
+  await signInThrough(page, base, email)
 }
 
 /** A Turkish-Excel-shaped CSV: BOM, semicolons, comma decimals. */

@@ -4,6 +4,7 @@ import { createVerifiedAccount, DEFAULT_PASSWORD, grantPlatformRole } from './su
 import { pngBuffer } from './support/sellers'
 import { fillStable } from './support/forms'
 import { gotoInteractive, waitForHydration } from './support/hydration'
+import { signInThrough } from './support/signin'
 
 /**
  * The Phase 5 gate: a customer's home, and who can see it.
@@ -23,16 +24,9 @@ const API = process.env.E2E_API_URL ?? 'http://localhost:58000'
 test.describe.configure({ timeout: 300_000 })
 
 async function signIn(page: Page, email: string): Promise<void> {
-  await page.context().clearCookies()
-  await page.goto(`${STOREFRONT}/auth/login`)
-  await waitForHydration(page)
-
-  await fillStable(page, '#email', email)
-  await fillStable(page, '#password', DEFAULT_PASSWORD)
-  await page.getByRole('button', { name: 'Giriş yap' }).click()
-
-  // The storefront lands a signed-in customer on their account, not the home page.
-  await expect(page).toHaveURL(/\/account$/)
+  // Retries once through a rate-limit refusal. See tests/e2e/support/signin.ts — the
+  // limiter is production-strength on purpose, and a suite this long trips it.
+  await signInThrough(page, STOREFRONT, email, /\/account$/)
 }
 
 /**

@@ -27,6 +27,17 @@ const nav = [
 
 <template>
   <div data-rc-theme="operational" class="flex min-h-screen bg-bg text-ink">
+    <!--
+      First in the DOM and visible only when focused. An operator working a queue by
+      keyboard should not tab through the whole sidebar to reach the row they came for.
+    -->
+    <a
+      href="#main"
+      class="sr-only rounded-sm bg-charcoal px-4 py-2 text-inverse focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-[60]"
+    >
+      İçeriğe geç
+    </a>
+
     <aside class="hidden w-64 shrink-0 border-r border-line bg-surface lg:block">
       <div class="flex h-16 items-center gap-2.5 border-b border-line px-6">
         <span class="grid size-8 place-items-center rounded-sm bg-charcoal text-inverse text-xs font-medium">
@@ -73,7 +84,7 @@ const nav = [
         </NuxtLink>
       </header>
 
-      <main class="flex-1 p-6">
+      <main id="main" class="flex-1 p-6">
         <slot />
       </main>
     </div>

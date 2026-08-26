@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test'
 import { createVerifiedAccount, DEFAULT_PASSWORD, grantPlatformRole } from './support/accounts'
 import { fillStable } from './support/forms'
 import { gotoInteractive, waitForHydration } from './support/hydration'
+import { signInThrough } from './support/signin'
 
 /**
  * The Phase 7 gate: a customer's credits behave like money.
@@ -22,24 +23,9 @@ const ADMIN = process.env.E2E_ADMIN_PANEL_URL ?? 'http://localhost:3002'
 const API = process.env.E2E_API_URL ?? 'http://localhost:58000'
 
 async function signIn(page: Page, base: string, email: string): Promise<void> {
-  // Cookies are scoped by host and ignore the port, so the three dev apps share one jar.
-  await page.context().clearCookies()
-  await page.goto(`${base}/auth/login`)
-  await waitForHydration(page)
-
-  await fillStable(page, '#email', email)
-  await fillStable(page, '#password', DEFAULT_PASSWORD)
-  await page.getByRole('button', { name: 'Giriş yap' }).click()
-
-  /*
-   * Waited for, not assumed. Without this the next navigation races the sign-in and the
-   * auth middleware bounces straight back to the form — which then fails on a missing
-   * heading and looks like a broken page rather than a test that moved too early.
-   *
-   * The landing page differs per app (the storefront lands on /account, the admin panel
-   * on /), so what is waited for is simply leaving the login form.
-   */
-  await page.waitForURL(url => !url.pathname.startsWith('/auth/login'))
+  // Retries once through a rate-limit refusal. See tests/e2e/support/signin.ts — the
+  // limiter is production-strength on purpose, and a suite this long trips it.
+  await signInThrough(page, base, email)
 }
 
 test.describe.configure({ timeout: 300_000 })

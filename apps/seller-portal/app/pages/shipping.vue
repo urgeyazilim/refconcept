@@ -73,6 +73,17 @@ async function open(order: SellerOrderSummary) {
   carrier.value = ''
   trackingNumber.value = ''
 
+  await refresh(order)
+}
+
+/**
+ * Re-reads the parcels and what is left, without touching the banner.
+ *
+ * Separate from open() precisely because of that: refreshing after a save used to clear
+ * the confirmation it had just set, so the seller saw the parcel appear and no word about
+ * whether it had worked.
+ */
+async function refresh(order: SellerOrderSummary) {
   try {
     const response = await api.get<{ data: ShipmentSummary[], meta: { pending: PendingShipmentLine[] } }>(
       `/api/v1/seller/orders/${order.seller_order_number}/shipments`,
@@ -113,12 +124,13 @@ async function ship() {
       items: chosen.value,
     })
 
-    banner.value = { tone: 'success', text: 'Kargo kaydedildi.' }
-
     const order = active.value
 
     await load()
-    await open(order)
+    await refresh(order)
+
+    // Set last, so the reload cannot wipe the only feedback the seller gets.
+    banner.value = { tone: 'success', text: 'Kargo kaydedildi.' }
   } catch (error) {
     banner.value = {
       tone: 'danger',
@@ -142,12 +154,12 @@ async function markDelivered(shipment: ShipmentSummary) {
       `/api/v1/seller/orders/${active.value.seller_order_number}/shipments/${shipment.id}/delivered`,
     )
 
-    banner.value = { tone: 'success', text: 'Teslim edildi olarak işaretlendi.' }
-
     const order = active.value
 
     await load()
-    await open(order)
+    await refresh(order)
+
+    banner.value = { tone: 'success', text: 'Teslim edildi olarak işaretlendi.' }
   } catch (error) {
     banner.value = {
       tone: 'danger',

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'account', middleware: 'auth' })
-useHead({ title: 'Hesabım' })
+useSeo({ title: 'Hesabım', noindex: true })
 
 const api = useApi()
 const { user, fetchUser, displayName } = useAuth()

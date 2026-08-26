@@ -4,6 +4,7 @@ import { createVerifiedAccount, DEFAULT_PASSWORD } from './support/accounts'
 import { listProduct } from './support/catalog'
 import { fillStable } from './support/forms'
 import { gotoInteractive, waitForHydration } from './support/hydration'
+import { signInThrough } from './support/signin'
 
 /**
  * The Phase 16 gate in a browser: commission, the ledger, and getting a seller paid.
@@ -19,15 +20,9 @@ const ADMIN = process.env.E2E_ADMIN_PANEL_URL ?? 'http://localhost:3002'
 const API = process.env.E2E_API_URL ?? 'http://localhost:58000'
 
 async function signIn(page: Page, email: string, origin: string): Promise<void> {
-  await page.context().clearCookies()
-  await page.goto(`${origin}/auth/login`)
-  await waitForHydration(page)
-
-  await fillStable(page, '#email', email)
-  await fillStable(page, '#password', DEFAULT_PASSWORD)
-  await page.getByRole('button', { name: 'Giriş yap' }).click()
-
-  await expect(page).toHaveURL(/\/(account|)$/)
+  // Retries once through a rate-limit refusal. See tests/e2e/support/signin.ts — the
+  // limiter is production-strength on purpose, and a suite this long trips it.
+  await signInThrough(page, origin, email)
 }
 
 /** Buys the listing, pays, and walks the seller order to delivered. */

@@ -1,14 +1,9 @@
 <script setup lang="ts">
-useHead({
+useSeo({
   title: 'Odanı gör, şekillendir, yaşa',
-  meta: [
-    {
-      name: 'description',
-      content:
-        'RefConcept odanın fotoğrafını yapay zekâ ile analiz eder, sana özel bir tasarım '
-        + 'üretir ve tasarımdaki her parçayı bütçene uyan gerçek ürünlerle eşleştirir.',
-    },
-  ],
+  description:
+    'RefConcept odanın fotoğrafını yapay zekâ ile analiz eder, sana özel bir tasarım '
+    + 'üretir ve tasarımdaki her parçayı bütçene uyan gerçek ürünlerle eşleştirir.',
 })
 
 /** The six pillars from 22_SCREEN_BLUEPRINTS §3, each saying what it actually does. */

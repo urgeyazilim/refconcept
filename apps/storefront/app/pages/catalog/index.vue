@@ -13,7 +13,12 @@ import type { CatalogCategory, CatalogVocabulary, Paginated, Product } from '@re
  * `publiclyVisible` scope, so a draft or a suspended seller's listing cannot appear
  * however the filters are combined.
  */
-useHead({ title: 'Ürünler' })
+useSeo({
+  title: 'Ürünler',
+  description:
+    'RefConcept pazar yerindeki mobilya ve dekorasyon ürünleri. Odanıza uygun parçaları '
+    + 'stil, oda tipi ve bütçeye göre filtreleyin.',
+})
 
 const api = useApi()
 const route = useRoute()

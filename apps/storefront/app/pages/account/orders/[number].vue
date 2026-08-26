@@ -25,7 +25,13 @@ try {
   loadError.value = error instanceof ApiError ? error.message : 'Sipariş yüklenemedi.'
 }
 
-useHead({ title: () => (order.value ? `Sipariş ${order.value.order_number}` : 'Sipariş') })
+// An order number in a page title is precisely the thing that must never reach a search
+// result: not secret, but protected, and a URL a crawler can reach is a URL a search result
+// can carry.
+useSeo(() => ({
+  title: order.value ? `Sipariş ${order.value.order_number}` : 'Sipariş',
+  noindex: true,
+}))
 
 function money(minor: number, currency = 'TRY'): string {
   return new Intl.NumberFormat('tr-TR', { style: 'currency', currency }).format(minor / 100)

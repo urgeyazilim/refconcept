@@ -12,19 +12,19 @@ WEB
 IN_PROGRESS
 
 ## Current Phase
-PHASE_20
+PHASE_21
 
 ## Current Task
-Not started — Phase 19 is closed; Phases 12 and 13 remain deferred (see below) and Phase 20 has not begun.
+Not started — Phase 20 is closed; Phases 12 and 13 remain deferred (see below) and Phase 21 has not begun.
 
 ## Last Completed Task
-P19-T006 — Phase 19 gate verified end to end (see `TEST_REPORT.md`).
+P20-T006 — Phase 20 gate verified end to end (see `TEST_REPORT.md`).
 
 ## Next Task
-Phase 20 — Storefront Complete + Approved Design Language.
+Phase 21 — Hardening.
 
 ## Test State
-PASS — 775 backend tests / 2467 assertions, 67 Playwright E2E journeys across all three
+PASS — 775 backend tests / 2467 assertions, 76 Playwright E2E journeys across all three
 apps, PHPStan level 6, Pint, ESLint, vue-tsc and the design token guard all clean.
 
 ## Release State
@@ -1232,6 +1232,68 @@ head while looking at a screen that already knows the answer.
 reconciles them — with `sync()`, so a permission *removed* from the enum is removed from the
 role too. Phase 19's E2E run caught the deployment consequence: the code was right and the
 environment was stale.
+
+### PHASE_20_STOREFRONT_COMPLETE — DONE (2026-08-26)
+
+```text
+UPDATED_AT: 2026-08-26
+COMMIT_OR_SNAPSHOT: phase-20-storefront
+PHASE: 20 — Storefront Complete + Approved Design Language
+TASK: P20-T001 .. P20-T006
+STATUS: DONE
+FILES_CHANGED:
+  packages/ui/src/runtime/useSeo.ts
+  packages/ui/src/runtime/useApi.ts  (the Nitro $fetch narrowing)
+  apps/storefront/server/routes/{robots.txt,sitemap.xml}.ts
+  apps/storefront/app/layouts/default.vue  (skip link, mobile drawer, real footer)
+  apps/storefront/app/pages/catalog/[slug].vue  (canonical, Open Graph, Product JSON-LD)
+  apps/storefront/app/pages/{index,cart,favorites}.vue
+  apps/storefront/app/pages/catalog/index.vue
+  apps/storefront/app/pages/account/**  (noindex)
+  apps/storefront/app/pages/checkout/{index,return}.vue  (noindex)
+  apps/storefront/app/pages/projects/index.vue  (noindex)
+  apps/storefront/nuxt.config.ts  (public site origin)
+  apps/seller-portal/app/layouts/default.vue, apps/admin-panel/app/layouts/default.vue
+  tests/e2e/storefront-quality.spec.ts
+MIGRATIONS: none
+TESTS_RUN: php artisan test · phpstan level 6 · pint · eslint · vue-tsc
+  · check-design-tokens.mjs · playwright (full suite)
+TEST_RESULT: PASS (775 backend tests / 2467 assertions; 76 E2E journeys)
+BLOCKERS: none
+NEXT_ACTION: Phase 21 — Hardening
+```
+
+**A phone could not use the site.** The desktop navigation is hidden below `lg` and nothing
+replaced it, so a phone visitor saw a logo and a sign-up button and had no way to reach the
+catalogue — which is most of the traffic and all of the shopping. The drawer is a real
+dialog: focus moves into it, Escape closes it, the page behind does not scroll, and it
+closes on navigation so it never reads as a stuck overlay.
+
+**The skip link is the first focusable element on the page.** Tabbing through a whole
+header to reach the article you arrived for is not navigation.
+
+**Everything behind a sign-in refuses to be indexed.** An order page is not secret — it is
+protected — but a URL a crawler can reach is a URL a search result can carry, and "it needed
+a login anyway" is no comfort once an order number is in the title. Those pages carry
+`noindex` and deliberately carry no canonical: a canonical asks a crawler to index one URL
+rather than another, which is a contradiction on a page that must not be indexed at all.
+
+**`robots.txt` and the sitemap are generated, not written.** A static disallow list drifts
+from the router the moment somebody adds a page, and a hand-kept sitemap is wrong the day
+after somebody adds a product. The sitemap pages the catalogue sixty at a time because the
+API caps a page at sixty — asking for two hundred is a 422, which is how a sitemap silently
+loses every product it was written to list.
+
+**Structured data says only what the page says.** A listing that claims availability the
+page contradicts is the kind of mismatch that gets a whole site's rich results turned off,
+and the customer who clicked through deserves the page to agree with the result.
+
+**The legal pages were reachable only by typing the URL.** A terms page nobody can find is
+a terms page nobody agreed to; the footer now links them, along with the catalogue.
+
+**Three navigation links pointed at the homepage.** "Platform", "Nasıl çalışır" and
+"Profesyoneller" all resolved to `/` — a menu that lies about where it goes. Replaced with
+the destinations that exist.
 
 ---
 

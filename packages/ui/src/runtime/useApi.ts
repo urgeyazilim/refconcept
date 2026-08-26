@@ -53,11 +53,17 @@ export function useApi() {
     }
 
     try {
+      /*
+       * Cast because `$fetch` is typed against Nitro's own routes once a server directory
+       * exists, and it then narrows `T` to whatever it believes an internal route returns.
+       * Every call here goes to the external Laravel API, which Nitro knows nothing about,
+       * so the caller's `T` is the more accurate of the two.
+       */
       return await $fetch<T>(path, {
         baseURL: config.public.apiBase,
         ...options,
         headers,
-      })
+      }) as T
     } catch (error: unknown) {
       throw toApiError(error)
     }

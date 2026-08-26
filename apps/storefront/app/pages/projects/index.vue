@@ -9,7 +9,7 @@ import type { Option, Paginated, ProjectSummary } from '@refconcept/ui/types'
  * with one flat and one living room should see their living room, not a chart about it.
  */
 definePageMeta({ middleware: ['auth', 'verified'], layout: 'account' })
-useHead({ title: 'Projelerim' })
+useSeo({ title: 'Projelerim', noindex: true })
 
 const api = useApi()
 

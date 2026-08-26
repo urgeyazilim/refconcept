@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test'
 import { createVerifiedAccount, DEFAULT_PASSWORD, grantOperatorRole } from './support/accounts'
 import { checkStable, fillStable } from './support/forms'
 import { gotoHydrated, waitForHydration } from './support/hydration'
+import { signInThrough } from './support/signin'
 
 /**
  * The seller onboarding journey from 15_CRITICAL_E2E_SCENARIOS.md, driven through the
@@ -17,14 +18,9 @@ const PORTAL = process.env.E2E_SELLER_PORTAL_URL ?? 'http://localhost:3001'
 const API = process.env.E2E_API_URL ?? 'http://localhost:58000'
 
 async function signIn(page: Page, email: string): Promise<void> {
-  await page.goto(`${PORTAL}/auth/login`)
-  await waitForHydration(page)
-
-  await fillStable(page, '#email', email)
-  await fillStable(page, '#password', DEFAULT_PASSWORD)
-  await page.getByRole('button', { name: 'Giriş yap' }).click()
-
-  await expect(page).toHaveURL(new RegExp(`${PORTAL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/?$`))
+  // Retries once through a rate-limit refusal. See tests/e2e/support/signin.ts — the
+  // limiter is production-strength on purpose, and a suite this long trips it.
+  await signInThrough(page, PORTAL, email)
 }
 
 test.describe('seller onboarding', () => {

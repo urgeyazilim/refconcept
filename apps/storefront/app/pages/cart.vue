@@ -12,7 +12,7 @@
  * be the worst possible moment.
  */
 definePageMeta({ middleware: 'auth' })
-useHead({ title: 'Sepetim' })
+useSeo({ title: 'Sepetim', noindex: true })
 
 interface CartLine {
   id: string

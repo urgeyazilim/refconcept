@@ -4,6 +4,7 @@ import { DEFAULT_PASSWORD } from './support/accounts'
 import { createApprovedSeller, pngBuffer, TEST_CATEGORY_SLUG } from './support/sellers'
 import { fillStable } from './support/forms'
 import { gotoHydrated, gotoInteractive, waitForHydration } from './support/hydration'
+import { signInThrough } from './support/signin'
 
 /**
  * The Phase 3 gate: a seller lists a product, a reviewer approves it, and only then
@@ -36,15 +37,9 @@ const API = process.env.E2E_API_URL ?? 'http://localhost:58000'
  * does not arise, so this belongs in the test rather than in the apps.
  */
 async function signIn(page: Page, base: string, email: string): Promise<void> {
-  await page.context().clearCookies()
-  await page.goto(`${base}/auth/login`)
-  await waitForHydration(page)
-
-  await fillStable(page, '#email', email)
-  await fillStable(page, '#password', DEFAULT_PASSWORD)
-  await page.getByRole('button', { name: 'Giriş yap' }).click()
-
-  await expect(page).toHaveURL(new RegExp(`${base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/?$`))
+  // Retries once through a rate-limit refusal. See tests/e2e/support/signin.ts — the
+  // limiter is production-strength on purpose, and a suite this long trips it.
+  await signInThrough(page, base, email)
 }
 
 /*

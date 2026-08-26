@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test'
 import { createVerifiedAccount, DEFAULT_PASSWORD, grantPlatformRole } from './support/accounts'
 import { fillStable } from './support/forms'
 import { gotoInteractive, waitForHydration } from './support/hydration'
+import { signInThrough } from './support/signin'
 
 /**
  * The Phase 18 gate in a browser: what a super admin can do, and what an operator cannot.
@@ -22,15 +23,9 @@ const ADMIN = process.env.E2E_ADMIN_PANEL_URL ?? 'http://localhost:3002'
 const API = process.env.E2E_API_URL ?? 'http://localhost:58000'
 
 async function signIn(page: Page, email: string): Promise<void> {
-  await page.context().clearCookies()
-  await page.goto(`${ADMIN}/auth/login`)
-  await waitForHydration(page)
-
-  await fillStable(page, '#email', email)
-  await fillStable(page, '#password', DEFAULT_PASSWORD)
-  await page.getByRole('button', { name: 'Giriş yap' }).click()
-
-  await expect(page).toHaveURL(/\/(account|)$/)
+  // Retries once through a rate-limit refusal. See tests/e2e/support/signin.ts — the
+  // limiter is production-strength on purpose, and a suite this long trips it.
+  await signInThrough(page, ADMIN, email)
 }
 
 /** An account with a platform role, ready to sign in with. */

@@ -4,6 +4,7 @@ import { createVerifiedAccount, DEFAULT_PASSWORD } from './support/accounts'
 import { listProduct } from './support/catalog'
 import { fillStable } from './support/forms'
 import { gotoInteractive, waitForHydration } from './support/hydration'
+import { signInThrough } from './support/signin'
 
 /**
  * The Phase 15 gate, in a browser: E2E-06 from 15_CRITICAL_E2E_SCENARIOS.md.
@@ -19,17 +20,9 @@ const SELLER_PORTAL = process.env.E2E_SELLER_PORTAL_URL ?? 'http://localhost:300
 const API = process.env.E2E_API_URL ?? 'http://localhost:58000'
 
 async function signIn(page: Page, email: string, origin: string): Promise<void> {
-  await page.context().clearCookies()
-  await page.goto(`${origin}/auth/login`)
-  await waitForHydration(page)
-
-  await fillStable(page, '#email', email)
-  await fillStable(page, '#password', DEFAULT_PASSWORD)
-  await page.getByRole('button', { name: 'Giriş yap' }).click()
-
-  // Waited for rather than assumed: navigating mid-sign-in lands on the login redirect
-  // and produces a locator timeout three steps later with no hint of the cause.
-  await expect(page).toHaveURL(/\/(account|)$/)
+  // Retries once through a rate-limit refusal. See tests/e2e/support/signin.ts — the
+  // limiter is production-strength on purpose, and a suite this long trips it.
+  await signInThrough(page, origin, email)
 }
 
 test.describe.configure({ timeout: 420_000 })
