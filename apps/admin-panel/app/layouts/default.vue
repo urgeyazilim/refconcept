@@ -12,6 +12,7 @@ const nav = [
   { label: 'AI', to: '/ai', icon: 'M12 3v2m0 14v2m9-9h-2M5 12H3m14.5-6.5-1.4 1.4M7.9 16.1l-1.4 1.4m11.6 0-1.4-1.4M7.9 7.9 6.5 6.5M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z' },
   { label: 'Krediler', to: '/credits', icon: 'M3 8.5h18M3 8.5A1.5 1.5 0 0 1 4.5 7h15A1.5 1.5 0 0 1 21 8.5m-18 0v8A1.5 1.5 0 0 0 4.5 18h15a1.5 1.5 0 0 0 1.5-1.5v-8M7 14h3' },
   { label: 'Ödemeler', to: '/payments', icon: 'M4 6h16v12H4zM4 10h16M8 15h4' },
+  { label: 'Finans', to: '/finance', icon: 'M12 3v18M8 7h6a2 2 0 0 1 0 4h-4a2 2 0 0 0 0 4h6' },
 ]
 </script>
 

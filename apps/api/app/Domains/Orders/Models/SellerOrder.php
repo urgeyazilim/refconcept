@@ -108,6 +108,18 @@ class SellerOrder extends Model
         return $this->hasMany(OrderStatusChange::class, 'seller_order_id');
     }
 
+    /** @return HasMany<\App\Domains\Fulfilment\Models\ReturnRequest, $this> */
+    public function returns(): HasMany
+    {
+        return $this->hasMany(\App\Domains\Fulfilment\Models\ReturnRequest::class, 'seller_order_id');
+    }
+
+    /** @return HasMany<\App\Domains\Fulfilment\Models\Shipment, $this> */
+    public function shipments(): HasMany
+    {
+        return $this->hasMany(\App\Domains\Fulfilment\Models\Shipment::class, 'seller_order_id');
+    }
+
     /** What the seller keeps once the platform's cut is taken. */
     public function payableMinor(): int
     {

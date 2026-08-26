@@ -33,6 +33,10 @@ final class DatabaseSeeder extends Seeder
         // stack rather than one that 503s the first time somebody picks it.
         $this->call(BankAccountSeeder::class);
 
+        // A platform commission default, because a sale with no rate is a sale whose
+        // commission is a guess.
+        $this->call(CommissionSeeder::class);
+
         if (app()->environment('production')) {
             $this->command?->info('Production environment: demo data skipped.');
 

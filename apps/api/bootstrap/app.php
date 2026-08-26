@@ -6,6 +6,9 @@ use App\Domains\Ai\Exceptions\AiJobRefused;
 use App\Domains\Commerce\Exceptions\CartRefused;
 use App\Domains\Credits\Console\SweepExpiredCreditsCommand;
 use App\Domains\Credits\Exceptions\InsufficientCredits;
+use App\Domains\Finance\Console\BuildSettlementsCommand;
+use App\Domains\Finance\Exceptions\SettlementRefused;
+use App\Domains\Fulfilment\Exceptions\FulfilmentRefused;
 use App\Domains\Identity\Console\GrantRoleCommand;
 use App\Domains\Inventory\Console\ReleaseExpiredReservationsCommand;
 use App\Domains\Matching\Console\EmbedCatalogueCommand;
@@ -35,6 +38,7 @@ return Application::configure(basePath: dirname(__DIR__))
         EmbedCatalogueCommand::class,
         ExpireCheckoutSessionsCommand::class,
         ExpireBankTransfersCommand::class,
+        BuildSettlementsCommand::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         // The three Nuxt clients are separate origins; CORS is configured in config/cors.php.
@@ -88,6 +92,18 @@ return Application::configure(basePath: dirname(__DIR__))
         // And for orders: an illegal transition is a 409 naming both states, so a seller
         // on a stale screen learns what the order actually is now.
         $exceptions->render(function (OrderRefused $e) {
+            return response()->json(['message' => $e->getMessage()], $e->status);
+        });
+
+        // A payout refusal, same shape: a second operator on a stale screen is told what
+        // happened rather than allowed through to post a second journal.
+        $exceptions->render(function (SettlementRefused $e) {
+            return response()->json(['message' => $e->getMessage()], $e->status);
+        });
+
+        // Shipping, returns and refunds. A closed return window is a 422 the customer can
+        // read; a return that is not theirs is a 404 that confirms nothing.
+        $exceptions->render(function (FulfilmentRefused $e) {
             return response()->json(['message' => $e->getMessage()], $e->status);
         });
 

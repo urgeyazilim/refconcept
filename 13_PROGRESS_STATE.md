@@ -12,19 +12,19 @@ WEB
 IN_PROGRESS
 
 ## Current Phase
-PHASE_16
+PHASE_17
 
 ## Current Task
-Not started — Phase 15 is closed; Phases 12 and 13 remain deferred (see below) and Phase 16 has not begun.
+Not started — Phase 16 is closed; Phases 12 and 13 remain deferred (see below) and Phase 17 has not begun.
 
 ## Last Completed Task
-P15-T006 — Phase 15 gate verified end to end (see `TEST_REPORT.md`).
+P16-T007 — Phase 16 gate verified end to end (see `TEST_REPORT.md`).
 
 ## Next Task
-Phase 16 — Commission / Ledger / Settlement, shipping its own UI slice alongside its API.
+Phase 17 — Shipping / Return / Refund, shipping its own UI slice alongside its API.
 
 ## Test State
-PASS — 645 backend tests / 1963 assertions, 46 Playwright E2E journeys across all three
+PASS — 678 backend tests / 2063 assertions, 50 Playwright E2E journeys across all three
 apps, PHPStan level 6, Pint, ESLint, vue-tsc and the design token guard all clean.
 
 ## Release State
@@ -941,6 +941,74 @@ is a return, with a different set of rights; allowing "cancel" there would leave
 and the goods in disagreement. Cancelling before that puts the stock back on the shelf,
 because the stock left when the payment was captured and a warehouse that disagrees with
 the ledger only reveals it weeks later as a sale nobody can fulfil.
+
+### PHASE_16_COMMISSION_LEDGER_SETTLEMENT — DONE (2026-08-26)
+
+```text
+UPDATED_AT: 2026-08-26
+COMMIT_OR_SNAPSHOT: phase-16-finance
+PHASE: 16 — Commission / Ledger / Settlement
+TASK: P16-T001 .. P16-T007
+STATUS: DONE
+FILES_CHANGED:
+  apps/api/database/migrations/0001_01_01_000024_create_finance_tables.php
+  apps/api/app/Domains/Finance/Enums/{LedgerAccount,SettlementStatus}.php
+  apps/api/app/Domains/Finance/Models/{CommissionRule,LedgerAccountRow,LedgerEntry,LedgerLine,
+    Settlement,SettlementItem}.php
+  apps/api/app/Domains/Finance/Services/{Ledger,JournalLine,CommissionResolver,CommissionDecision,
+    OrderAccounting,SettlementEligibility,SettlementService}.php
+  apps/api/app/Domains/Finance/Http/Controllers/{AdminFinanceController,SellerEarningsController}.php
+  apps/api/app/Domains/Finance/Console/BuildSettlementsCommand.php
+  apps/api/app/Domains/Finance/Exceptions/SettlementRefused.php
+  apps/api/app/Domains/Finance/Tests/{FinancialInvariantTest,FinanceHttpTest}.php
+  apps/api/app/Domains/Orders/Services/{OrderFactory,OrderStatusService}.php  (the finance hooks)
+  apps/api/database/seeders/{CommissionSeeder,DatabaseSeeder}.php
+  apps/api/config/refconcept.php, routes/domains/finance.php, routes/api.php, routes/console.php,
+    bootstrap/app.php
+  packages/ui/src/runtime/types.ts
+  apps/seller-portal/app/pages/earnings.vue, app/layouts/default.vue
+  apps/admin-panel/app/pages/finance/index.vue, app/layouts/default.vue
+  tests/e2e/settlement.spec.ts, tests/e2e/support/catalog.ts
+MIGRATIONS: 7 tables — commission_rules, ledger_accounts, ledger_entries, ledger_lines
+  (append-only, deferred balance trigger), seller_balances, settlements, settlement_items
+TESTS_RUN: php artisan test · phpstan level 6 · pint · eslint · vue-tsc
+  · check-design-tokens.mjs · playwright (full suite)
+TEST_RESULT: PASS (678 backend tests / 2063 assertions; 50 E2E journeys)
+BLOCKERS: none
+NEXT_ACTION: Phase 17 — Shipping / Return / Refund
+```
+
+**A marketplace's cash is mostly a liability.** It holds money it does not own: some of
+what a customer pays is commission and the rest is owed to sellers. So a sale posts a debit
+to cash and credits to each seller's payable plus commission revenue. Posting the whole
+amount as income and the payouts as expenses would balance perfectly and describe a
+completely different business — one that is enormously profitable right up until it pays
+its sellers.
+
+**Every entry balances, twice over.** Checked in the service with a message naming the
+figures, and again by a **deferred constraint trigger** that runs at commit — the only way
+to express "this must balance" in a database, because an entry is built line by line and
+can only be judged as a whole.
+
+**Nothing is ever edited.** Both tables refuse UPDATE and DELETE outright. A mistake is
+corrected by a reversing entry, so the mistake and the correction both stay visible; that
+is the difference between a ledger and a table of numbers.
+
+**The commission hierarchy has six rungs and the first is the snapshot.** Campaign, seller
++category, seller, category, platform default — resolved once, at order time, and copied
+onto the line. Re-resolving later would let a rate change rewrite what a seller earned last
+quarter. The decision carries the rule that produced it, because "why is my commission 14%"
+is the question sellers ask most and "because of the September campaign" is an answer they
+can act on.
+
+**Building, approving and paying are three separate acts.** Building is arithmetic and can
+be re-run; approving commits the money into a clearing account so it cannot be counted
+twice; paying is a person recording that a transfer left, with the bank's own reference.
+Collapsing them would turn a mistake in the arithmetic into a bank transfer.
+
+**A seller sees four figures, not one** — ready, pending, in payout, paid — because the
+money genuinely is in four states, and each unpaid order carries a sentence rather than a
+status: "12.09.2026 tarihinde hakedişe girer" is something a seller can plan around.
 
 ---
 

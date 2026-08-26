@@ -12,6 +12,8 @@ export interface ListedProduct {
   /** The seller owner's own address, for tests that sign into the portal as them. */
   sellerEmail: string
   operatorToken: string
+  /** The operator's own address, for tests that sign into the admin panel as them. */
+  operatorEmail: string
 }
 
 /**
@@ -119,5 +121,6 @@ export async function listProduct(
     sellerToken: seller.account.token,
     sellerEmail: seller.account.email,
     operatorToken: seller.operator.token,
+    operatorEmail: seller.operator.email,
   }
 }

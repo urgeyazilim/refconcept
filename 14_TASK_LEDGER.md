@@ -102,6 +102,13 @@
 | P15-T004 | 15 | BACKEND_AGENT | P15-T003 | DONE | stock tests | Cancelling before shipping returns the stock; shipped cannot be cancelled |
 | P15-T005 | 15 | STOREFRONT_AGENT | P15-T002..004 | DONE | orders E2E | Customer list and detail grouped by seller; seller queue with payable next to gross |
 | P15-T006 | 15 | INDEPENDENT_TEST_AGENT | P15-T001..005 | DONE | Phase 15 gate | 645 backend tests, 46 E2E journeys, 2 defects found and fixed (see TEST_REPORT.md) |
+| P16-T001 | 16 | ARCHITECT_AGENT | P15-T006 | DONE | schema review | Append-only journal, deferred balance trigger, per-seller payable accounts, one settlement per order |
+| P16-T002 | 16 | BACKEND_AGENT | P16-T001 | DONE | ledger invariants | Every entry balances; nothing edited; reversal not deletion; one journal per event |
+| P16-T003 | 16 | BACKEND_AGENT | P16-T001 | DONE | commission tests | Six-rung hierarchy resolved once at order time and snapshotted onto the line |
+| P16-T004 | 16 | BACKEND_AGENT | P16-T002 | DONE | eligibility tests | Captured, delivered, held, unsuspended, unsettled — with a sentence per order |
+| P16-T005 | 16 | BACKEND_AGENT | P16-T004 | DONE | payout tests | Build, approve, pay as three acts; no double approval; no order in two runs |
+| P16-T006 | 16 | STOREFRONT_AGENT | P16-T003..005 | DONE | finance E2E | Seller earnings with four states; admin finance screen leading on "denk mi" |
+| P16-T007 | 16 | INDEPENDENT_TEST_AGENT | P16-T001..006 | DONE | Phase 16 gate | 678 backend tests, 50 E2E journeys, 3 defects found and fixed (see TEST_REPORT.md) |
 
 ## Scope notes
 

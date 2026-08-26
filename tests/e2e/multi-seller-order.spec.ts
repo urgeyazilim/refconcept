@@ -159,7 +159,8 @@ test.describe('multi-seller order', () => {
      * The seller sees what they will actually be paid, next to what the customer paid.
      * Showing only the gross is how a payout becomes a surprise.
      */
-    await expect(page.getByText('Hakediş')).toBeVisible()
+    // The column, not the navigation link Phase 16 added beside it.
+    await expect(page.getByRole('columnheader', { name: 'Hakediş' })).toBeVisible()
 
     await page.getByRole('button', { name: 'Aç' }).first().click()
 

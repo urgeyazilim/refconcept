@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domains\Orders\Services;
 
 use App\Domains\Audit\Services\AuditLogger;
+use App\Domains\Finance\Services\OrderAccounting;
 use App\Domains\Identity\Models\User;
 use App\Domains\Inventory\Enums\MovementType;
 use App\Domains\Inventory\Services\InventoryLedger;
@@ -41,6 +42,7 @@ final class OrderStatusService
 {
     public function __construct(
         private readonly InventoryLedger $stock,
+        private readonly OrderAccounting $accounting,
         private readonly AuditLogger $audit,
     ) {}
 
@@ -115,6 +117,22 @@ final class OrderStatusService
             reason: $reason,
             actor: $actor,
         );
+
+        if ($next === SellerOrderStatus::Cancelled) {
+            /*
+             * The money follows the goods. A cancelled part reverses this seller's share
+             * and records what the customer is owed — as its own entry rather than a
+             * reversal of the whole sale, because the other sellers' parcels are still on
+             * their way.
+             */
+            $this->accounting->recordSellerCancellation($updated, $reason ?? 'İptal', $actor);
+        }
+
+        if (in_array($next, [SellerOrderStatus::Cancelled, SellerOrderStatus::Delivered], true)) {
+            // Delivery starts the settlement hold, so the projected balance changes even
+            // though no journal line does.
+            $this->accounting->rebuildBalance((string) $updated->seller_id, $updated->currency);
+        }
 
         if ($next === SellerOrderStatus::Shipped) {
             $this->notifyCustomer($updated);

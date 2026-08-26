@@ -122,6 +122,34 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Settlement
+    |--------------------------------------------------------------------------
+    | How long a seller's money is held after delivery before it can be paid
+    | out. The return window plus a margin: paying before it closes means
+    | chasing a seller for money they have already spent. Configured rather
+    | than constant because it is a commercial decision that changes.
+    */
+
+    'settlement' => [
+        'hold_days' => (int) env('REFCONCEPT_SETTLEMENT_HOLD_DAYS', 14),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Returns
+    |--------------------------------------------------------------------------
+    | How long after delivery a customer may still ask to send something back.
+    | Fourteen days is the Turkish distance-selling right; the settlement hold
+    | matches it deliberately, because paying a seller before the window closes
+    | means chasing money from somebody who has already spent it.
+    */
+
+    'returns' => [
+        'window_days' => (int) env('REFCONCEPT_RETURN_WINDOW_DAYS', 14),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Legal document versions
     |--------------------------------------------------------------------------
     | The version a registration must accept. Bumping these forces re-acceptance

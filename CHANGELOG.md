@@ -238,6 +238,47 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a demo product page claimed six in stock while the stock screen was empty. Opening
   stock is now booked as a receipt through the ledger.
 
+### Added — Phase 16 (Commission, ledger and settlement)
+
+- **A double-entry journal, append-only.** Every financial event is a set of lines that sum
+  to zero, and neither the entries nor the lines can be updated or deleted — a mistake is
+  corrected by a reversing entry so both stay visible. That is the difference between a
+  ledger and a table of numbers, and it is enforced by database triggers rather than by
+  convention.
+- **Balance checked twice.** In the service, with a message naming both figures, and again
+  by a **deferred constraint trigger** that runs at commit. The deferral is the point: an
+  entry is built line by line and can only be judged as a whole.
+- **A marketplace's cash treated as what it is.** A sale debits cash and credits each
+  seller's payable plus commission revenue. Posting the customer's payment as income and
+  the payouts as expenses would balance perfectly and describe a different business — one
+  that looks enormously profitable right until it pays its sellers.
+- **The commission hierarchy from the finance rules**, six rungs deep: the order item's own
+  snapshot, then a campaign, seller+category, seller, category and the platform default. It
+  is resolved once, at order time, and copied onto the line — re-resolving later would let a
+  rate change rewrite what a seller earned last quarter. The decision carries the rule that
+  produced it, because "why is my commission 14%" is the question sellers ask most.
+- **Settlement eligibility with reasons.** Payment captured, goods delivered, hold period
+  passed, nothing open against it, seller still trading, not already settled. Each order a
+  seller is waiting on carries a sentence — "12.09.2026 tarihinde hakedişe girer" — rather
+  than a status code, because a date is something a seller can plan around.
+- **A three-step payout.** Building is arithmetic and can be re-run and posts nothing;
+  approving commits the money into a clearing account so it cannot be counted twice or
+  swept into a second run; paying is a person recording that a transfer left, with the
+  bank's own reference. Collapsing them would turn a mistake in the arithmetic into a bank
+  transfer, and a nightly job that approved its own payouts would pay a suspended seller at
+  three on a Sunday morning.
+- **The same order can never be in two settlements**, enforced by a unique index rather than
+  by care — a bank transfer is not something anybody can recall.
+- **Seller balances as a projection**, rebuilt from the journal rather than incremented. If
+  it ever disagrees, the journal is right and this is rebuilt; incrementing would mean every
+  write has to be perfect forever.
+- **An earnings page in the seller portal** showing four figures rather than one — ready,
+  pending, in payout, paid — because the money really is in four states, and a single
+  "bakiye" is how a seller reads a number they cannot yet have.
+- **A finance screen in the admin panel** that says whether the books balance before it says
+  anything else, lists the account balances and the journal, and keeps approving and paying
+  as two separate buttons.
+
 ### Added — Phase 15 (Orders and seller orders)
 
 - **One order for the customer, one per seller inside it.** A marketplace order is two

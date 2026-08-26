@@ -918,3 +918,92 @@ export interface SellerOrderDetail extends SellerOrderSummary {
   cancellation_reason: string | null
   items: OrderLine[]
 }
+
+/*
+ * Finance.
+ *
+ * A seller's balance is split four ways because the money is genuinely in four states, and
+ * collapsing them into one "balance" is how a seller reads a number they cannot yet have.
+ */
+
+export interface SellerEarningsSummary {
+  currency: string
+  /** Earned, but the goods are not delivered or the hold is still running. */
+  pending_minor: number
+  /** Delivered, held out, and ready to be paid. */
+  available_minor: number
+  /** In an approved settlement that has not left the bank yet. */
+  reserved_minor: number
+  paid_out_minor: number
+  lifetime_commission_minor: number
+  hold_days: number
+}
+
+export interface SellerEarningsOrder {
+  seller_order_number: string
+  status: string
+  status_label: string
+  total_minor: number
+  commission_minor: number
+  payable_minor: number
+  delivered_at: string | null
+  /** A sentence, not a code: "12.09.2026 tarihinde hakedişe girer". */
+  settlement_note: string
+}
+
+export type SettlementStatus = 'draft' | 'approved' | 'paid' | 'cancelled'
+
+export interface SettlementRow {
+  id: string
+  reference: string
+  status: SettlementStatus
+  status_label: string
+  currency: string
+  period_start: string
+  period_end: string
+  gross_minor: number
+  commission_minor: number
+  adjustment_minor: number
+  net_minor: number
+  item_count: number
+  seller_name: string | null
+  approved_at: string | null
+  paid_at: string | null
+  payout_reference: string | null
+  note: string | null
+}
+
+export interface LedgerAccountBalance {
+  code: string
+  label: string
+  type: string
+  balance_minor: number
+}
+
+export interface FinanceOverview {
+  /** If this is ever false, nothing else on the page means anything. */
+  is_balanced: boolean
+  accounts: LedgerAccountBalance[]
+  /** Every seller's payable added together — what the platform owes in total. */
+  sellers_owed_minor: number
+  open_settlements: number
+  sellers_owed: number
+}
+
+export interface LedgerEntryRow {
+  id: string
+  type: string
+  description: string
+  currency: string
+  total_minor: number
+  reference_type: string | null
+  reference_id: string | null
+  is_reversal: boolean
+  posted_at: string
+  lines: Array<{
+    account: string | null
+    debit_minor: number
+    credit_minor: number
+    memo: string | null
+  }>
+}

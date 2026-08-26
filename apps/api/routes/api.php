@@ -27,4 +27,6 @@ Route::prefix('v1')->as('v1.')->group(function (): void {
     require __DIR__.'/domains/shopping.php';
     require __DIR__.'/domains/payments.php';
     require __DIR__.'/domains/orders.php';
+    require __DIR__.'/domains/finance.php';
+    require __DIR__.'/domains/fulfilment.php';
 });

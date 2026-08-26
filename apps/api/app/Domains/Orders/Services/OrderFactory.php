@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domains\Orders\Services;
 
+use App\Domains\Finance\Services\CommissionResolver;
+use App\Domains\Finance\Services\OrderAccounting;
 use App\Domains\Orders\Models\Order;
 use App\Domains\Orders\Models\OrderItem;
 use App\Domains\Orders\Models\OrderStatusChange;
@@ -11,7 +13,6 @@ use App\Domains\Orders\Models\SellerOrder;
 use App\Domains\Orders\Notifications\SellerOrderPlaced;
 use App\Domains\Payments\Models\CheckoutSession;
 use App\Domains\Payments\Services\CheckoutFulfiller;
-use App\Domains\Sellers\Models\Seller;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -34,7 +35,21 @@ use Illuminate\Support\Facades\Notification;
  */
 final class OrderFactory
 {
-    public function __construct(private readonly OrderNumbers $numbers) {}
+    public function __construct(
+        private readonly OrderNumbers $numbers,
+        private readonly CommissionResolver $commissions,
+        private readonly OrderAccounting $accounting,
+    ) {}
+
+    /** Refreshes each seller's projected balance after a sale. */
+    private function rebuildBalances(Order $order): void
+    {
+        $order->loadMissing('sellerOrders');
+
+        foreach ($order->sellerOrders as $sellerOrder) {
+            $this->accounting->rebuildBalance((string) $sellerOrder->seller_id, $order->currency);
+        }
+    }
 
     /**
      * Builds the master order and its seller orders.
@@ -66,6 +81,17 @@ final class OrderFactory
 
             return $winner;
         }
+
+        /*
+         * The journal, after the order exists and outside its transaction.
+         *
+         * Idempotent through the ledger's own key, so a duplicate confirmation posts once
+         * — and separate from the order transaction because a posting that fails should
+         * leave a findable order with no journal rather than roll back an order the
+         * customer has already paid for.
+         */
+        $this->accounting->recordSale($order);
+        $this->rebuildBalances($order);
 
         $this->notifySellers($order);
 
@@ -169,7 +195,19 @@ final class OrderFactory
         $unitPrice = (int) ($line['unit_price_minor'] ?? 0);
         $lineTotal = (int) ($line['line_total_minor'] ?? $unitPrice * $quantity);
 
-        $commissionBps = $this->commissionBpsFor($sellerOrder->seller_id);
+        /*
+         * Resolved once, here, and copied onto the line.
+         *
+         * The hierarchy — campaign, seller+category, seller, category, platform default —
+         * is asked at order time and never again: re-resolving later would let a rate
+         * change rewrite what a seller earned last quarter.
+         */
+        $decision = $this->commissions->resolve(
+            $sellerOrder->seller_id,
+            $cartLine?->product?->primary_category_id,
+        );
+
+        $commissionBps = $decision->rateBps;
 
         OrderItem::query()->create([
             'order_id' => $order->getKey(),
@@ -194,7 +232,7 @@ final class OrderFactory
              * column exists before Phase 16 builds the resolver that fills it properly.
              */
             'commission_rate_bps' => $commissionBps,
-            'commission_minor' => (int) round($lineTotal * $commissionBps / 10_000),
+            'commission_minor' => $this->commissions->amountFor($lineTotal, $commissionBps),
             'design_match_id' => $cartLine?->design_match_id,
         ]);
     }
@@ -211,20 +249,6 @@ final class OrderFactory
             'total_minor' => $subtotal,
             'commission_minor' => (int) $items->sum('commission_minor'),
         ])->save();
-    }
-
-    /**
-     * The seller's rate, or the platform default.
-     *
-     * The full hierarchy — campaign, seller+category, category — is Phase 16's. This is the
-     * bottom two rungs of it, which is what exists today, and it is read here rather than
-     * at payout time because the snapshot has to be taken now.
-     */
-    private function commissionBpsFor(string $sellerId): int
-    {
-        $sellerRate = Seller::query()->whereKey($sellerId)->value('default_commission_bps');
-
-        return (int) ($sellerRate ?? config('refconcept.commission.platform_default_bps', 1200));
     }
 
     /**

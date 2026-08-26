@@ -1399,3 +1399,72 @@ own account and a person confirms it against a statement.
 - **No order documents.** An invoice compliant with Turkish e-Arşiv rules is a tax
   integration rather than a PDF, and belongs with that work. The order detail page is
   printable and carries everything a customer needs to see.
+
+---
+
+## Phase 16 — Commission, ledger and settlement
+
+**Date:** 2026-08-26
+**Scope:** where the money is, who it belongs to, and how it gets to them.
+
+### Gate criteria (04_WEB_PHASE_PLAN.md: financial invariant suite)
+
+| # | Criterion | Method | Result |
+|---|---|---|---|
+| 1 | **A sale posts a balanced journal** | Pest | **PASS** — debit equals credit and equals what the customer paid |
+| 2 | **The whole ledger balances** | Pest | **PASS** — asserted after every scenario in the suite |
+| 3 | **Cash is mostly a liability, not revenue** | Pest | **PASS** — seller payables plus commission equal the cash held |
+| 4 | A duplicate confirmation posts one journal | Pest | **PASS** — idempotency key derived from the event |
+| 5 | **An unbalanced entry is refused in the service** | Pest | **PASS** — with both figures named |
+| 6 | **An unbalanced entry is refused by the database** | Pest (raw insert) | **PASS** — deferred constraint trigger, forced with `SET CONSTRAINTS ALL IMMEDIATE` |
+| 7 | **The ledger cannot be edited** | Pest (raw `UPDATE`/`DELETE`) | **PASS** — triggers on both tables |
+| 8 | **A mistake is undone by a reversing entry** | Pest | **PASS** — nets to zero, both entries still readable |
+| 9 | Reversing twice reverses once | Pest | **PASS** — otherwise the original is re-posted |
+| 10 | **The commission hierarchy prefers the most specific rule** | Pest | **PASS** — platform → category → seller → seller+category → campaign |
+| 11 | A finished campaign is ignored | Pest | **PASS** |
+| 12 | The decision names the rule that produced it | Pest | **PASS** — "Eylül kampanyası", not 500 |
+| 13 | **The snapshot survives a later rate change** | Pest | **PASS** — rung one of the hierarchy |
+| 14 | A seller's negotiated column still counts | Pest (suite) | **PASS** — treated as the `seller` rung so the existing screen keeps working |
+| 15 | **An undelivered order cannot be settled** | Pest | **PASS** |
+| 16 | **A delivery inside the hold cannot be settled** | Pest + Playwright | **PASS** — the return window |
+| 17 | A delivery past the hold can | Pest | **PASS** |
+| 18 | A suspended seller cannot be paid | Pest | **PASS** |
+| 19 | A draft posts nothing to the ledger | Pest | **PASS** — which is what makes re-running the builder safe |
+| 20 | **Approving moves money into a clearing account** | Pest | **PASS** |
+| 21 | **Paying moves it out of the bank** | Pest | **PASS** — and the books still balance |
+| 22 | **A settlement cannot be approved twice** | Pest + Pest (HTTP) | **PASS** — 409 naming the current status |
+| 23 | A settlement cannot be paid before approval | Pest + Pest (HTTP) | **PASS** |
+| 24 | A payout reference is required | Pest (HTTP) | **PASS** — a payout nobody can look up is a seller asking where their money is |
+| 25 | **The same order is never in two settlements** | Pest + unique index | **PASS** — a bank transfer cannot be recalled |
+| 26 | Cancelling returns orders to the pool | Pest | **PASS** — the approval is unwound by a reversing entry |
+| 27 | **A cancelled seller order unwinds only that seller's share** | Pest | **PASS** — the other sellers' parcels are still on their way |
+| 28 | The seller balance projection matches the journal | Pest | **PASS** — rebuilt from the journal, never incremented |
+| 29 | A seller sees four figures and a sentence per order | Pest (HTTP) + Playwright | **PASS** |
+| 30 | One seller cannot see another's earnings | Pest (HTTP) | **PASS** |
+| 31 | **Reading the books and moving money are separate grants** | Pest (HTTP) | **PASS** — an analyst reads, an operator settles |
+| 32 | A seller cannot reach platform finance | Pest (HTTP) + Playwright | **PASS** |
+| 33 | A contradictory commission rule is refused | Pest (HTTP) + CHECK | **PASS** — a `seller` rule with a category cannot be written |
+
+### Defects found and fixed in this phase
+
+| Id | Severity | Defect | Fix |
+|---|---|---|---|
+| P16-D001 | **P1** | The commission hierarchy picked the wrong rule. Several sort keys passed to `Collection::sortBy()` as closures are not the multi-key sort they look like, so a category rate beat a negotiated seller rate — every affected order would have been snapshotted with the wrong commission and no way to tell afterwards. | One composed sort key, built as a string so specificity, priority and recency order in a single ascending pass |
+| P16-D002 | P2 | A self-referencing foreign key inside the same `CREATE TABLE` — PostgreSQL refuses it because the primary key does not exist yet. | Added after the table with an explicit `ALTER TABLE` |
+| P16-D003 | P3 | A test asserted against "the newest order" where two were placed in the same test and `placed_at` can tie — it would have passed for the wrong reason. | Selected by exclusion instead |
+
+### Known limitations
+
+- **The settlement period is derived, not calendared.** A run covers the deliveries it
+  actually contains rather than a fixed fortnight. Fixed cycles per seller are a
+  commercial feature, not a correctness one, and the schema carries the dates for it.
+- **No adjustments yet.** `settlements.adjustment_minor` exists and is always zero:
+  manual corrections, penalties and goodwill credits are operator tooling that belongs
+  with Phase 18's admin work.
+- **A cancellation records what the customer is owed but does not refund it.** The journal
+  moves the money to `LIABILITY:CUSTOMER_REFUND`; actually sending it back is a refund
+  against the payment, and the refund state machine is Phase 17.
+- **The approve-then-pay two-step is proved in the backend suite, not in the browser.** A
+  settlement needs a delivery past the hold, and the only ways to produce one in an E2E run
+  are to wait a fortnight or to open a test-only endpoint that ages deliveries. An endpoint
+  that moves money closer to leaving is not worth the coverage.

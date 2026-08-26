@@ -76,3 +76,15 @@ Schedule::command('refconcept:expire-bank-transfers')
     ->everyTenMinutes()
     ->withoutOverlapping()
     ->runInBackground();
+
+/*
+ * Payout drafts, ready for somebody to look at in the morning.
+ *
+ * Only drafts: nothing is posted and no money moves. A schedule that approved its own
+ * payouts would be a schedule that pays a suspended seller at three on a Sunday morning,
+ * and the point of the draft is that a person decides.
+ */
+Schedule::command('refconcept:build-settlements')
+    ->dailyAt('06:00')
+    ->withoutOverlapping()
+    ->runInBackground();
