@@ -143,6 +143,14 @@
 | P21-T007 | 21 | BACKEND_AGENT | P20-T006 | DONE | observability + CDN | A request id on every response; product media cached immutably |
 | P21-T008 | 21 | BACKEND_AGENT | P16-T007 | DONE | payment reconciliation | Provider log against the journal, with an exit code a scheduler can alert on |
 | P21-T009 | 21 | INDEPENDENT_TEST_AGENT | P21-T001..008 | DONE | Phase 21 gate | 805 backend tests, 76 E2E journeys, P0/P1 = 0 after 6 defects fixed (see TEST_REPORT.md) |
+| P22-T001 | 22 | BACKEND_AGENT | P21-T009 | DONE | OpenAPI freeze | Generated from the router, verified by --check in CI, 205 paths |
+| P22-T002 | 22 | FRONTEND_AGENT | P21-T009 | DONE | component tests | 18 tests on the rules every app inherits from the design system |
+| P22-T003 | 22 | BACKEND_AGENT | P21-T009 | DONE | payment runbook | Written for 03:00; first rule is never guess which system is right |
+| P22-T004 | 22 | BACKEND_AGENT | P21-T009 | DONE | onboarding runbook | Including what to write in a rejection reason, and why |
+| P22-T005 | 22 | BACKEND_AGENT | P21-T009 | DONE | production checklist | Blocked items listed rather than omitted; limited release strategy |
+| P22-T006 | 22 | BACKEND_AGENT | P21-T009 | DONE | deployment + rollback | Order of operations, expand/contract, and why workers restart last |
+| P22-T007 | 22 | INDEPENDENT_TEST_AGENT | P22-T001..006 | DONE | full regression | 805 backend, 18 component, 76 E2E, audits, drills — all pass |
+| P22-T008 | 22 | INDEPENDENT_TEST_AGENT | P22-T007 | DONE | final audit | 117 items verified, 3 open; WEB_RELEASE_APPROVED withheld — no card payment is possible |
 
 ## Scope notes
 

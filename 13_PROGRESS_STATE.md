@@ -12,25 +12,33 @@ WEB
 IN_PROGRESS
 
 ## Current Phase
-PHASE_22
+PHASE_22 — closed with the release gate withheld
 
 ## Current Task
-Not started — Phase 21 is closed; Phases 12 and 13 remain deferred (see below) and Phase 22 has not begun.
+None. Phase 22 is complete and the WEB milestone is closed short of approval:
+`WEB_RELEASE_APPROVED` is deliberately **not** written, because Phases 12 and 13 are
+deferred and the platform therefore cannot take a card payment. See the Independent Test
+Agent verdict at the bottom of `12_FINAL_WEB_ACCEPTANCE.md`.
 
 ## Last Completed Task
-P21-T009 — Phase 21 gate verified end to end (see `TEST_REPORT.md`).
+P22-T008 — final acceptance audit (see `12_FINAL_WEB_ACCEPTANCE.md`).
 
 ## Next Task
-Phase 22 — Web Release / Stabilization.
+Unblock Phase 12 (iyzico) or Phase 13 (QNB): official documentation and sandbox
+credentials. Until one of them is live, the platform launches on bank transfer only — see
+the limited-release strategy in `docs/operations/PRODUCTION_CHECKLIST.md`.
 
 ## Test State
-PASS — 805 backend tests / 2538 assertions, 76 Playwright E2E journeys across all three
-apps, PHPStan level 6, Pint, ESLint, vue-tsc and the design token guard all clean.
-Dependency audits clean (composer + npm). Load smoke, backup/restore drill, migration
-and rollback rehearsals all pass.
+PASS — 805 backend tests / 2538 assertions, 18 component tests, 76 Playwright E2E journeys
+across all three apps, PHPStan level 6, Pint, ESLint, vue-tsc and the design token guard all
+clean. Dependency audits clean (composer + npm). Load smoke, backup/restore drill, migration
+and rollback rehearsals all pass. The OpenAPI document is frozen and verified against the
+router in CI.
 
 ## Release State
-NOT_APPROVED
+NOT_APPROVED — withheld deliberately, not for want of testing. Three mandatory acceptance
+items are open: iyzico (deferred), QNB (deferred) and a monitoring destination. The first
+two mean no card payment is possible.
 
 ## Blockers
 None.
@@ -1369,6 +1377,59 @@ after itself. Migration and rollback rehearsals were run for real.
 **The request id column had been null since Phase 1.** The audit logger read `X-Request-Id`
 and nothing ever set one — a field that looks like correlation and is not, which is worse
 than an absent one because somebody eventually trusts it.
+
+### PHASE_22_WEB_RELEASE — DONE, GATE WITHHELD (2026-08-26)
+
+```text
+UPDATED_AT: 2026-08-26
+COMMIT_OR_SNAPSHOT: phase-22-release
+PHASE: 22 — Web Release / Stabilization
+TASK: P22-T001 .. P22-T008
+STATUS: DONE (release gate deliberately not granted)
+FILES_CHANGED:
+  apps/api/app/Domains/Administration/Console/GenerateOpenApiCommand.php
+  apps/api/openapi.json  (frozen contract, 205 paths / 251 operations)
+  apps/api/config/refconcept.php  (version 1.0.0-web)
+  packages/ui/vitest.config.ts, vitest.setup.ts, package.json
+  packages/ui/src/components/{RcStatusPill,RcField,RcButton}.spec.ts
+  docs/operations/{DEPLOYMENT,PRODUCTION_CHECKLIST,PAYMENT_RUNBOOK,SELLER_ONBOARDING_RUNBOOK}.md
+  docs/security/SECURITY_CHECKLIST.md
+  .github/workflows/ci.yml  (OpenAPI freeze + component tests)
+  README.md, 12_FINAL_WEB_ACCEPTANCE.md
+MIGRATIONS: none
+TESTS_RUN: php artisan test · vitest · phpstan level 6 · pint · eslint · vue-tsc
+  · check-design-tokens.mjs · playwright (full suite) · composer audit · npm audit
+  · load-smoke.mjs · backup-drill.sh · refconcept:openapi --check
+TEST_RESULT: PASS (805 backend / 2538 assertions; 18 component; 76 E2E)
+BLOCKERS: iyzico (Phase 12) and QNB (Phase 13) — external credentials
+NEXT_ACTION: limited release on bank transfer; card payments when 12 or 13 unblocks
+```
+
+**The contract is generated, not written.** A hand-written specification is wrong the first
+time somebody adds a route and an integrator finds out before the team does. The router
+knows the path, the verb, whether authentication is required and which permission the matrix
+demands, and `--check` fails in CI when the committed document stops matching. What it
+deliberately does not invent is request and response schemas: guessing them from controller
+code produces a document that looks authoritative and is subtly wrong, which is worse than
+one honest about its scope.
+
+**Component tests where a journey cannot explain itself.** Eighteen of them, on the rules
+every app inherits: which status gets which colour and why it must come from the code rather
+than the label, whether an error is associated with its field or only drawn near it, whether
+a loading button can be pressed a second time. A Playwright run exercises all of that
+incidentally and tells you nothing about which rule broke.
+
+**Four operational documents written for the person who did not build this.** A payment
+runbook whose first rule is never to guess which system is right; an onboarding runbook that
+says what to write in a rejection reason and why; a production checklist that lists what is
+**blocked** rather than omitting it; and a deployment document that explains why reference
+data is seeded on every deploy and why the workers restart after the migration.
+
+**The release gate is withheld, and that is the finding.** Everything measurable passes and
+P0/P1 are zero. Three mandatory acceptance items are open, two of them the card gateways —
+so the platform cannot take a card payment. A marketplace on bank transfer alone is a viable
+limited launch and is not a completed web release, and writing `WEB_RELEASE_APPROVED` over
+that would be a report that says something untrue about the system.
 
 ---
 

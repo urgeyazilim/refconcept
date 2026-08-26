@@ -12,7 +12,7 @@ return [
     | code, configuration, UI copy or documents (20_BRAND_RENAME_CHECKLIST.md).
     */
 
-    'version' => env('REFCONCEPT_VERSION', '0.1.0-phase0'),
+    'version' => env('REFCONCEPT_VERSION', '1.0.0-web'),
 
     'milestone' => env('REFCONCEPT_MILESTONE', 'WEB'),
 

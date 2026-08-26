@@ -238,6 +238,46 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a demo product page claimed six in stock while the stock screen was empty. Opening
   stock is now booked as a receipt through the ledger.
 
+### Added — Phase 22 (Web release / stabilization)
+
+- **The API contract, generated from the router** and frozen at `apps/api/openapi.json` —
+  205 paths, 251 operations, with the required permission stated on every administrative
+  one. `refconcept:openapi --check` fails in CI when the committed document stops matching
+  the routes, because a specification nobody verifies is wrong the first time somebody adds
+  an endpoint and an integrator finds out before the team does. Request and response schemas
+  are deliberately not invented: the shapes live in `packages/ui/src/runtime/types.ts`,
+  where three clients compile against them.
+- **Component tests for the shared design system** — eighteen, on the rules every app
+  inherits: a status chip takes its colour from the code and never from the label, an error
+  is *associated* with its field rather than merely drawn near it, a loading button cannot be
+  pressed a second time, and a button given a destination renders a real link. That last one
+  is a regression test: it once rendered an unknown element, looked perfect in every
+  screenshot and did nothing when clicked.
+- **Four operational documents**, written for the person who did not build this: a payment
+  runbook whose first rule is never to guess which system is right, a seller onboarding
+  runbook that explains what to write in a rejection reason, a production checklist that
+  lists what is **blocked** rather than omitting it, and a deployment document explaining why
+  reference data is seeded on every deploy and why workers restart after the migration.
+- **A security checklist** that marks every rule as enforced by a test or by a person, and
+  says plainly what is not covered.
+- **A limited release strategy**: sellers first by invitation, bank transfer before cards,
+  credits with a low ceiling, feature flags as the throttle, reconciliation daily from day
+  one rather than from the first problem.
+
+### Fixed — Phase 22
+
+- **The OpenAPI freeze would have been decorative.** The document was written to a path
+  outside the container's application tree, so `--check` had nothing to compare against.
+- **The published API version still said `0.1.0-phase0`.**
+
+### Release status
+
+`WEB_RELEASE_APPROVED` is **not** written. Everything measurable passes and P0/P1 are zero,
+but Phases 12 (iyzico) and 13 (QNB) are deferred pending documentation and credentials —
+so the platform cannot take a card payment. A marketplace on bank transfer alone is a viable
+limited launch and is not a completed web release. See the Independent Test Agent verdict at
+the bottom of `12_FINAL_WEB_ACCEPTANCE.md`.
+
 ### Added — Phase 21 (Hardening)
 
 - **The security rules are properties now, not prose.** A rule that lives only in a document

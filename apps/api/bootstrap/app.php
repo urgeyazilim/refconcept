@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Domains\Administration\Console\GenerateOpenApiCommand;
 use App\Domains\Administration\Http\Middleware\AssignRequestId;
 use App\Domains\Administration\Http\Middleware\EnforceAdminPermission;
 use App\Domains\Administration\Http\Middleware\SecurityHeaders;
@@ -45,6 +46,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ExpireBankTransfersCommand::class,
         BuildSettlementsCommand::class,
         ReconcilePaymentsCommand::class,
+        GenerateOpenApiCommand::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         // The three Nuxt clients are separate origins; CORS is configured in config/cors.php.

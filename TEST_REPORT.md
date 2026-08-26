@@ -1471,6 +1471,99 @@ own account and a person confirms it against a statement.
 
 ---
 
+## Phase 22 — Web release / stabilization
+
+**Date:** 2026-08-26
+**Scope:** the full regression, the contract, the runbooks, and an honest answer about
+whether this is releasable.
+
+### Gate criteria (04_WEB_PHASE_PLAN.md: `WEB_RELEASE_APPROVED`)
+
+| # | Criterion | Method | Result |
+|---|---|---|---|
+| 1 | **Full backend regression** | `php artisan test` | **PASS** — 805 tests, 2538 assertions |
+| 2 | **Full E2E regression** | `npx playwright test` | **PASS** — 76 journeys, three apps |
+| 3 | **Component tests exist** | `npm run test` | **PASS** — 18, on rules every app inherits |
+| 4 | Static analysis | `phpstan analyse` level 6 | **PASS** |
+| 5 | Style, lint, types | Pint, ESLint, vue-tsc | **PASS** |
+| 6 | Design language unchanged | `check-design-tokens.mjs` | **PASS** |
+| 7 | **Dependency scan** | `composer audit`, `npm audit` | **PASS** — no advisories, 0 vulnerabilities |
+| 8 | **Load smoke** | `scripts/load-smoke.mjs` | **PASS** — no 5xx, no dropped request |
+| 9 | **Backup and restore drill** | `scripts/backup-drill.sh` | **PASS** — restored, row counts matched |
+| 10 | **Migration rehearsal** | `migrate:fresh --seed` | **PASS** |
+| 11 | **Rollback rehearsal** | `migrate:rollback` + `migrate` | **PASS** |
+| 12 | **OpenAPI generated and frozen** | `refconcept:openapi` | **PASS** — 205 paths, 251 operations |
+| 13 | **The frozen contract matches the router** | `refconcept:openapi --check` | **PASS** — and now runs in CI |
+| 14 | Payment runbook | Written | **PASS** — `docs/operations/PAYMENT_RUNBOOK.md` |
+| 15 | Seller onboarding runbook | Written | **PASS** |
+| 16 | Production config checklist | Written | **PASS** — blocked items listed, not omitted |
+| 17 | Deployment and rollback plan | Written | **PASS** |
+| 18 | Security checklist | Written | **PASS** — every rule marked test-enforced or person-enforced |
+| 19 | Limited release strategy | Written | **PASS** — sellers first, transfers before cards |
+| 20 | **P0 = 0** | Full suite | **PASS** |
+| 21 | **P1 = 0** | Full suite | **PASS** |
+| 22 | **Staging deploy** | — | **BLOCKED** — no staging environment exists to deploy to |
+| 23 | **iyzico sandbox verified** | — | **BLOCKED** — Phase 12 deferred; no documentation, no credentials |
+| 24 | **QNB sandbox verified** | — | **BLOCKED** — Phase 13 deferred; no merchant account |
+| 25 | Monitoring destination wired | — | **BLOCKED** — everything is emitted; the destination is an operations decision |
+| 26 | **`WEB_RELEASE_APPROVED`** | Final audit | **WITHHELD** — see below |
+
+### Defects found and fixed in this phase
+
+| Id | Severity | Defect | Fix |
+|---|---|---|---|
+| P22-D001 | P3 | The generated OpenAPI document was written to a path that resolved outside the container's application tree, so `--check` could never compare against anything and the freeze would have been decorative. | Committed inside the API's own tree, where CI can verify it |
+| P22-D002 | P3 | `refconcept.version` still read `0.1.0-phase0`, which the contract published as the API version. | `1.0.0-web` |
+
+No P0 or P1 defects were found in this phase. The six from Phase 21 remain fixed and are
+covered by tests.
+
+### The verdict
+
+**`WEB_RELEASE_APPROVED` is not written.**
+
+Everything measurable passes. Three mandatory items in `12_FINAL_WEB_ACCEPTANCE.md` are
+open, and two of them are the card gateways — which means **the platform cannot take a card
+payment**. Bank transfer works end to end and is genuinely production-ready; a marketplace
+that accepts only transfers is a viable limited launch and is not a completed web release.
+
+Approving the release anyway would mean writing a line that says something untrue about the
+system, in a document whose entire purpose is to be trusted later by somebody who was not
+here. The correct next step is the limited release described in
+`docs/operations/PRODUCTION_CHECKLIST.md`, and a re-audit when Phase 12 or 13 unblocks.
+
+### Known limitations at the close of the WEB milestone
+
+- **No card payments.** iyzico and QNB are deferred pending documentation and credentials.
+- **No staging environment.** Everything here was verified against the full local stack —
+  real PostgreSQL, real Redis, real MinIO, real queue workers, a real browser — which is not
+  the same as a staging deploy.
+- **No penetration test.** The security suite asserts properties the team decided to assert.
+- **No monitoring destination.** The signals exist and nothing consumes them.
+- **No CDN.** Cache headers are correct; nothing is distributing them.
+- **Reconciliation compares our own two records.** The version that catches a provider
+  disagreeing with itself needs a provider settlement file, which needs a live provider.
+
+### Test suite state at the close of the WEB milestone
+
+| Suite | Command | Result |
+|---|---|---|
+| Backend | `php artisan test` | **805 passed**, 2538 assertions |
+| Components | `npm run test` | **18 passed** |
+| Static analysis | `phpstan analyse` (level 6) | **No errors** |
+| Style | `pint --test` | **PASS** — 519 files |
+| Frontend lint | `npm run lint` | **PASS** — three apps |
+| Frontend types | `npm run typecheck` | **PASS** — vue-tsc, three apps |
+| Design tokens | `node scripts/check-design-tokens.mjs` | **PASS** |
+| PHP dependencies | `composer audit` | **PASS** |
+| JS dependencies | `npm audit` | **PASS** — 0 vulnerabilities |
+| API contract | `refconcept:openapi --check` | **PASS** — 205 paths |
+| Load smoke | `node scripts/load-smoke.mjs` | **PASS** |
+| Backup drill | `bash scripts/backup-drill.sh` | **PASS** |
+| E2E | `npx playwright test` | **76 passed** |
+
+---
+
 ## Phase 21 — Hardening
 
 **Date:** 2026-08-26

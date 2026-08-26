@@ -86,6 +86,11 @@ jobs:
       - name: Code style (Pint)
         run: ./vendor/bin/pint --test
 
+      # The committed contract must still match the router. A specification nobody verifies
+      # is wrong the first time somebody adds a route, and an integrator finds out first.
+      - name: OpenAPI freeze
+        run: php artisan refconcept:openapi --check
+
       - name: Tests (Pest)
         env:
           DB_CONNECTION: pgsql
@@ -120,6 +125,11 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      # Component tests for the shared design system. A Playwright journey exercises these
+      # rules incidentally and tells you nothing about why one broke.
+      - name: Unit tests
+        run: npm run test
 
       - name: Build
         run: npm run build

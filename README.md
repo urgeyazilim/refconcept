@@ -144,3 +144,30 @@ Gold `#C9A86A`. Tailwind's default palette is removed at the theme level and
 
 Live build state is tracked in [13_PROGRESS_STATE.md](13_PROGRESS_STATE.md) and
 [14_TASK_LEDGER.md](14_TASK_LEDGER.md); test outcomes in `TEST_REPORT.md`.
+
+**Where the WEB milestone stands (2026-08-26).** Twenty of the twenty-two phases are built,
+tested and documented. Phases 12 (iyzico) and 13 (QNB) are deferred pending official
+documentation and sandbox credentials, which means the platform takes **bank transfer** and
+not cards. `WEB_RELEASE_APPROVED` is deliberately not written — see the verdict at the
+bottom of [12_FINAL_WEB_ACCEPTANCE.md](12_FINAL_WEB_ACCEPTANCE.md) for why, and
+[docs/operations/PRODUCTION_CHECKLIST.md](docs/operations/PRODUCTION_CHECKLIST.md) for the
+limited-release strategy that follows from it.
+
+| Check | Command | State |
+|---|---|---|
+| Backend | `docker compose exec api php artisan test` | 805 passed |
+| Components | `npm run test` | 18 passed |
+| End to end | `npx playwright test` | 76 journeys |
+| Static analysis | `./vendor/bin/phpstan analyse` | level 6, no errors |
+| API contract | `php artisan refconcept:openapi --check` | frozen, 205 paths |
+| Load smoke | `node scripts/load-smoke.mjs` | no 5xx under concurrency |
+| Restore drill | `bash scripts/backup-drill.sh` | restores and matches |
+
+## Operations
+
+- [docs/operations/DEPLOYMENT.md](docs/operations/DEPLOYMENT.md) — what ships, in what order, and how it rolls back
+- [docs/operations/PRODUCTION_CHECKLIST.md](docs/operations/PRODUCTION_CHECKLIST.md) — everything that must be true before a real customer, including what is still blocked
+- [docs/operations/PAYMENT_RUNBOOK.md](docs/operations/PAYMENT_RUNBOOK.md) — for whoever is on call when money is involved
+- [docs/operations/SELLER_ONBOARDING_RUNBOOK.md](docs/operations/SELLER_ONBOARDING_RUNBOOK.md) — reviewing and approving a seller
+- [docs/security/SECURITY_CHECKLIST.md](docs/security/SECURITY_CHECKLIST.md) — every rule, and whether a test or a person enforces it
+- [apps/api/openapi.json](apps/api/openapi.json) — the API contract, generated from the router
