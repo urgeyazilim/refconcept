@@ -227,6 +227,19 @@ final class AiGateway
         /** @var array<int, string> $imageUrls */
         $imageUrls = (array) ($job->input['image_urls'] ?? []);
 
+        /*
+         * Disk references where we have them, URLs only for anything genuinely elsewhere.
+         *
+         * A URL was the original design and it was wrong in two ways at once: a signed link
+         * to a customer's room photograph must not leave this system, and a link signed for
+         * the browser's hostname cannot be fetched from inside the container anyway. The
+         * second failure was silent — no images were attached and the render carried on
+         * without them.
+         *
+         * @var array<int, array{disk?: string, path?: string, url?: string}|string> $sources
+         */
+        $sources = (array) ($job->input['image_sources'] ?? $imageUrls);
+
         return new AiCall(
             task: $job->task,
             model: $model,
@@ -240,7 +253,7 @@ final class AiGateway
              * arbitrary URLs, and a link to somebody's room photograph must never leave
              * this system at all.
              */
-            imageBlobs: $this->images->load($imageUrls),
+            imageBlobs: $this->images->load($sources),
             // Only ask for a schema when the task needs one *and* a prompt version
             // defines one; demanding JSON with no shape to check it against would turn
             // every free-text answer into a failure.

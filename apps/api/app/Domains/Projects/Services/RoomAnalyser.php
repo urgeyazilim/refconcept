@@ -28,7 +28,6 @@ final class RoomAnalyser
 {
     public function __construct(
         private readonly AiJobDispatcher $dispatcher,
-        private readonly RoomPhotoStorage $storage,
     ) {}
 
     /**
@@ -59,11 +58,14 @@ final class RoomAnalyser
         }
 
         /*
-         * A signed link that outlives the call but not the day. The provider fetches the
-         * image itself rather than receiving the bytes, so this process does not hold a
-         * room photograph in memory on a request somebody is waiting on.
+         * A reference to the object, not a link to it.
+         *
+         * The gateway reads the bytes off the disk and sends them inline. A signed URL was
+         * the original design and it was wrong twice: a link to somebody's room photograph
+         * must not leave this system, and the provider cannot fetch one from our network
+         * regardless.
          */
-        $imageUrl = $this->storage->temporaryUrl($media);
+        $imageSource = ['disk' => $media->disk, 'path' => $media->storage_path];
 
         $ran = $this->dispatcher->runInline(
             task: AiTask::RoomAnalysis,
@@ -75,7 +77,7 @@ final class RoomAnalyser
                     'length_mm' => $room->length_mm,
                     'height_mm' => $room->height_mm,
                 ]),
-                'image_urls' => [$imageUrl],
+                'image_sources' => [$imageSource],
             ],
             subject: $room,
             // Billed to the design version that asked for it, not separately. A customer

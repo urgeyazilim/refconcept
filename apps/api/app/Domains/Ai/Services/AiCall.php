@@ -23,9 +23,9 @@ final readonly class AiCall
 {
     /**
      * @param  array<int, string>  $imageUrls  where the images came from, for the record
-     * @param  list<array{mime: string, data: string}>  $imageBlobs  the images themselves,
-     *                                                               base64, read inside our own network — see InlineImageLoader for why a URL is
-     *                                                               not handed to a provider
+     * @param  list<array{mime: string, data: string, width: int, height: int}>  $imageBlobs  the images themselves,
+     *                                                                                        base64, read inside our own network — see InlineImageLoader for why a URL is
+     *                                                                                        not handed to a provider
      * @param  array<string, mixed>|null  $responseSchema  the shape the answer must take
      * @param  array<string, mixed>  $options  provider-neutral knobs
      */

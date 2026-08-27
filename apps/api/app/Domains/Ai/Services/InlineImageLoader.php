@@ -6,6 +6,7 @@ namespace App\Domains\Ai\Services;
 
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 /**
@@ -40,28 +41,81 @@ final class InlineImageLoader
     private const MAX_BYTES = 8 * 1024 * 1024;
 
     /**
-     * @param  array<int, string>  $urls
-     * @return list<array{mime: string, data: string}> base64 payloads, in order
+     * Reads each source and returns it as bytes.
+     *
+     * A source is `{disk, path}` for anything we hold — which is everything a design is
+     * built from — and a URL only for something genuinely elsewhere.
+     *
+     * @param  array<int, array{disk?: string, path?: string, url?: string}|string>  $sources
+     * @return list<array{mime: string, data: string, width: int, height: int}> base64
+     *                                                                          payloads, in order, each with the pixel size it was read at
      */
-    public function load(array $urls, int $timeoutSeconds = 20): array
+    public function load(array $sources, int $timeoutSeconds = 20): array
     {
         $images = [];
 
-        foreach ($urls as $url) {
-            $image = $this->one((string) $url, $timeoutSeconds);
+        foreach ($sources as $source) {
+            $image = is_array($source)
+                ? $this->fromSource($source, $timeoutSeconds)
+                : $this->fromUrl((string) $source, $timeoutSeconds);
 
             if ($image !== null) {
                 $images[] = $image;
             }
         }
 
+        /*
+         * Said out loud when nothing could be read.
+         *
+         * This exact silence hid a real defect: the loader fetched signed URLs over HTTP,
+         * the URLs were signed for the browser's hostname, and inside the container that
+         * name resolves to the container itself. Every fetch failed, `load()` returned an
+         * empty list, and the render carried on with no images — producing a handsome room
+         * that was not the customer's, with nothing anywhere saying why.
+         */
+        if ($images === [] && $sources !== []) {
+            Log::warning('AI çağrısına hiçbir görsel eklenemedi.', ['istenen' => count($sources)]);
+        }
+
         return $images;
     }
 
     /**
-     * @return array{mime: string, data: string}|null
+     * @param  array{disk?: string, path?: string, url?: string}  $source
+     * @return array{mime: string, data: string, width: int, height: int}|null
      */
-    private function one(string $url, int $timeoutSeconds): ?array
+    private function fromSource(array $source, int $timeoutSeconds): ?array
+    {
+        $path = (string) ($source['path'] ?? '');
+
+        if ($path === '') {
+            return $this->fromUrl((string) ($source['url'] ?? ''), $timeoutSeconds);
+        }
+
+        /*
+         * Read straight off the disk rather than over HTTP.
+         *
+         * Faster, and immune to the whole class of problem that a URL brings: which host
+         * name resolves from where, whether a signature is still valid, whether the link
+         * has expired between being made and being used.
+         */
+        $disk = (string) ($source['disk'] ?? config('refconcept.storage.private_disk'));
+
+        try {
+            $body = Storage::disk($disk)->get($path);
+        } catch (Throwable $e) {
+            Log::warning('AI görseli diskten okunamadı.', ['disk' => $disk, 'reason' => $e->getMessage()]);
+
+            return null;
+        }
+
+        return is_string($body) ? $this->describe($body, null) : null;
+    }
+
+    /**
+     * @return array{mime: string, data: string, width: int, height: int}|null
+     */
+    private function fromUrl(string $url, int $timeoutSeconds): ?array
     {
         if ($url === '') {
             return null;
@@ -98,11 +152,30 @@ final class InlineImageLoader
             return null;
         }
 
+        return $this->describe($body, $response->header('Content-Type'));
+    }
+
+    /**
+     * Bytes, plus the two things a caller needs to know about them.
+     *
+     * The pixel size travels with the image because an image model given no aspect ratio
+     * answers in its own default — a wide cinematic frame — and a room photographed in
+     * portrait comes back as a different, wider room. Not cropped: different, because the
+     * model fills whatever frame it was asked for.
+     *
+     * @return array{mime: string, data: string, width: int, height: int}
+     */
+    private function describe(string $body, ?string $contentType): array
+    {
+        $size = @getimagesizefromstring($body);
+
         return [
-            // From the response rather than from the file extension: a signed URL carries a
-            // query string, and guessing from the path gets `image/jpeg` for a PNG.
-            'mime' => $this->mimeFor($response->header('Content-Type'), $body),
+            // Read from the bytes rather than guessed from a filename: a signed URL carries
+            // a query string, and guessing from the path gets `image/jpeg` for a PNG.
+            'mime' => $this->mimeFor($contentType, $body),
             'data' => base64_encode($body),
+            'width' => is_array($size) ? (int) $size[0] : 0,
+            'height' => is_array($size) ? (int) $size[1] : 0,
         ];
     }
 

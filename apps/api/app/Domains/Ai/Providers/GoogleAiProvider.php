@@ -184,20 +184,28 @@ final class GoogleAiProvider implements AiProvider
      */
     private function payloadFor(AiCall $call): array
     {
-        $parts = [['text' => $call->prompt]];
+        $parts = [];
 
         foreach ($call->imageBlobs as $image) {
             /*
-             * Inline bytes, not a link.
+             * Images first, then the instruction — and the order is not cosmetic.
              *
-             * `file_data.file_uri` accepts a URI from Google's own Files API and nothing
-             * else — pointing it at one of our signed URLs failed every call with "Cannot
-             * fetch content from the provided URL", which the platform then showed a
-             * customer as a problem with their photograph. And a room photograph's URL must
-             * not leave this system in any case.
+             * With the text first, the model reads a brief and then happens to be shown a
+             * picture, and it writes a new picture from the brief. With the image first it
+             * reads "here is a thing" and then "do this to it", and it edits. The same
+             * prompt, the same model, the same photograph: one comes back as the
+             * customer's own living room with furniture in it, the other as a stranger's.
+             *
+             * Inline bytes rather than a link, too. `file_data.file_uri` accepts a URI from
+             * Google's own Files API and nothing else — pointing it at one of our signed
+             * URLs failed every call with "Cannot fetch content from the provided URL",
+             * which the platform then showed a customer as a problem with their photograph.
+             * And a room photograph's URL must not leave this system in any case.
              */
             $parts[] = ['inline_data' => ['mime_type' => $image['mime'], 'data' => $image['data']]];
         }
+
+        $parts[] = ['text' => $call->prompt];
 
         $payload = [
             'contents' => [['role' => 'user', 'parts' => $parts]],
@@ -220,7 +228,65 @@ final class GoogleAiProvider implements AiProvider
             $payload['generationConfig']['responseMimeType'] = 'application/json';
         }
 
+        /*
+         * An image answer comes back in the shape of the picture that was sent.
+         *
+         * Without this the model answers in its own default — a wide cinematic frame — and
+         * a room photographed in portrait comes back as a wider room. Not a *cropped* room:
+         * a different one, because the model fills the frame it was asked for. It was the
+         * single biggest reason a customer's own living room came back as somebody else's.
+         */
+        if ($call->modality() === AiModality::Image) {
+            $payload['generationConfig']['responseModalities'] = ['IMAGE'];
+
+            $ratio = $this->aspectRatioOf($call);
+
+            if ($ratio !== null) {
+                $payload['generationConfig']['imageConfig'] = ['aspectRatio' => $ratio];
+            }
+        }
+
         return $payload;
+    }
+
+    /**
+     * The nearest aspect ratio the API offers to the picture we were given.
+     *
+     * Nearest rather than exact: the API takes a fixed set, and asking for 1.37:1 is an
+     * error rather than a refinement. The first supplied image is the one that matters —
+     * it is the room being edited; the rest are products.
+     */
+    private function aspectRatioOf(AiCall $call): ?string
+    {
+        $first = $call->imageBlobs[0] ?? null;
+
+        if ($first === null || ($first['width'] ?? 0) <= 0 || ($first['height'] ?? 0) <= 0) {
+            return null;
+        }
+
+        $ratio = $first['width'] / $first['height'];
+
+        $supported = [
+            '1:1' => 1.0,
+            '3:4' => 0.75,
+            '4:3' => 4 / 3,
+            '9:16' => 0.5625,
+            '16:9' => 16 / 9,
+        ];
+
+        $best = null;
+        $bestDistance = INF;
+
+        foreach ($supported as $name => $value) {
+            $distance = abs($ratio - $value);
+
+            if ($distance < $bestDistance) {
+                $bestDistance = $distance;
+                $best = $name;
+            }
+        }
+
+        return $best;
     }
 
     /**

@@ -12,6 +12,7 @@ use App\Domains\Ai\Models\AiTaskRoute;
 use App\Domains\Ai\Services\AiJobDispatcher;
 use App\Domains\Credits\Models\CreditReservation;
 use App\Domains\Credits\Services\CreditLedger;
+use App\Domains\Matching\Models\DesignMatch;
 use App\Domains\Matching\Services\ShoppingListBuilder;
 use App\Domains\Projects\Enums\GenerationStage;
 use App\Domains\Projects\Enums\RenderQuality;
@@ -21,6 +22,8 @@ use App\Domains\Projects\Models\DesignVersion;
 use App\Domains\Projects\Models\DesignVersionEvent;
 use App\Domains\Projects\Models\Room;
 use App\Domains\Projects\Models\RoomAnalysis;
+use App\Domains\Projects\Models\RoomMedia;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
@@ -50,6 +53,16 @@ use Throwable;
  */
 final class DesignGenerationPipeline
 {
+    /**
+     * How many product photographs go into a render.
+     *
+     * Not for tidiness: every reference image is another few hundred kilobytes in a request
+     * somebody is waiting on, and a model given twenty of them follows none of them well.
+     * The first placements are the furniture that defines a room — the sofa and the table,
+     * not the sixth cushion.
+     */
+    private const MAX_PRODUCT_REFERENCES = 4;
+
     public function __construct(
         private readonly AiJobDispatcher $dispatcher,
         private readonly DesignVersionTree $tree,
@@ -79,8 +92,21 @@ final class DesignGenerationPipeline
         try {
             $analysis = $this->analyse($version, $room);
             $plan = $this->plan($version, $room, $analysis);
-            $this->render($version, $room, $analysis, $plan);
-            $this->match($version);
+
+            /*
+             * Products are chosen before the picture is drawn, and that order is the whole
+             * point of the product.
+             *
+             * Rendering first produced a handsome room full of furniture nobody could buy,
+             * with a shopping list underneath it showing different things. A customer looks
+             * at the picture, likes the sofa in it, and finds a different sofa in the list —
+             * so the image was decoration rather than a preview of a purchase.
+             *
+             * Matching depends only on the plan, so nothing is lost by doing it first, and
+             * the render can then be handed the actual products.
+             */
+            $matches = $this->match($version);
+            $this->render($version, $room, $analysis, $plan, $matches);
         } catch (DesignGenerationFailed $e) {
             return $this->fail($version, $e);
         } catch (AiJobRefused $e) {
@@ -241,13 +267,42 @@ final class DesignGenerationPipeline
         return $plan;
     }
 
-    private function render(DesignVersion $version, Room $room, RoomAnalysis $analysis, DesignPlan $plan): void
-    {
+    /**
+     * @param  Collection<int, DesignMatch>  $matches
+     */
+    private function render(
+        DesignVersion $version,
+        Room $room,
+        RoomAnalysis $analysis,
+        DesignPlan $plan,
+        Collection $matches,
+    ): void {
         $started = microtime(true);
 
         $quality = $version->render_quality;
 
         $this->event($version, GenerationStage::Render, 'started', $quality->label().' üretiliyor…');
+
+        /*
+         * The customer's own room goes in first.
+         *
+         * Without it the model was given a description — "living room, Scandinavian, sofa
+         * against the south wall" — and drew a room from that description. A perfectly nice
+         * room, and not theirs. The product's promise is "odanı gör, şekillendir, yaşa", and
+         * a customer who uploads their living room and gets back a stranger's has been shown
+         * a brochure.
+         *
+         * The room photograph is first in the list and named first in the prompt, because
+         * order carries weight: it is the thing being edited, and everything after it is
+         * what to put in it.
+         */
+        $photograph = $this->photographOf($room);
+
+        $images = [['disk' => $photograph->disk, 'path' => $photograph->storage_path]];
+
+        // Then the products the customer will actually be offered, so the sofa in the
+        // picture is the sofa in the shopping list underneath it.
+        $images = array_merge($images, $this->productImages($matches));
 
         $ran = $this->dispatcher->runInline(
             task: $quality->task(),
@@ -263,6 +318,10 @@ final class DesignGenerationPipeline
                  */
                 'preserve' => $analysis->preservedElements(),
                 'instruction' => $version->user_prompt,
+                // What each supplied image is. Unlabelled, a model has no way to tell the
+                // room it must preserve from the furniture it must place into it.
+                'image_roles' => $this->imageRoles($matches),
+                'image_sources' => $images,
             ],
             subject: $version,
             creditCostOverride: 0,
@@ -323,7 +382,10 @@ final class DesignGenerationPipeline
      * they paid for and cannot see. The list is rebuildable on demand, so a bad moment
      * here costs nothing permanent.
      */
-    private function match(DesignVersion $version): void
+    /**
+     * @return Collection<int, DesignMatch>
+     */
+    private function match(DesignVersion $version): Collection
     {
         $started = microtime(true);
 
@@ -345,7 +407,10 @@ final class DesignGenerationPipeline
                 $this->elapsed($started),
             );
 
-            return;
+            // An empty list, not a failure: the render still runs and the customer still
+            // gets their room back. A design with no shopping list is worth less than one
+            // with it, and worth far more than nothing.
+            return collect();
         }
 
         $this->event(
@@ -357,6 +422,89 @@ final class DesignGenerationPipeline
                 : sprintf('%d ürün önerisi hazır.', $matches->count()),
             $this->elapsed($started),
         );
+
+        return $matches;
+    }
+
+    /**
+     * The photograph a design is built on.
+     *
+     * The primary one if the customer marked one, otherwise the first they uploaded. A room
+     * with no photograph never reaches here — the pipeline refuses at the door — so a
+     * missing one is a broken invariant rather than a customer error.
+     */
+    private function photographOf(Room $room): RoomMedia
+    {
+        $room->loadMissing('primaryMedia');
+
+        // The same photograph the analysis read. A render built on a different one would
+        // preserve a window the analysis never saw, and the two steps would be describing
+        // two different rooms.
+        $media = $room->primaryMedia ?? $room->media()->orderBy('position')->first();
+
+        if (! $media instanceof RoomMedia) {
+            throw DesignGenerationFailed::roomHasNoPhotograph();
+        }
+
+        return $media;
+    }
+
+    /**
+     * A picture of each product the customer is actually being offered.
+     *
+     * Capped, and not for tidiness: every image is another few hundred kilobytes in a
+     * request the customer is waiting on, and a model given twenty reference photographs
+     * follows none of them well. The first few placements are the furniture that defines
+     * the room — the sofa and the table, not the sixth cushion.
+     *
+     * @param  Collection<int, DesignMatch>  $matches
+     * @return list<array{disk: string, path: string}>
+     */
+    private function productImages(Collection $matches): array
+    {
+        $sources = [];
+
+        foreach ($matches->sortBy('placement_index')->take(self::MAX_PRODUCT_REFERENCES) as $match) {
+            $media = $match->product?->media?->first();
+
+            if ($media !== null && $media->storage_path !== '') {
+                // A reference rather than the public URL: the gateway reads it off the disk,
+                // which is one fewer round trip and no dependence on which hostname resolves
+                // from where.
+                $sources[] = ['disk' => $media->disk, 'path' => $media->storage_path];
+            }
+        }
+
+        return $sources;
+    }
+
+    /**
+     * What each image is, in the order they are sent.
+     *
+     * A model handed four pictures and no explanation has to guess which one is the room.
+     * Telling it is one line in a prompt and the difference between "put these things in
+     * this room" and "here are some pictures".
+     *
+     * @param  Collection<int, DesignMatch>  $matches
+     * @return list<string>
+     */
+    private function imageRoles(Collection $matches): array
+    {
+        $roles = ['Müşterinin odasının fotoğrafı — düzenlenecek mekân budur.'];
+
+        foreach ($matches->sortBy('placement_index')->take(self::MAX_PRODUCT_REFERENCES) as $match) {
+            $media = $match->product?->media?->first();
+
+            if ($media !== null && $media->storage_path !== '') {
+                $roles[] = sprintf(
+                    'Yerleştirilecek ürün: %s (%s).',
+                    $match->product->name ?? 'ürün',
+                    $match->placement_category,
+                );
+            }
+        }
+
+        return $roles;
     }
 
     // --- internals -----------------------------------------------------------
