@@ -397,6 +397,76 @@ async function addChosenToCart() {
   }
 }
 
+/**
+ * The picture opened full-screen, or null.
+ *
+ * A before-and-after shown at card size is a thumbnail of somebody's living room, and the
+ * whole point is to look at it — whether the sofa suits the light from that window is not a
+ * question anybody answers at four hundred pixels wide. Held as which of the two is open
+ * rather than as a URL, so the viewer can switch between them without closing: comparing
+ * them is the reason both are on the page.
+ */
+const zoomed = ref<'before' | 'after' | null>(null)
+
+const zoomedImage = computed<{ src: string, label: string } | null>(() => {
+  if (zoomed.value === 'before' && design.value?.source_image_url) {
+    return { src: design.value.source_image_url, label: 'İlk hâli' }
+  }
+
+  if (zoomed.value === 'after' && shownVersion.value?.image_url) {
+    return { src: shownVersion.value.image_url, label: 'Son hâli' }
+  }
+
+  return null
+})
+
+/** Whether there is a second picture to flip to — there is not while a render is running. */
+const canFlip = computed(() => Boolean(design.value?.source_image_url && shownVersion.value?.image_url))
+
+function flipZoom() {
+  zoomed.value = zoomed.value === 'before' ? 'after' : 'before'
+}
+
+const zoomDialog = ref<HTMLElement | null>(null)
+
+/*
+ * The same treatment the navigation drawer gets: Escape closes it and the page behind holds
+ * still, because a full-screen picture that scrolls the list underneath it is a picture
+ * somebody loses their place in.
+ *
+ * Focus moves into the overlay too. Without it the key handler sits on an element nothing is
+ * focused on, so Escape goes to the page behind and the only way out is the mouse.
+ */
+watch(zoomed, async (open) => {
+  if (import.meta.server) {
+    return
+  }
+
+  document.body.style.overflow = open ? 'hidden' : ''
+
+  if (open) {
+    await nextTick()
+    zoomDialog.value?.focus()
+  }
+})
+
+onBeforeUnmount(() => {
+  if (import.meta.client) {
+    document.body.style.overflow = ''
+  }
+})
+
+function onZoomKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    zoomed.value = null
+  }
+
+  if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && canFlip.value) {
+    event.preventDefault()
+    flipZoom()
+  }
+}
+
 const statusTone: Record<string, string> = {
   pending: 'in_review',
   generating: 'in_review',
@@ -477,22 +547,42 @@ const statusTone: Record<string, string> = {
 
         <div class="grid gap-px bg-line sm:grid-cols-2">
           <figure :class="comparison === 'before' ? '' : 'hidden sm:block'" class="bg-surface">
-            <img
-              :src="design.source_image_url"
-              alt="Odanızın ilk hâli"
-              class="aspect-[4/3] w-full object-cover"
+            <!--
+              A button rather than an image with a click handler. It is genuinely a control
+              — it opens something — and writing it as one gives it keyboard focus, Enter and
+              Space, and a name a screen reader can read out, none of which a bare <img>
+              has however many listeners are attached to it.
+            -->
+            <button
+              type="button"
+              class="block w-full cursor-zoom-in"
+              aria-label="Odanızın ilk hâlini büyüt"
+              @click="zoomed = 'before'"
             >
+              <img
+                :src="design.source_image_url"
+                alt="Odanızın ilk hâli"
+                class="aspect-[4/3] w-full object-cover"
+              >
+            </button>
             <figcaption class="px-5 py-3 text-sm text-muted">İlk hâli</figcaption>
           </figure>
 
           <figure :class="comparison === 'after' ? '' : 'hidden sm:block'" class="bg-surface">
-            <img
+            <button
               v-if="shownVersion?.image_url"
-              :src="shownVersion.image_url"
-              alt="Odanızın önerilen ürünlerle hâli"
-              class="aspect-[4/3] w-full object-cover"
-              data-testid="design-render"
+              type="button"
+              class="block w-full cursor-zoom-in"
+              aria-label="Odanızın önerilen ürünlerle hâlini büyüt"
+              @click="zoomed = 'after'"
             >
+              <img
+                :src="shownVersion.image_url"
+                alt="Odanızın önerilen ürünlerle hâli"
+                class="aspect-[4/3] w-full object-cover"
+                data-testid="design-render"
+              >
+            </button>
 
             <!--
               A version that is still running, or one that failed. Said in words rather than
@@ -585,17 +675,40 @@ const statusTone: Record<string, string> = {
                   ? 'border-charcoal bg-bg-muted'
                   : (match.status === 'rejected' ? 'border-line opacity-50' : 'border-line')"
               >
-                <div class="aspect-[4/3] overflow-hidden rounded-sm bg-bg-muted">
-                  <img
-                    v-if="match.product.image_url"
-                    :src="match.product.image_url"
-                    :alt="match.product.name ?? ''"
-                    class="size-full object-cover"
-                    loading="lazy"
-                  >
-                </div>
+                <!--
+                  The picture and the name go to the product.
 
-                <p class="mt-2.5 line-clamp-2 text-sm">{{ match.product.name }}</p>
+                  They were dead: a customer looking at a suggested sofa could accept it or
+                  reject it and had no way to read what it was — no dimensions, no other
+                  photographs, no seller — which is a strange thing to ask of somebody about
+                  to spend five thousand lira. In a new tab on purpose, because choosing is
+                  a comparison and losing the design to read about one item ends it.
+
+                  Only when there is a slug to go to. A match whose product has since been
+                  delisted still shows, and its card should not be a link to a 404.
+                -->
+                <component
+                  :is="match.product.slug ? 'a' : 'div'"
+                  v-bind="match.product.slug
+                    ? { href: `/catalog/${match.product.slug}`, target: '_blank', rel: 'noopener' }
+                    : {}"
+                  class="block"
+                  :class="match.product.slug ? 'group' : ''"
+                >
+                  <div class="aspect-[4/3] overflow-hidden rounded-sm bg-bg-muted">
+                    <img
+                      v-if="match.product.image_url"
+                      :src="match.product.image_url"
+                      :alt="match.product.name ?? ''"
+                      class="size-full object-cover transition-transform group-hover:scale-105"
+                      loading="lazy"
+                    >
+                  </div>
+
+                  <p class="mt-2.5 line-clamp-2 text-sm group-hover:underline">
+                    {{ match.product.name }}
+                  </p>
+                </component>
                 <p v-if="match.sku.seller" class="text-xs text-muted">{{ match.sku.seller }}</p>
 
                 <p class="mt-1.5 text-sm font-medium tabular-nums">
@@ -782,5 +895,64 @@ const statusTone: Record<string, string> = {
         </ul>
       </section>
     </template>
+
+    <!--
+      The picture, full-screen.
+
+      `object-contain` inside the viewport rather than a fixed size: the render matches the
+      customer's photograph, which might be a wide living room or a tall corner, and either
+      has to arrive whole. Cropping the thing somebody opened in order to see it properly
+      would be a peculiar way to answer the click.
+
+      The backdrop closes it, Escape closes it, and the arrow keys move between the two —
+      flipping between before and after in place is how the difference actually reads.
+
+      Above the sticky header, at the layer the navigation drawer already uses, and opaque.
+      A translucent backdrop let the site navigation read straight through it and across the
+      caption — the logo and "Ürünler" sitting over the words "Son hâli". Nothing is gained
+      by seeing the page behind: this exists so somebody can look at one picture properly.
+    -->
+    <div
+      v-if="zoomedImage"
+      ref="zoomDialog"
+      class="fixed inset-0 z-[70] flex flex-col bg-black p-4 sm:p-8"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="zoomedImage.label"
+      tabindex="-1"
+      @click.self="zoomed = null"
+      @keydown="onZoomKeydown"
+    >
+      <div class="flex items-center justify-between gap-4 pb-4 text-white">
+        <p class="text-sm">{{ zoomedImage.label }}</p>
+
+        <div class="flex items-center gap-2">
+          <button
+            v-if="canFlip"
+            type="button"
+            class="rounded-pill border border-white/40 px-4 py-1.5 text-sm hover:bg-white/10"
+            @click="flipZoom"
+          >
+            {{ zoomed === 'after' ? 'İlk hâline bak' : 'Son hâline bak' }}
+          </button>
+
+          <button
+            type="button"
+            class="rounded-pill border border-white/40 px-4 py-1.5 text-sm hover:bg-white/10"
+            aria-label="Kapat"
+            @click="zoomed = null"
+          >
+            Kapat
+          </button>
+        </div>
+      </div>
+
+      <img
+        :src="zoomedImage.src"
+        :alt="zoomedImage.label"
+        class="min-h-0 flex-1 object-contain"
+        @click="canFlip && flipZoom()"
+      >
+    </div>
   </div>
 </template>

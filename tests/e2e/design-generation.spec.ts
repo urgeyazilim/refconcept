@@ -178,6 +178,32 @@ test.describe('design generation', () => {
        */
       await expect(page.getByText('Hazır', { exact: true }).first()).toBeVisible({ timeout: 120_000 })
 
+      /*
+       * The picture, and a way to look at it properly.
+       *
+       * The render is the thing the customer uploaded a photograph to get, and it arrives
+       * on the page at card size. Whether that sofa suits the light from that window is not
+       * a question anybody answers at four hundred pixels wide, and for a while there was
+       * no way to make it bigger — the image was inert. Asserted through the keyboard as
+       * well as the mouse, because it is written as a real dialog and Escape is how most
+       * people close one.
+       */
+      const render = page.getByTestId('design-render')
+      await expect(render).toBeVisible()
+
+      await render.click()
+
+      const lightbox = page.getByRole('dialog', { name: 'Son hâli' })
+      await expect(lightbox).toBeVisible()
+
+      // Both halves of the comparison are reachable from inside it: flipping between them
+      // in place is how the difference actually reads.
+      await lightbox.getByRole('button', { name: 'İlk hâline bak' }).click()
+      await expect(page.getByRole('dialog', { name: 'İlk hâli' })).toBeVisible()
+
+      await page.keyboard.press('Escape')
+      await expect(page.getByRole('dialog')).toHaveCount(0)
+
       // --- the API agrees ---------------------------------------------------------------
       const detail = await request.get(
         `${API}/api/v1/projects/${projectId}/rooms/${roomId}/designs`,
