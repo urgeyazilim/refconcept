@@ -9,6 +9,8 @@ use App\Domains\Matching\Enums\MatchStatus;
 use App\Domains\Matching\Models\DesignMatch;
 use App\Domains\Matching\Models\DesignMatchFeedback;
 use App\Domains\Matching\Services\ShoppingListBuilder;
+use App\Domains\Products\Enums\ProductStatus;
+use App\Domains\Products\Models\Product;
 use App\Domains\Projects\Models\Design;
 use App\Domains\Projects\Models\DesignVersion;
 use App\Domains\Projects\Models\Project;
@@ -182,23 +184,88 @@ final class DesignMatchController
     {
         $version->loadMissing('plan');
 
+        /** @var array<int, mixed> $placements */
         $placements = $version->plan->placements ?? [];
 
-        return $matches
-            ->groupBy('placement_index')
-            ->map(function (Collection $group, int|string $index) use ($placements): array {
-                $placement = $placements[(int) $index] ?? [];
+        $byIndex = $matches->groupBy('placement_index');
 
-                return [
-                    'index' => (int) $index,
-                    'category' => $group->first()?->placement_category,
-                    'wall' => is_array($placement) ? ($placement['wall'] ?? null) : null,
-                    'max_width_mm' => is_array($placement) ? ($placement['max_width_mm'] ?? null) : null,
-                    'matches' => $group->map(fn (DesignMatch $match): array => $this->payload($match))->values()->all(),
-                ];
-            })
-            ->values()
-            ->all();
+        /*
+         * Built from the plan, not from the matches.
+         *
+         * Grouping the matches meant a placement nothing was found for simply did not
+         * exist as far as the page was concerned. A customer whose plan called for a TV
+         * unit, a coffee table, curtains, a picture and a plant saw a list of four things
+         * and no hint that five more had been asked for — while the render, which was still
+         * being given the whole plan, cheerfully drew all of them. Furniture in the picture
+         * and nothing in the basket, with nothing on the page to explain the gap.
+         *
+         * Now every planned item appears, and the ones with nothing behind them say why.
+         */
+        $groups = [];
+
+        foreach ($placements as $index => $placement) {
+            if (! is_array($placement)) {
+                continue;
+            }
+
+            $group = $byIndex->get($index) ?? collect();
+
+            $groups[] = [
+                'index' => (int) $index,
+                // The plan's own category, since the group is now built from the plan. The
+                // match's copy is the fallback for rows written before plans carried one.
+                'category' => $placement['category'] ?? $group->first()?->placement_category,
+                'name' => $placement['name'] ?? null,
+                'wall' => $placement['wall'] ?? null,
+                'max_width_mm' => $placement['max_width_mm'] ?? null,
+                'matches' => $group->map(fn (DesignMatch $match): array => $this->payload($match))->values()->all(),
+                // Why there is nothing here, in the customer's own terms. "Nothing in the
+                // catalogue" and "there is one but it is 900mm and you asked for 800" are
+                // different problems and only one of them is worth waiting for.
+                'unavailable_reason' => $group->isEmpty() ? $this->reasonNothingMatched($placement) : null,
+            ];
+        }
+
+        return $groups;
+    }
+
+    /**
+     * Why a planned item has no suggestion.
+     *
+     * Asked of the catalogue directly rather than inferred from the empty result, because
+     * "we stock none of these" and "we stock one and it is too wide" send a customer to
+     * quite different places — the first to a different plan, the second to a re-measure.
+     *
+     * @param  array<string, mixed>  $placement
+     */
+    private function reasonNothingMatched(array $placement): string
+    {
+        $category = is_string($placement['category'] ?? null) ? $placement['category'] : null;
+
+        if ($category === null) {
+            return 'Bu öğe için ürün aranamadı.';
+        }
+
+        $inCategory = Product::query()
+            ->where('status', ProductStatus::Active)
+            ->whereHas('primaryCategory', fn ($query) => $query->where('slug', $category))
+            ->count();
+
+        if ($inCategory === 0) {
+            return 'Bu kategoride henüz ürün yok.';
+        }
+
+        $maxWidth = $placement['max_width_mm'] ?? null;
+
+        if (is_int($maxWidth) && $maxWidth > 0) {
+            return sprintf(
+                'Katalogdaki %d ürün bu ölçüye (en fazla %d cm) sığmıyor.',
+                $inCategory,
+                (int) round($maxWidth / 10),
+            );
+        }
+
+        return 'Bu plana uyan ürün bulunamadı.';
     }
 
     /**

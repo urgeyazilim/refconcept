@@ -8,6 +8,7 @@ use App\Domains\Ai\Models\AiJob;
 use App\Domains\Ai\Providers\FakeAiProvider;
 use App\Domains\Ai\Services\AiResult;
 use App\Domains\Credits\Enums\CreditLotSource;
+use App\Domains\Matching\Services\ProductEmbedder;
 use App\Domains\Credits\Exceptions\InsufficientCredits;
 use App\Domains\Credits\Services\CreditLedger;
 use App\Domains\Identity\Models\User;
@@ -93,6 +94,29 @@ beforeEach(function (): void {
     ]);
 
     // Routes for the three tasks the pipeline runs.
+    /*
+     * A catalogue with one buyable sofa in it.
+     *
+     * The suite used to run against an empty shop, which was fine while the renderer was
+     * handed the whole plan and drew whatever it liked. It is not fine now: a render only
+     * places things a customer can buy, so "a photograph becomes a finished render" needs
+     * something to be for sale. The plan these tests script asks for a kanepe up to 2200mm,
+     * and this is one.
+     */
+    makeAiRoute(AiTask::TextEmbedding, ['credit_cost' => 0, 'max_attempts' => 1]);
+    makeAiRoute(AiTask::ProductMatchRerank, ['credit_cost' => 0, 'max_attempts' => 1]);
+
+    [$seller] = makeApprovedSeller('Tasarım Test A.Ş.', 'tasarim-test');
+
+    $this->sofa = makeProduct($seller, makeCategory('Kanepe', 'kanepe', 'living_room'), [
+        'name' => 'İskandinav meşe kanepe',
+        'description' => 'Açık renk boucle kumaş, meşe ayaklı üçlü kanepe.',
+        'price_minor' => 3_490_000,
+        'width_mm' => 2_100,
+    ]);
+
+    app(ProductEmbedder::class)->embed($this->sofa);
+
     makeAiRoute(AiTask::RoomAnalysis, ['credit_cost' => 1, 'max_attempts' => 1]);
     makeAiRoute(AiTask::DesignPlan, ['credit_cost' => 1, 'max_attempts' => 1]);
     makeAiRoute(AiTask::ImageRenderDraft, ['credit_cost' => 2, 'max_attempts' => 1]);
@@ -110,8 +134,18 @@ it('takes a room from a photograph to a finished render', function (): void {
 
     expect($finished?->status)->toBe(DesignVersionStatus::Ready)
         ->and($finished?->completed_at)->not->toBeNull()
-        // Analysis, plan and render: three calls, one design.
-        ->and(AiJob::query()->count())->toBe(3);
+        /*
+         * Analysis, plan and render: three calls, one design.
+         *
+         * Counted by task rather than in total. Matching sits inside the pipeline too and
+         * makes its own embedding and re-rank calls, and a bare total turned "the design
+         * made three calls" into a number that changes whenever the shopping list does.
+         */
+        ->and(AiJob::query()->whereIn('task', [
+            AiTask::RoomAnalysis->value,
+            AiTask::DesignPlan->value,
+            AiTask::ImageRenderDraft->value,
+        ])->count())->toBe(3);
 
     // Each step left something worth keeping.
     expect(RoomAnalysis::query()->where('room_id', $this->room->getKey())->current()->exists())->toBeTrue()
@@ -362,7 +396,9 @@ it('refuses to start a render the customer cannot pay for', function (): void {
 
     expect($version->status)->toBe(DesignVersionStatus::Failed)
         ->and($version->failure_reason)->toContain('kredi')
-        ->and(AiJob::query()->count())->toBe(0);
+        // Nothing ran for this version. Scoped to the version rather than counting every
+        // job in the database, which also holds the one that embedded the test catalogue.
+        ->and(AiJob::query()->where('subject_id', $version->getKey())->count())->toBe(0);
 });
 
 it('does not run a version twice when the queue delivers it twice', function (): void {
@@ -473,3 +509,65 @@ function renderAnswer(): AiResult
         imageCount: 1,
     );
 }
+
+it('renders only the items a customer can buy', function (): void {
+    /*
+     * The plan is what an interior designer would ask for; the catalogue is what this shop
+     * stocks, and they are not the same list. A plan calling for a sofa, a television unit
+     * and a picture went to the renderer whole, against a catalogue holding only the sofa,
+     * and the model drew all three — beautifully, and two of them unbuyable. The customer
+     * was shown a room they could have a third of.
+     */
+    FakeAiProvider::script(
+        analysisAnswer(),
+        planAnswer([
+            ['category' => 'kanepe', 'wall' => 'south', 'max_width_mm' => 2_200],
+            ['category' => 'tv-unitesi', 'wall' => 'north', 'max_width_mm' => 2_000],
+            ['category' => 'tablo', 'wall' => 'south', 'max_width_mm' => 1_500],
+        ]),
+        renderAnswer(),
+    );
+
+    $version = $this->launcher->launch($this->design, null, $this->owner);
+
+    expect($version->fresh()?->status)->toBe(DesignVersionStatus::Ready);
+
+    $render = AiJob::query()
+        ->where('subject_id', $version->getKey())
+        ->where('task', AiTask::ImageRenderDraft->value)
+        ->firstOrFail();
+
+    $sent = collect((array) ($render->input['plan'] ?? []))
+        ->pluck('category')
+        ->all();
+
+    // The sofa, and only the sofa — with the product named, so the model is placing the
+    // thing in the second photograph rather than a sofa of its own devising.
+    expect($sent)->toBe(['kanepe'])
+        ->and($render->input['plan'][0]['product'] ?? null)->toBe('İskandinav meşe kanepe');
+});
+
+it('refuses to render a room it cannot furnish from the catalogue', function (): void {
+    /*
+     * Refused rather than rendered, and this is a reversal: the empty shopping list used to
+     * be treated as a shame rather than a stop, on the reasoning that a customer still got
+     * their room back. What they actually got was a room furnished entirely with things
+     * that do not exist, which reads as the product working — right up to the empty list
+     * underneath it. Nothing is a better answer than a promise nobody can keep.
+     */
+    FakeAiProvider::script(
+        analysisAnswer(),
+        planAnswer([
+            ['category' => 'perde', 'wall' => 'east', 'max_width_mm' => 4_200],
+            ['category' => 'bitki', 'wall' => null, 'max_width_mm' => 500],
+        ]),
+    );
+
+    $version = $this->launcher->launch($this->design, null, $this->owner);
+
+    expect($version->fresh()?->status)->toBe(DesignVersionStatus::Failed)
+        ->and($version->fresh()?->failure_reason)->toContain('katalogda bulunamadı')
+        // And nothing was charged for it. A refusal the customer pays for is worse than
+        // the picture it refused to draw.
+        ->and($this->ledger->walletFor($this->owner)->balance)->toBe(500);
+});

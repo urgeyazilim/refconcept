@@ -64,11 +64,24 @@ final class FakeAiProvider implements AiProvider
         return true;
     }
 
+    /**
+     * Calls a script is never about.
+     *
+     * Embeddings and re-ranking are how the shopping list is built, not steps a test writes
+     * an outcome for, and they are made from inside stages that are. A script of three —
+     * analysis, plan, render — was being consumed as analysis, plan, embedding, because
+     * matching now runs between the plan and the render; the render then fell through to
+     * the default answer and the test asserted against something nobody wrote. Serving
+     * these from the deterministic answers keeps a script about the steps it names, however
+     * many support calls happen to sit between them.
+     */
+    private const UNSCRIPTED = [AiTask::TextEmbedding, AiTask::ProductMatchRerank];
+
     public function execute(AiCall $call): AiResult
     {
         self::$calls[] = $call;
 
-        if (self::$scripted !== []) {
+        if (self::$scripted !== [] && ! in_array($call->task, self::UNSCRIPTED, true)) {
             return array_shift(self::$scripted);
         }
 

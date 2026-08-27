@@ -61,9 +61,12 @@ interface MatchRow {
 interface PlacementGroup {
   index: number
   category: string | null
+  name: string | null
   wall: string | null
   max_width_mm: number | null
   matches: MatchRow[]
+  /** Why this planned item has no suggestion, when it has none. */
+  unavailable_reason: string | null
 }
 
 interface ShoppingList {
@@ -755,8 +758,18 @@ const statusTone: Record<string, string> = {
               </li>
             </ul>
 
+            <!--
+              Why there is nothing here, in terms somebody can act on.
+
+              These groups did not appear at all until now — the list was built from the
+              matches, so a planned item nothing was found for simply vanished, while the
+              render drew it anyway. Four products in the list, nine pieces of furniture in
+              the picture, and nothing on the page joining the two. "We stock none of these"
+              and "we stock one and it is 90cm where you have room for 80" are different
+              answers and only one of them is worth coming back for.
+            -->
             <p v-if="group.matches.length === 0" class="mt-3 text-sm text-muted">
-              Bu parça için uygun ürün bulunamadı.
+              {{ group.unavailable_reason ?? 'Bu parça için uygun ürün bulunamadı.' }}
             </p>
           </div>
         </div>

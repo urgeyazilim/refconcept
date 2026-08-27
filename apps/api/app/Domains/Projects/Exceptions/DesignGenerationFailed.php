@@ -103,6 +103,24 @@ final class DesignGenerationFailed extends RuntimeException
         );
     }
 
+    /**
+     * The plan was sound and the catalogue had none of it.
+     *
+     * Refused rather than rendered. The alternative is a picture of a room furnished
+     * entirely with things that cannot be bought, which is a worse outcome than no picture:
+     * it looks like the product working, and the customer only discovers otherwise when the
+     * shopping list underneath it is empty.
+     */
+    public static function nothingToPlace(): self
+    {
+        return new self(
+            'Bu plandaki ürünlerin hiçbiri katalogda bulunamadı, bu yüzden görsel '
+            .'üretilmedi. Farklı bir stil veya bütçe ile tekrar deneyebilirsiniz.',
+            'match',
+            isRetryable: false,
+        );
+    }
+
     public static function planHadNothingUsable(): self
     {
         return new self(

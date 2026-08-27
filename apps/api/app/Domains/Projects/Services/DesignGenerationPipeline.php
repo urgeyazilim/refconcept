@@ -304,12 +304,33 @@ final class DesignGenerationPipeline
         // picture is the sofa in the shopping list underneath it.
         $images = array_merge($images, $this->productImages($matches));
 
+        $purchasable = $this->purchasablePlacements($plan, $matches);
+
+        if ($purchasable === []) {
+            throw DesignGenerationFailed::nothingToPlace();
+        }
+
         $ran = $this->dispatcher->runInline(
             task: $quality->task(),
             input: [
                 'room_type' => $analysis->detected_room_type ?? $room->room_type->value,
                 'style' => $plan->style ?? $version->style_code,
-                'plan' => $plan->placements,
+                /*
+                 * Only what the customer can actually buy.
+                 *
+                 * The whole plan used to go, and the plan is what an interior designer would
+                 * ask for rather than what this catalogue happens to stock. So a room came
+                 * back with a television unit, floor-length curtains, a framed picture and a
+                 * potted palm — none of which exist here — beside a shopping list of four
+                 * things. The customer is shown a room they cannot have and asked to buy a
+                 * quarter of it.
+                 *
+                 * Everything that failed to match is dropped from the render, and the
+                 * shopping list says why it was dropped. A sparser room that can be bought
+                 * is the honest picture; the other one is a brochure for a shop that does
+                 * not exist.
+                 */
+                'plan' => $purchasable,
                 'palette' => $plan->palette,
                 /*
                  * Named explicitly in the prompt rather than left to the model to infer
@@ -476,6 +497,49 @@ final class DesignGenerationPipeline
         }
 
         return $sources;
+    }
+
+    /**
+     * The parts of the plan a customer could actually buy.
+     *
+     * A layout plan is what an interior designer would ask for, not an inventory of what
+     * this catalogue stocks, and the gap between the two is wide: a plan calling for a
+     * television unit, a coffee table, curtains, a picture and a plant against a catalogue
+     * that has none of them. Sending the whole plan to the renderer produced exactly that
+     * room, beautifully, and the customer could buy four items out of nine.
+     *
+     * Each surviving placement carries the name of the product chosen for it, so the model
+     * is placing "the Arden bouclé three-seater, whose photograph is the second image"
+     * rather than "a sofa" — which is the difference between the render and the shopping
+     * list agreeing and merely resembling one another.
+     *
+     * @param  Collection<int, DesignMatch>  $matches
+     * @return list<array<string, mixed>>
+     */
+    private function purchasablePlacements(DesignPlan $plan, Collection $matches): array
+    {
+        $chosen = $matches
+            ->sortBy('rank')
+            ->groupBy('placement_index')
+            ->map(fn (Collection $group): ?DesignMatch => $group->first());
+
+        $kept = [];
+
+        foreach ($plan->placements as $index => $placement) {
+            if (! is_array($placement)) {
+                continue;
+            }
+
+            $match = $chosen->get($index);
+
+            if ($match === null) {
+                continue;
+            }
+
+            $kept[] = [...$placement, 'product' => $match->product?->name];
+        }
+
+        return $kept;
     }
 
     /**
