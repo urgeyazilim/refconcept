@@ -10,7 +10,9 @@ use App\Domains\Projects\Enums\DesignVersionStatus;
 use App\Domains\Projects\Exceptions\DesignVersionRefused;
 use App\Domains\Projects\Models\Design;
 use App\Domains\Projects\Models\DesignVersion;
+use App\Support\Storage\PrivateLinkSigner;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 /**
  * The only writer of design versions.
@@ -33,6 +35,8 @@ use Illuminate\Support\Facades\DB;
  */
 final class DesignVersionTree
 {
+    public function __construct(private readonly PrivateLinkSigner $links) {}
+
     /**
      * Starts a new attempt.
      *
@@ -220,6 +224,16 @@ final class DesignVersionTree
                     'failure_reason' => $version->failure_reason,
                     'credit_cost' => $version->credit_cost,
                     'is_current' => $design->current_version_id === $version->id,
+                    /*
+                     * The picture itself, signed.
+                     *
+                     * It was missing entirely: the render was produced, stored and never
+                     * shown. A customer paid credits, waited a minute and got a shopping
+                     * list — the list is what they can act on, but the picture is the whole
+                     * reason they uploaded a photograph. Without it there is nothing to
+                     * imagine, and the product's promise is exactly that you can see it.
+                     */
+                    'image_url' => $this->assetUrl($version),
                     'created_at' => $version->created_at?->toIso8601String(),
                     'children' => $build((string) $version->id),
                 ];
@@ -229,6 +243,28 @@ final class DesignVersionTree
         };
 
         return $build('root');
+    }
+
+    /**
+     * A short-lived link to a version's render.
+     *
+     * Null while a version is still generating, or if it failed — both are ordinary states
+     * and the screen says so in its own words rather than showing a broken image.
+     */
+    private function assetUrl(DesignVersion $version): ?string
+    {
+        $asset = $version->render();
+
+        if ($asset === null) {
+            return null;
+        }
+
+        try {
+            return $this->links->url($asset->disk, $asset->storage_path, now()->addMinutes(30));
+        } catch (RuntimeException) {
+            // A disk that cannot sign is a local development setup, not a customer problem.
+            return null;
+        }
     }
 
     /**

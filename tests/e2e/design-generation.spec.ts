@@ -214,6 +214,18 @@ test.describe('design generation', () => {
       expect(body.data.progress.progress_bps).toBe(10_000)
 
       /*
+       * Before and after, both reachable by the client.
+       *
+       * The render was produced, stored and never sent: the design payload carried a tree,
+       * a status and a shopping list, and no picture anywhere. A customer paid credits,
+       * waited a minute and got a list of furniture with nothing to imagine it in — which
+       * is the one thing the product exists to do. Asserted on the payload rather than only
+       * on the screen, because a missing field is the cause and a blank panel is a symptom.
+       */
+      expect(design.source_image_url, 'odanın kendi fotoğrafı gönderilmiyor').toBeTruthy()
+      expect(version.image_url, 'üretilen görsel gönderilmiyor').toBeTruthy()
+
+      /*
        * One charge for the whole design, not one per model call. The wallet is the check
        * that matters: a pipeline that billed each step would leave a customer paying for an
        * analysis and a plan whenever a render failed.

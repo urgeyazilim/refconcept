@@ -640,6 +640,8 @@ export interface DesignTreeNode {
   failure_reason: string | null
   credit_cost: number
   is_current: boolean
+  /** The render itself, signed and short-lived. Null while generating, or after a failure. */
+  image_url: string | null
   created_at: string | null
   children: DesignTreeNode[]
 }
@@ -662,6 +664,13 @@ export interface DesignDetail extends DesignSummary {
     status: DesignVersionStatus
     user_prompt: string | null
   } | null
+  /**
+   * The photograph the design was built from.
+   *
+   * Sent so a screen can show before and after together. A render on its own is a picture
+   * of a room; next to the room it came from it answers the question the customer asked.
+   */
+  source_image_url: string | null
   tree: DesignTreeNode[]
 }
 

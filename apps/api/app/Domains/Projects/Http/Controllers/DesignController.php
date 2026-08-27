@@ -14,9 +14,11 @@ use App\Domains\Projects\Models\Room;
 use App\Domains\Projects\Services\DesignVersionLauncher;
 use App\Domains\Projects\Services\DesignVersionTree;
 use App\Domains\Projects\Services\RoomPhotoStorage;
+use App\Support\Storage\PrivateLinkSigner;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use RuntimeException;
 
 /**
  * Designs and their version trees.
@@ -35,6 +37,7 @@ final class DesignController
         private readonly DesignVersionTree $tree,
         private readonly DesignVersionLauncher $launcher,
         private readonly RoomPhotoStorage $storage,
+        private readonly PrivateLinkSigner $links,
     ) {}
 
     public function index(Request $request, Project $project, Room $room): JsonResponse
@@ -343,10 +346,46 @@ final class DesignController
                 'status' => $design->currentVersion->status->value,
                 'user_prompt' => $design->currentVersion->user_prompt,
             ],
+            /*
+             * The photograph the design started from.
+             *
+             * Sent so the screen can show before and after together. A render on its own is
+             * a nice picture of a room; next to the room it came from it is the answer to
+             * "what would mine look like", which is the question the customer actually
+             * asked.
+             */
+            'source_image_url' => $this->sourcePhotographUrl($design),
+
             // The whole tree from one query, so a screen with twenty versions is one
             // round trip rather than twenty.
             'tree' => $this->tree->tree($design),
         ];
+    }
+
+    /**
+     * A link to the room photograph this design was built on.
+     */
+    private function sourcePhotographUrl(Design $design): ?string
+    {
+        $room = $design->room;
+
+        if ($room === null) {
+            return null;
+        }
+
+        $room->loadMissing('primaryMedia');
+
+        $media = $room->primaryMedia ?? $room->media()->orderBy('position')->first();
+
+        if ($media === null) {
+            return null;
+        }
+
+        try {
+            return $this->links->url($media->disk, $media->storage_path, now()->addMinutes(30));
+        } catch (RuntimeException) {
+            return null;
+        }
     }
 
     private function defaultName(Room $room): string

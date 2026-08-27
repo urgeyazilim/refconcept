@@ -77,6 +77,12 @@ const shoppingList = ref<ShoppingList | null>(null)
 const listBusy = ref(false)
 const listMessage = ref<string | null>(null)
 
+const addingToCart = ref(false)
+const cartMessage = ref<{ tone: 'success' | 'danger', text: string } | null>(null)
+
+/** Before and after, side by side — the reason a photograph was uploaded at all. */
+const comparison = ref<'after' | 'before'>('after')
+
 const progress = ref<Record<string, VersionProgress>>({})
 const pollFailures = ref(0)
 const pollStalled = ref(false)
@@ -320,6 +326,77 @@ async function setCurrent(node: DesignTreeNode) {
   }
 }
 
+/** The version on screen: whichever one the design currently points at. */
+const shownVersion = computed<DesignTreeNode | null>(() => {
+  const id = shownVersionId.value
+
+  if (!design.value || id === null) {
+    return null
+  }
+
+  // Reuses the same flattening the version tree draws with, so the picture on screen and
+  // the row highlighted in the tree can never disagree about which version is current.
+  return flatten(design.value.tree).find(row => row.node.id === id)?.node ?? null
+})
+
+/** What the customer has actually chosen, across every placement. */
+const chosen = computed<MatchRow[]>(() =>
+  (shoppingList.value?.placements ?? [])
+    .flatMap(group => group.matches)
+    .filter(match => match.status === 'accepted'),
+)
+
+const chosenTotal = computed(() =>
+  chosen.value.reduce((total, match) => total + match.price.amount_minor, 0),
+)
+
+/**
+ * Puts the chosen products in the basket.
+ *
+ * One at a time rather than one request with a list: the cart endpoint is the same one the
+ * catalogue uses, and a second endpoint that takes a batch would be a second place for the
+ * stock and price rules to be applied — and to drift.
+ *
+ * A product that cannot be added does not stop the rest. Somebody who chose six things and
+ * can have five wants the five, and to be told plainly about the one.
+ */
+async function addChosenToCart() {
+  if (chosen.value.length === 0) {
+    return
+  }
+
+  addingToCart.value = true
+  cartMessage.value = null
+
+  const failed: string[] = []
+
+  for (const match of chosen.value) {
+    try {
+      await api.post('/api/v1/cart/items', { sku_id: match.sku.id, quantity: 1 })
+    } catch {
+      failed.push(match.product.name ?? 'ürün')
+    }
+  }
+
+  addingToCart.value = false
+
+  if (failed.length === 0) {
+    cartMessage.value = {
+      tone: 'success',
+      text: `${chosen.value.length} ürün sepetinize eklendi.`,
+    }
+
+    return
+  }
+
+  cartMessage.value = {
+    tone: 'danger',
+    text: failed.length === chosen.value.length
+      ? 'Ürünler sepete eklenemedi. Stok durumu değişmiş olabilir.'
+      : `${chosen.value.length - failed.length} ürün eklendi. Eklenemeyen: ${failed.join(', ')}.`,
+  }
+}
+
 const statusTone: Record<string, string> = {
   pending: 'in_review',
   generating: 'in_review',
@@ -364,6 +441,82 @@ const statusTone: Record<string, string> = {
 
 
       <!--
+        Before and after.
+
+        First on the page, above the shopping list, because it is what the customer came
+        for: they uploaded a photograph of their own room to see what it could look like.
+        The render existed for weeks and was never shown — the page listed products and left
+        the customer to imagine the rest, which is the one thing the product promised to do
+        for them.
+      -->
+      <section v-if="design.source_image_url" class="rc-card overflow-hidden">
+        <div class="flex flex-wrap items-center justify-between gap-3 p-6 pb-4 sm:px-8">
+          <div>
+            <h2 class="text-lg font-medium">Odanız</h2>
+            <p class="mt-1 text-sm text-ink-secondary">
+              {{ shownVersion?.image_url
+                ? 'Soldaki fotoğrafınız, sağdaki aynı odanın önerilen ürünlerle hâli.'
+                : 'Tasarım hazır olduğunda burada yan yana göreceksiniz.' }}
+            </p>
+          </div>
+
+          <!-- On a phone the two do not fit side by side, so they are switched instead. -->
+          <div v-if="shownVersion?.image_url" class="flex gap-1.5 sm:hidden">
+            <button
+              v-for="option in [{ value: 'before', label: 'İlk hâli' }, { value: 'after', label: 'Son hâli' }]"
+              :key="option.value"
+              type="button"
+              class="rounded-pill border px-3 py-1 text-sm"
+              :class="comparison === option.value ? 'border-ink bg-ink text-surface' : 'border-line'"
+              @click="comparison = option.value as 'before' | 'after'"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+        </div>
+
+        <div class="grid gap-px bg-line sm:grid-cols-2">
+          <figure :class="comparison === 'before' ? '' : 'hidden sm:block'" class="bg-surface">
+            <img
+              :src="design.source_image_url"
+              alt="Odanızın ilk hâli"
+              class="aspect-[4/3] w-full object-cover"
+            >
+            <figcaption class="px-5 py-3 text-sm text-muted">İlk hâli</figcaption>
+          </figure>
+
+          <figure :class="comparison === 'after' ? '' : 'hidden sm:block'" class="bg-surface">
+            <img
+              v-if="shownVersion?.image_url"
+              :src="shownVersion.image_url"
+              alt="Odanızın önerilen ürünlerle hâli"
+              class="aspect-[4/3] w-full object-cover"
+              data-testid="design-render"
+            >
+
+            <!--
+              A version that is still running, or one that failed. Said in words rather than
+              left as an empty frame: a blank box next to a photograph reads as a broken
+              page, not as work in progress.
+            -->
+            <div
+              v-else
+              class="flex aspect-[4/3] w-full items-center justify-center bg-bg-muted px-6 text-center text-sm text-muted"
+            >
+              {{ shownVersion?.status === 'failed'
+                ? (shownVersion.failure_reason ?? 'Bu sürüm tamamlanamadı.')
+                : 'Tasarımınız hazırlanıyor…' }}
+            </div>
+
+            <figcaption class="px-5 py-3 text-sm text-muted">
+              Son hâli
+              <span v-if="shownVersion" class="text-ink-secondary">· v{{ shownVersion.version_number }}</span>
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!--
         The shopping list.
 
         Above the version tree, because it is what the customer came for: the picture is
@@ -386,11 +539,32 @@ const statusTone: Record<string, string> = {
 
         <p v-if="listMessage" class="mt-3 text-sm text-ink-secondary">{{ listMessage }}</p>
 
-        <p v-if="shoppingList.total_minor > 0" class="mt-4 text-sm">
-          Seçtikleriniz:
-          <span class="font-medium tabular-nums">
-            {{ money(shoppingList.total_minor, shoppingList.currency) }}
-          </span>
+        <RcAlert v-if="cartMessage" :tone="cartMessage.tone" class="mt-4">{{ cartMessage.text }}</RcAlert>
+
+        <!--
+          What they have chosen, and the one button that turns a design into an order.
+          Without it the page ends at "here are some products" and the customer has to find
+          each one again in the catalogue — which is where a design stops being a design.
+        -->
+        <div
+          v-if="chosen.length > 0"
+          class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-line-strong bg-bg-muted p-4"
+        >
+          <p class="text-sm">
+            {{ chosen.length }} ürün seçtiniz ·
+            <span class="font-medium tabular-nums">
+              {{ money(chosenTotal, shoppingList.currency) }}
+            </span>
+          </p>
+
+          <RcButton :loading="addingToCart" data-testid="add-design-to-cart" @click="addChosenToCart">
+            Seçtiklerimi sepete ekle
+          </RcButton>
+        </div>
+
+        <p v-else-if="shoppingList.total_minor > 0" class="mt-4 text-sm text-ink-secondary">
+          Beğendiklerinizi <span class="text-ink">Bunu seç</span> ile işaretleyin, hepsini
+          birlikte sepete ekleyin.
         </p>
 
         <div class="mt-6 space-y-8">
