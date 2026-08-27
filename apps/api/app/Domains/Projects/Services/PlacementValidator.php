@@ -71,6 +71,24 @@ final class PlacementValidator
      */
     private function reasonToReject(Room $room, array $placement): ?string
     {
+        /*
+         * A placement nobody can shop for.
+         *
+         * The category is the only part of a placement the product search can use, and for
+         * a while nothing insisted on it: the response schema asked for an array and got
+         * one, full of prose — "L köşe koltuk, TV ünitesinin karşısına, ön ayakları halının
+         * üzerinde". A fine sentence and not a category, so the search returned nothing,
+         * the shopping list came back empty, and with no products there were no product
+         * photographs to send the renderer, which then drew furniture out of its own head.
+         * Every stage reported success.
+         *
+         * Rejected rather than dropped, so it lands in the plan's `rejected` column where
+         * somebody can see the model wandered off, instead of vanishing.
+         */
+        if ($this->stringOrNull($placement['category'] ?? null) === null) {
+            return 'Kategorisi belirtilmediği için bu öğe için ürün aranamaz.';
+        }
+
         $width = $this->millimetres($placement['max_width_mm'] ?? null);
 
         if ($width === null) {
@@ -182,6 +200,18 @@ final class PlacementValidator
      * rejecting over which. A negative or absurd figure *is* worth rejecting, and comes
      * back as null so the placement is treated as unmeasured rather than as fitting.
      */
+    /** A non-empty string, or null for anything else a model might have put there. */
+    private function stringOrNull(mixed $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $trimmed = trim($value);
+
+        return $trimmed === '' ? null : $trimmed;
+    }
+
     private function millimetres(mixed $value): ?int
     {
         if (is_int($value)) {

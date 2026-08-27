@@ -300,3 +300,86 @@ describe('Google adapter', function (): void {
             ->and($result->isRetryable())->toBeTrue();
     });
 });
+
+/*
+ * The layout plan's shape.
+ *
+ * The plan is the contract between the model that arranges a room and the search that
+ * finds real furniture for it, and for a while the contract said only "placements is an
+ * array". Any array satisfied it, including a paragraph of interior-design prose, and a
+ * prose plan produces an empty shopping list — and, because the products are what supply
+ * the render's reference photographs, a room furnished with things nobody sells. Every
+ * stage reported success. These cover the two halves of the fix: the schema now reaches
+ * the provider, and it survives the trip in the dialect Google reads.
+ */
+describe('structured output schemas', function (): void {
+    $planSchema = [
+        'required' => ['style', 'placements'],
+        'properties' => [
+            'style' => ['type' => 'string'],
+            'placements' => [
+                'type' => 'array',
+                'items' => [
+                    'type' => 'object',
+                    'required' => ['category', 'max_width_mm'],
+                    'properties' => [
+                        'category' => ['type' => 'string'],
+                        'max_width_mm' => ['type' => 'integer'],
+                        'wall' => ['type' => 'string'],
+                    ],
+                ],
+            ],
+        ],
+    ];
+
+    it('sends the schema to Google, not only the mime type', function () use ($planSchema): void {
+        Http::fake(['*' => Http::response(['candidates' => [[
+            'content' => ['parts' => [['text' => '{"style":"modern","placements":[]}']]],
+            'finishReason' => 'STOP',
+        ]]], 200)]);
+
+        app(GoogleAiProvider::class)->execute(
+            callFor($this->provider, AiModality::Text, AiTask::DesignPlan, $planSchema),
+        );
+
+        Http::assertSent(function (Request $request) {
+            $config = $request->data()['generationConfig'] ?? [];
+            $schema = $config['responseSchema'] ?? [];
+            $item = $schema['properties']['placements']['items'] ?? [];
+
+            // Google's dialect: upper-case type names, and `required` carried down into
+            // the item rather than left at the top where it says nothing useful.
+            return ($config['responseMimeType'] ?? null) === 'application/json'
+                && ($schema['type'] ?? null) === 'OBJECT'
+                && ($item['type'] ?? null) === 'OBJECT'
+                && ($item['properties']['max_width_mm']['type'] ?? null) === 'INTEGER'
+                && ($item['required'] ?? []) === ['category', 'max_width_mm'];
+        });
+    });
+
+    /*
+     * A schema Google rejects fails the whole call with an invalid_request, so anything
+     * untranslatable is dropped rather than forwarded. The gateway still validates it
+     * afterwards, so nothing is lost except how often the first attempt is right.
+     */
+    it('omits a schema it cannot translate rather than sending a broken one', function (): void {
+        Http::fake(['*' => Http::response(['candidates' => [[
+            'content' => ['parts' => [['text' => '{}']]],
+            'finishReason' => 'STOP',
+        ]]], 200)]);
+
+        app(GoogleAiProvider::class)->execute(callFor(
+            $this->provider,
+            AiModality::Text,
+            AiTask::DesignPlan,
+            ['properties' => ['anything' => ['description' => 'no type given']]],
+        ));
+
+        Http::assertSent(function (Request $request) {
+            $config = $request->data()['generationConfig'] ?? [];
+
+            return ($config['responseMimeType'] ?? null) === 'application/json'
+                && ! array_key_exists('responseSchema', $config);
+        });
+    });
+});

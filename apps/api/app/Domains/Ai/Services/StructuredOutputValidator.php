@@ -120,7 +120,10 @@ final class StructuredOutputValidator
         $required = (array) ($schema['required'] ?? []);
 
         foreach ($required as $key) {
-            if (! array_key_exists($key, $value)) {
+            // Present-and-null is missing. A required `category` that came back null is
+            // exactly as unusable to the matcher as one that was never written, and
+            // "the key is there" is not the promise the schema is making.
+            if (($value[$key] ?? null) === null) {
                 $problems[] = sprintf('"%s%s" alanı eksik', $path, $key);
             }
         }
@@ -130,6 +133,21 @@ final class StructuredOutputValidator
 
         foreach ($properties as $key => $definition) {
             if (! array_key_exists($key, $value)) {
+                continue;
+            }
+
+            /*
+             * An optional field written out as null is the same as leaving it out.
+             *
+             * Models fill in the whole shape they were shown and put null where they have
+             * nothing to say — `"wall": null` for a rug that sits in the middle of the room
+             * is a correct answer, and rejecting it as "wall must be a string" failed a
+             * plan that was right, twice, until the attempts ran out and the customer was
+             * told their design could not be prepared. Required fields still have to be
+             * there and still have to hold a value: null does not satisfy `required`,
+             * because the check above only accepts a key that is present *and* not null.
+             */
+            if ($value[$key] === null && ! in_array($key, $required, true)) {
                 continue;
             }
 

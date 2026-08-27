@@ -222,10 +222,27 @@ final class GoogleAiProvider implements AiProvider
             $payload['generationConfig']['maxOutputTokens'] = $call->model->max_output_tokens;
         }
 
-        // Only the MIME type, not the schema: the gateway checks the shape itself so
-        // that "valid" means the same thing whichever provider ran the call.
+        /*
+         * The shape is both asked for and checked.
+         *
+         * Only the MIME type used to be sent, on the reasoning that the gateway validates
+         * the shape itself so "valid" means the same thing whichever provider ran the call.
+         * That reasoning still holds and the gateway is still the authority — but asking
+         * for JSON and describing the shape only in prose left the model free to invent one.
+         * The layout plan came back sometimes as `{category, wall, max_width_mm}` and
+         * sometimes as a paragraph of interior-design advice, and the second kind produced
+         * a design with an empty shopping list and a rendered room full of furniture nobody
+         * sells. Handing Google the schema makes the first attempt usually right; the
+         * gateway's own check makes a wrong one still fail here rather than downstream.
+         */
         if ($call->expectsStructuredOutput() && $call->model->supports_structured_output) {
             $payload['generationConfig']['responseMimeType'] = 'application/json';
+
+            $schema = $this->googleSchema($call->responseSchema ?? []);
+
+            if ($schema !== null) {
+                $payload['generationConfig']['responseSchema'] = $schema;
+            }
         }
 
         /*
@@ -247,6 +264,105 @@ final class GoogleAiProvider implements AiProvider
         }
 
         return $payload;
+    }
+
+    /**
+     * Our JSON Schema in the dialect Google accepts.
+     *
+     * Google takes an OpenAPI subset with upper-case type names and a short list of
+     * keywords, so this translates rather than forwards. Anything it does not recognise is
+     * dropped instead of passed through: a schema Google rejects fails the whole call with
+     * an `invalid_request`, which would turn a validation aid into an outage. Whatever is
+     * dropped here is still enforced by the gateway afterwards, so the loss is in how often
+     * the model gets it right first time, never in what counts as right.
+     *
+     * Returns null when there is nothing worth sending, and the call goes out with the MIME
+     * type alone, exactly as it did before.
+     *
+     * @param  array<string, mixed>  $schema
+     * @return array<string, mixed>|null
+     */
+    private function googleSchema(array $schema): ?array
+    {
+        if ($schema === []) {
+            return null;
+        }
+
+        $translated = $this->translateSchema($schema, 'object');
+
+        return $translated === null || ($translated['properties'] ?? []) === [] ? null : $translated;
+    }
+
+    /**
+     * @param  array<string, mixed>  $node
+     * @return array<string, mixed>|null
+     */
+    private function translateSchema(array $node, ?string $assumedType = null): ?array
+    {
+        $type = is_string($node['type'] ?? null) ? strtolower((string) $node['type']) : $assumedType;
+
+        $googleType = match ($type) {
+            'object' => 'OBJECT',
+            'array' => 'ARRAY',
+            'string' => 'STRING',
+            'integer' => 'INTEGER',
+            'number' => 'NUMBER',
+            'boolean' => 'BOOLEAN',
+            default => null,
+        };
+
+        if ($googleType === null) {
+            return null;
+        }
+
+        $out = ['type' => $googleType];
+
+        if ($googleType === 'ARRAY') {
+            $items = $this->translateSchema((array) ($node['items'] ?? []));
+
+            // An array of unspecified things. Google wants an item type, so this is one of
+            // the cases where saying less is the only way to say anything at all.
+            if ($items === null) {
+                return null;
+            }
+
+            $out['items'] = $items;
+
+            return $out;
+        }
+
+        if ($googleType !== 'OBJECT') {
+            return $out;
+        }
+
+        $properties = [];
+
+        foreach ((array) ($node['properties'] ?? []) as $key => $definition) {
+            $child = $this->translateSchema((array) $definition);
+
+            if ($child !== null) {
+                $properties[(string) $key] = $child;
+            }
+        }
+
+        if ($properties === []) {
+            return null;
+        }
+
+        $out['properties'] = $properties;
+
+        // Only the required fields that survived translation, so Google is never told to
+        // insist on a property the schema it received does not describe.
+        $required = array_values(array_filter(
+            (array) ($node['required'] ?? []),
+            static fn (mixed $key): bool => is_string($key) && isset($properties[$key]),
+        ));
+
+        if ($required !== []) {
+            $out['required'] = $required;
+        }
+
+        return $out;
     }
 
     /**

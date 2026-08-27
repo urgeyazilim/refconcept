@@ -200,6 +200,38 @@ it('records progress a customer can watch', function (): void {
         ->toContain(GenerationStage::Done);
 });
 
+it('drops a placement that names no category', function (): void {
+    /*
+     * The shape that got past everything.
+     *
+     * The plan schema asked for an array and got one, full of prose, so the layout
+     * validated and stored perfectly and the product search — which reads `category` and
+     * nothing else — found nothing for any of it. An empty shopping list also means no
+     * product photographs reach the renderer, so it was handed the room and a paragraph of
+     * advice and furnished it with things nobody sells. Every stage reported success.
+     *
+     * Rejected rather than silently dropped, so the reason lands somewhere a person can
+     * read it instead of vanishing between two green ticks.
+     */
+    FakeAiProvider::script(
+        analysisAnswer(),
+        planAnswer([
+            ['category' => 'kanepe', 'wall' => 'south', 'max_width_mm' => 2_200],
+            ['name' => 'L Köşe Koltuk', 'position_description' => 'TV ünitesinin karşısına.'],
+        ]),
+        renderAnswer(),
+    );
+
+    $version = $this->launcher->launch($this->design, null, $this->owner);
+
+    $plan = DesignPlan::query()->where('design_version_id', $version->getKey())->firstOrFail();
+
+    expect($plan->placements)->toHaveCount(1)
+        ->and($plan->categories())->toBe(['kanepe'])
+        ->and($plan->rejected)->toHaveCount(1)
+        ->and($plan->rejected[0]['reason'])->toContain('Kategorisi');
+});
+
 it('drops a placement the room cannot take and says so', function (): void {
     // A 6000mm sideboard in a room whose longest wall is 5000mm.
     FakeAiProvider::script(

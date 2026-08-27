@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
+import { uniqueEmail as sharedUniqueEmail } from './support/accounts'
 import { checkStable, fillStable } from './support/forms'
 import { gotoHydrated, gotoInteractive, waitForHydration } from './support/hydration'
 import { clearInbox, extractLink, waitForMessage } from './support/mailpit'
@@ -17,10 +18,13 @@ import { clearInbox, extractLink, waitForMessage } from './support/mailpit'
  * matches two controls fails for a reason that has nothing to do with the product.
  */
 
-/** Unique per run so repeated runs never collide on the unique e-mail index. */
-function uniqueEmail(prefix: string): string {
-  return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1e4)}@refconcept.local`
-}
+/**
+ * Unique per run so repeated runs never collide on the unique e-mail index.
+ *
+ * Shared with the API fixtures rather than copied, so both leave the same mark and the
+ * teardown finds both. This copy drifted once already and its accounts survived every purge.
+ */
+const uniqueEmail = sharedUniqueEmail
 
 const PASSWORD = 'E2eGucluParola2026'
 

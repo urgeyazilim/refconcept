@@ -19,8 +19,24 @@ export interface VerifiedAccount {
   token: string
 }
 
+/**
+ * The domain every fixture account lives on.
+ *
+ * Its own domain rather than a timestamp in the local part, because the suite's leavings
+ * have to be identifiable by something deliberate. They were not: fixture sellers listed
+ * their sofas in the real `kanepe` category and nothing ever removed them, so a dev
+ * catalogue of eighteen real products carried a hundred and twenty-six test ones — and the
+ * matcher, asked for a sofa, quite reasonably offered five of them, each with the flat
+ * five-kilobyte placeholder the fixtures upload. The design looked broken because the
+ * catalogue underneath it was.
+ *
+ * A domain is a marker no real account can collide with, which is what makes the teardown
+ * safe to run without a pattern match that might one day catch a customer.
+ */
+export const E2E_EMAIL_DOMAIN = 'e2e.refconcept.local'
+
 export function uniqueEmail(prefix: string): string {
-  return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1e4)}@refconcept.local`
+  return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1e4)}@${E2E_EMAIL_DOMAIN}`
 }
 
 /**

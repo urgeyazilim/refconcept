@@ -132,6 +132,23 @@ curl -s https://<host>/api/health | jq '.status'
 Then a human smoke: sign in, open the catalogue, add something to a basket. Automated checks
 answer "is it up"; those three answer "is it usable", and they are not the same question.
 
+### Keeping the development catalogue honest
+
+```bash
+php artisan refconcept:purge-e2e-fixtures --dry-run   # what the suite left behind
+php artisan refconcept:purge-e2e-fixtures             # archive it
+```
+
+Refuses to run in production, where there are no fixtures and a hit would mean the marker
+had caught something real. Playwright now runs it as a global teardown, so this is a repair
+tool rather than a routine one — reach for it after a run that was killed part-way.
+
+Worth knowing why it exists. The E2E suite lists real products through the real endpoints,
+in the real `kanepe` category, with a flat placeholder for a photograph, and nothing removed
+them afterwards. A development catalogue of eighteen genuine products carried a hundred and
+twenty-six test ones, so the design matcher — asked for a sofa, doing exactly its job —
+offered five that nobody sells. Nothing failed. The suite was green throughout.
+
 ---
 
 ## Scheduled work
