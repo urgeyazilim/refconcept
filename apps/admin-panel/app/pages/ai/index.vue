@@ -178,12 +178,23 @@ async function act(id: string, path: string, body: unknown, success: string) {
 }
 
 /**
- * Micros are millionths of a currency unit, which is the only sane way to store a cost
- * of a fraction of a cent. Nobody reads them, so they are turned into money here — for
- * display only, and never back into arithmetic.
+ * Micros are millionths of a lira, which is the only sane way to store a cost of a fraction
+ * of a kuruş. Nobody reads them, so they are turned into money here — for display only, and
+ * never back into arithmetic.
+ *
+ * Lira, not dollars. The provider quotes in USD and the gateway converts before it stores,
+ * so what arrives here is already the platform's own currency: putting a dollar sign on it
+ * would have been wrong by the whole exchange rate, and wrong silently.
  */
 function money(micros: number): string {
-  return `$${(micros / 1_000_000).toFixed(4)}`
+  return new Intl.NumberFormat('tr-TR', {
+    style: 'currency',
+    currency: 'TRY',
+    // Four places: a single AI call costs a fraction of a kuruş, and rounding to two
+    // would show every one of them as ₺0,00.
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4,
+  }).format(micros / 1_000_000)
 }
 
 function successRate(bps: number | null): string {

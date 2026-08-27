@@ -1471,6 +1471,49 @@ own account and a person confirms it against a statement.
 
 ---
 
+## Post-Phase 22 — currency consistency and the AI image path
+
+**Date:** 2026-08-27
+**Scope:** two defects found by using the product rather than by running the suite.
+
+Both were invisible to every automated check, and the reason is worth recording: the E2E
+suite runs against the **fake** AI provider, so no test ever sent a real image to Google.
+A suite that never touches the real provider cannot find a wrong model code or a rejected
+image part.
+
+### Defects found and fixed
+
+| Id | Severity | Defect | Fix |
+|---|---|---|---|
+| PX-D001 | **P1** | `gemini-3-pro` was seeded and Google does not serve it. Room analysis, design planning, product tagging and support answers all failed with `invalid_request`, which the platform rendered as *"Oda fotoğrafı okunamadı. Daha aydınlık bir fotoğrafla tekrar deneyin."* The message is the worst part: it is correct for the failure it was written for and a lie about this one, so the customer retook the photograph and failed again. | Repointed at `gemini-2.5-pro`, verified against ListModels and a real call; `refconcept:verify-ai-models` added so it cannot recur quietly |
+| PX-D002 | **P1** | Room photographs were passed to the provider as a signed URL. Gemini's `file_uri` accepts a URI from Google's Files API and nothing else, so every image call failed — *and* a signed link to a customer's private photograph was being handed to a third party, quietly breaking the Phase 5 rule that no such URL leaves the system. | Bytes are read inside our own network and sent inline, capped at 8MB, with the URL kept out of the logs |
+| PX-D003 | P2 | AI spend was stored and displayed in USD while every other money figure was TRY. | Converted to lira at record time with a configurable rate; existing rows migrated |
+| PX-D004 | P3 | The SKU form accepted EUR, USD and GBP from a hardcoded list while the config supported only TRY. | Reads the config |
+
+### Verification
+
+| Check | Result |
+|---|---|
+| A real room photograph through the real Gemini | **PASS** — analysed, structured output returned |
+| `refconcept:verify-ai-models` | **PASS** — all three Google models exist |
+| Currency consistency suite | **PASS** — 6 new tests |
+| Every currency column in the database | **TRY**, without exception |
+| Backend | **811 passed**, 2547 assertions |
+| PHPStan level 6, Pint, ESLint, vue-tsc | Clean |
+
+### What this says about the test strategy
+
+The suite is strong on everything it can hold: 811 backend tests, 76 E2E journeys, real
+PostgreSQL, real Redis, real storage, a real browser. It is deliberately blind in one place
+— the AI provider — because tests that call Gemini would be slow, cost money and fail when
+Google is having a bad morning.
+
+That trade is still right. What was missing was the *other* half of it: a deliberate check
+against the live provider, run by a person before a release rather than by CI on every push.
+`refconcept:verify-ai-models` is that check, and it belongs in the deploy checklist.
+
+---
+
 ## Phase 22 — Web release / stabilization
 
 **Date:** 2026-08-26

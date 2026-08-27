@@ -22,7 +22,10 @@ use App\Domains\Ai\Models\AiModel;
 final readonly class AiCall
 {
     /**
-     * @param  array<int, string>  $imageUrls  images the model should look at
+     * @param  array<int, string>  $imageUrls  where the images came from, for the record
+     * @param  list<array{mime: string, data: string}>  $imageBlobs  the images themselves,
+     *                                                               base64, read inside our own network — see InlineImageLoader for why a URL is
+     *                                                               not handed to a provider
      * @param  array<string, mixed>|null  $responseSchema  the shape the answer must take
      * @param  array<string, mixed>  $options  provider-neutral knobs
      */
@@ -32,6 +35,7 @@ final readonly class AiCall
         public string $prompt,
         public ?string $systemPrompt = null,
         public array $imageUrls = [],
+        public array $imageBlobs = [],
         public ?array $responseSchema = null,
         public int $temperatureBps = 7000,
         public int $timeoutSeconds = 60,

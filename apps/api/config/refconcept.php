@@ -110,6 +110,30 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Foreign exchange
+    |--------------------------------------------------------------------------
+    | The platform reports in lira. Everything a customer, a seller or an
+    | operator ever sees is TRY — see money.supported_currencies above.
+    |
+    | AI providers are the one thing that does not cooperate: Google publishes
+    | its price list in dollars per million tokens, so a cost arrives quoted in
+    | USD and has to be turned into lira before it is stored. The alternative —
+    | keeping dollars in the database and putting a lira sign on them — would
+    | show an operator a number that is wrong by whatever the rate happens to be.
+    |
+    | A configured rate rather than a live feed, deliberately. A cost recorded
+    | today must not change tomorrow because the market moved: the figure is what
+    | the spend was worth when it happened. Operators update it from
+    | Sistem → Ayarlar (`finance.usd_try_rate`) when it drifts far enough to
+    | matter.
+    */
+
+    'fx' => [
+        'usd_try' => (float) env('REFCONCEPT_USD_TRY_RATE', 34.0),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Commission
     |--------------------------------------------------------------------------
     | Basis points, never percentages: 1200 bps = 12%. The resolver hierarchy in

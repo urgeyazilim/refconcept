@@ -6,6 +6,7 @@ use App\Domains\Administration\Console\GenerateOpenApiCommand;
 use App\Domains\Administration\Http\Middleware\AssignRequestId;
 use App\Domains\Administration\Http\Middleware\EnforceAdminPermission;
 use App\Domains\Administration\Http\Middleware\SecurityHeaders;
+use App\Domains\Ai\Console\VerifyAiModelsCommand;
 use App\Domains\Ai\Exceptions\AiJobRefused;
 use App\Domains\Commerce\Exceptions\CartRefused;
 use App\Domains\Credits\Console\SweepExpiredCreditsCommand;
@@ -47,6 +48,7 @@ return Application::configure(basePath: dirname(__DIR__))
         BuildSettlementsCommand::class,
         ReconcilePaymentsCommand::class,
         GenerateOpenApiCommand::class,
+        VerifyAiModelsCommand::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         // The three Nuxt clients are separate origins; CORS is configured in config/cors.php.

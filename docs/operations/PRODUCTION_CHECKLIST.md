@@ -116,7 +116,8 @@ checklist.
 2. seed reference data (roles, settings, commission, AI routes, agreements, taxonomy)
 3. restart both queue workers        # they hold compiled code in memory
 4. php artisan refconcept:openapi --check
-5. smoke: /api/health, sign in, open the catalogue, add to basket
+5. php artisan refconcept:verify-ai-models   # the model codes still exist at the provider
+6. smoke: /api/health, sign in, open the catalogue, add to basket
 ```
 
 Step 3 is not optional and is the one most often forgotten: a worker that is not restarted

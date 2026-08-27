@@ -42,7 +42,13 @@ final class StoreSkuRequest extends FormRequest
             'barcode' => ['nullable', 'string', 'max:60'],
             'variant_label' => ['nullable', 'string', 'max:160'],
 
-            'currency' => ['sometimes', 'string', 'size:3', Rule::in(['TRY', 'EUR', 'USD', 'GBP'])],
+            // From the config rather than a second list here. The platform supports TRY and
+            // says so in one place; a hardcoded list is how a currency nobody supports
+            // ends up accepted by a form.
+            'currency' => [
+                'sometimes', 'string', 'size:3',
+                Rule::in((array) config('refconcept.money.supported_currencies', ['TRY'])),
+            ],
 
             'list_price_minor' => ['required', 'integer', 'min:0', 'max:99999999999'],
             'sale_price_minor' => ['nullable', 'integer', 'min:0', 'max:99999999999'],

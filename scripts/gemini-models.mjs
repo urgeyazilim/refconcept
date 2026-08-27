@@ -30,3 +30,13 @@ console.log('\n--- image capable ---')
 for (const model of imageCapable) {
   console.log(`${model.name}  [${(model.supportedGenerationMethods ?? []).join(', ')}]`)
 }
+
+// Every model that can answer a generateContent call, not only the image ones. Room
+// analysis sends a photograph *and* asks for text back, so the text models matter too.
+console.log('\n--- all generateContent models ---')
+
+for (const model of models) {
+  if ((model.supportedGenerationMethods ?? []).includes('generateContent')) {
+    console.log(model.name)
+  }
+}

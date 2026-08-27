@@ -48,8 +48,12 @@ final class AiGatewaySeeder extends Seeder
 
         $models['gemini-text'] = $this->model(
             $google,
-            'gemini-3-pro',
-            'Gemini 3 Pro',
+            // Verified against ListModels *and* a real generateContent call before being
+            // written here. 'gemini-3-pro' was seeded once and does not exist: every room
+            // analysis failed with 'Geçersiz istek', which reads to a customer like their
+            // photograph was the problem.
+            'gemini-2.5-pro',
+            'Gemini 2.5 Pro',
             AiModality::Vision,
             structured: true,
             imageInput: true,

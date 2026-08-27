@@ -46,6 +46,8 @@ final class AiGateway
         private readonly ProviderRegistry $registry,
         private readonly PromptRenderer $prompts,
         private readonly StructuredOutputValidator $validator,
+        private readonly ProviderCostInLira $cost,
+        private readonly InlineImageLoader $images,
     ) {}
 
     /**
@@ -231,6 +233,14 @@ final class AiGateway
             prompt: $rendered['prompt'],
             systemPrompt: $rendered['system'],
             imageUrls: $imageUrls,
+            /*
+             * Read here, inside our own network, and sent to the provider as bytes.
+             *
+             * Handing over a signed URL was both broken and unsafe: Gemini does not fetch
+             * arbitrary URLs, and a link to somebody's room photograph must never leave
+             * this system at all.
+             */
+            imageBlobs: $this->images->load($imageUrls),
             // Only ask for a schema when the task needs one *and* a prompt version
             // defines one; demanding JSON with no shape to check it against would turn
             // every free-text answer into a failure.
@@ -296,11 +306,21 @@ final class AiGateway
 
             $rate = $model->rateAt();
 
-            $cost = $rate?->costFor(
+            /*
+           * The provider's own figure, in the provider's own currency.
+           *
+           * Google quotes dollars per million tokens, so this can be USD. It is converted
+           * once, on the next line, and what gets stored is lira — relabelling dollars as
+           * lira would show an operator a number wrong by the whole exchange rate, and
+           * wrong silently.
+           */
+            $quoted = $rate?->costFor(
                 $result->inputTokens,
                 $result->outputTokens,
                 $result->imageCount,
             ) ?? 0;
+
+            $cost = $this->cost->convert($quoted, $rate?->currency);
 
             AiUsage::query()->create([
                 'request_id' => $request->getKey(),
@@ -311,7 +331,8 @@ final class AiGateway
                 'output_tokens' => $result->outputTokens,
                 'image_count' => $result->imageCount,
                 'cost_micros' => $cost,
-                'currency' => $rate->currency ?? 'USD',
+                // Always the platform's own currency: the conversion happened above.
+                'currency' => $this->cost->currency(),
                 // Credits are charged once for the job, not once per attempt: a
                 // customer must not pay three times because a provider was flaky.
                 'credits_charged' => 0,

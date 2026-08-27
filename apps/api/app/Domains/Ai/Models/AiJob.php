@@ -136,7 +136,7 @@ class AiJob extends Model
     }
 
     /** Cost as a decimal string, for a screen. Never used in arithmetic. */
-    public function costFormatted(string $currency = 'USD'): string
+    public function costFormatted(string $currency = 'TRY'): string
     {
         return number_format($this->total_cost_micros / 1_000_000, 4).' '.$currency;
     }

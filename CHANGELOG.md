@@ -238,6 +238,41 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a demo product page claimed six in stock while the stock screen was empty. Opening
   stock is now booked as a receipt through the ledger.
 
+### Fixed — after Phase 22 (currency and the AI image path)
+
+- **Every money figure is now lira, including AI spend.** The AI console stored and printed
+  the provider's own dollars while every other figure in the system was TRY — a spend total
+  sitting next to an order total in a different unit with nothing saying so. Google publishes
+  its price list in dollars, so the cost is now converted once, when the usage row is
+  written, and what is stored is lira. **Relabelling was not an option**: writing ₺ over a
+  dollar figure makes the number wrong by the whole exchange rate and wrong *silently* —
+  nothing else in the system would ever disagree with it. The rate is configurable and an
+  operator can update it from Sistem → Ayarlar (`finance.usd_try_rate`); an unusable rate
+  leaves the figure unconverted rather than zeroing it, because a spend report reading zero
+  looks like a quiet month and nobody investigates a quiet month.
+- **Product prices accept only the supported currency.** The SKU form allowed EUR, USD and
+  GBP from a hardcoded list while `money.supported_currencies` said TRY. It now reads the
+  config, so the two cannot disagree.
+- **A seeded model that Google does not serve.** `gemini-3-pro` was configured for room
+  analysis, design planning, tagging and support answers. Every one of them failed with the
+  provider's `invalid_request`, which the platform rendered to a customer as *"Oda fotoğrafı
+  okunamadı. Daha aydınlık bir fotoğrafla tekrar deneyin."* — a good message for the failure
+  it was written for and a lie about this one. The customer retook the photograph in better
+  light and failed again. Repointed at `gemini-2.5-pro`, verified against ListModels *and* a
+  real call.
+- **`refconcept:verify-ai-models`**, so that cannot happen quietly again. It asks each
+  provider whether the configured model codes exist and suggests near misses. Deliberately
+  not in the test suite: it needs the network and a live key, and a suite that fails when a
+  third party is having a bad morning is a suite people learn to ignore.
+- **Room photographs were being handed to the provider as a URL.** Wrong twice over. It does
+  not work — Gemini's `file_uri` accepts a URI from Google's own Files API, not an arbitrary
+  link, so every design generation failed with *"Cannot fetch content from the provided
+  URL"*. And it should not work: room photographs live on the private disk precisely so no
+  URL to one ever leaves this system, and handing a third party a fetchable link to somebody's
+  home would have quietly broken that while looking like an optimisation. The bytes are now
+  read inside our own network and sent inline, bounded at 8MB per image, with the URL kept
+  out of the logs.
+
 ### Added — Phase 22 (Web release / stabilization)
 
 - **The API contract, generated from the router** and frozen at `apps/api/openapi.json` —

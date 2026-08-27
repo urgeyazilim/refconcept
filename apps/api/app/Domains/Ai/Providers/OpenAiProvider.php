@@ -128,8 +128,19 @@ final class OpenAiProvider implements AiProvider
 
         $content = [['type' => 'text', 'text' => $call->prompt]];
 
-        foreach ($call->imageUrls as $url) {
-            $content[] = ['type' => 'image_url', 'image_url' => ['url' => $url]];
+        foreach ($call->imageBlobs as $image) {
+            /*
+             * A `data:` URL rather than a link to our storage.
+             *
+             * OpenAI would fetch a public URL, and that is exactly the problem: a room
+             * photograph's URL must not leave this system, and a signed link handed to a
+             * third party is a link they can use. The bytes were read inside our own
+             * network — see InlineImageLoader.
+             */
+            $content[] = [
+                'type' => 'image_url',
+                'image_url' => ['url' => 'data:'.$image['mime'].';base64,'.$image['data']],
+            ];
         }
 
         $messages[] = ['role' => 'user', 'content' => $content];

@@ -58,6 +58,15 @@ final class PlatformSettingsSeeder extends Seeder
                 'type' => 'integer',
             ],
             [
+                'key' => 'finance.usd_try_rate',
+                'group' => 'finance',
+                'label' => 'USD/TRY kuru',
+                'description' => 'Yapay zekâ sağlayıcıları fiyatlarını dolar üzerinden yayımlar. '
+                    .'Maliyet kaydedilirken bu kurla liraya çevrilir; kayıtlı bir maliyet '
+                    .'sonradan kur değişti diye değişmez. Boş bırakılırsa ortam değeri kullanılır.',
+                'type' => 'string',
+            ],
+            [
                 'key' => 'support.contact_email',
                 'group' => 'general',
                 'label' => 'Destek e-posta adresi',

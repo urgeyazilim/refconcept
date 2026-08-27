@@ -125,6 +125,7 @@ receiving traffic, not be killed and restarted into the same problem.
 
 ```bash
 php artisan refconcept:openapi --check        # the contract still matches the routes
+php artisan refconcept:verify-ai-models       # the model codes still exist at the provider
 curl -s https://<host>/api/health | jq '.status'
 ```
 

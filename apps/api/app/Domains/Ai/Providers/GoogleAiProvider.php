@@ -186,13 +186,17 @@ final class GoogleAiProvider implements AiProvider
     {
         $parts = [['text' => $call->prompt]];
 
-        foreach ($call->imageUrls as $url) {
+        foreach ($call->imageBlobs as $image) {
             /*
-             * Sent by reference rather than inlined. Inlining would mean this process
-             * downloading every room photograph and holding it in memory to base64 it,
-             * on a request a customer is waiting on.
+             * Inline bytes, not a link.
+             *
+             * `file_data.file_uri` accepts a URI from Google's own Files API and nothing
+             * else — pointing it at one of our signed URLs failed every call with "Cannot
+             * fetch content from the provided URL", which the platform then showed a
+             * customer as a problem with their photograph. And a room photograph's URL must
+             * not leave this system in any case.
              */
-            $parts[] = ['file_data' => ['mime_type' => 'image/jpeg', 'file_uri' => $url]];
+            $parts[] = ['inline_data' => ['mime_type' => $image['mime'], 'data' => $image['data']]];
         }
 
         $payload = [
