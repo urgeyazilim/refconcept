@@ -7,6 +7,7 @@ namespace App\Domains\Payments\Services;
 use App\Domains\Identity\Models\User;
 use App\Domains\Payments\Models\BankTransfer;
 use App\Domains\Payments\Models\PaymentReceipt;
+use App\Support\Storage\PrivateLinkSigner;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -21,6 +22,8 @@ use RuntimeException;
  */
 final class ReceiptStorage
 {
+    public function __construct(private readonly PrivateLinkSigner $links) {}
+
     /** @var list<string> */
     public const ALLOWED_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 
@@ -69,13 +72,12 @@ final class ReceiptStorage
      */
     public function temporaryUrl(PaymentReceipt $receipt): string
     {
-        $disk = Storage::disk($this->disk());
-
-        if (! method_exists($disk, 'temporaryUrl')) {
-            throw new RuntimeException('Bu disk imzalı bağlantı üretemiyor.');
-        }
-
-        return $disk->temporaryUrl($receipt->storage_path, now()->addMinutes(self::SIGNED_URL_TTL_MINUTES));
+        // Signed for the browser's host rather than the container's — see PrivateLinkSigner.
+        return $this->links->url(
+            $this->disk(),
+            $receipt->storage_path,
+            now()->addMinutes(self::SIGNED_URL_TTL_MINUTES),
+        );
     }
 
     private function assertAcceptable(UploadedFile $file): void

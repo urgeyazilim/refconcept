@@ -103,6 +103,22 @@ test.describe('project journey', () => {
 
     await expect(page.getByText('Tasarım bu fotoğraftan')).toBeVisible()
 
+    /*
+     * And the thumbnail actually loads.
+     *
+     * The badge above renders whether or not the image does, which is how a broken
+     * thumbnail survived to a customer: the signed link was being signed for the host this
+     * API talks to rather than the one the browser uses, so every photograph rendered as an
+     * alt-text filename. `naturalWidth` is the only assertion that can tell the difference
+     * between an <img> that is present and an <img> that works.
+     */
+    const thumbnail = page.locator('img[alt]').first()
+
+    await expect(thumbnail).toBeVisible()
+    await expect
+      .poll(() => thumbnail.evaluate((img: HTMLImageElement) => img.naturalWidth), { timeout: 15_000 })
+      .toBeGreaterThan(0)
+
     // --- measurements ------------------------------------------------------------
     await fillStable(page, '#width', '420')
     await fillStable(page, '#length', '560')

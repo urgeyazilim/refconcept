@@ -1487,19 +1487,32 @@ image part.
 |---|---|---|---|
 | PX-D001 | **P1** | `gemini-3-pro` was seeded and Google does not serve it. Room analysis, design planning, product tagging and support answers all failed with `invalid_request`, which the platform rendered as *"Oda fotoğrafı okunamadı. Daha aydınlık bir fotoğrafla tekrar deneyin."* The message is the worst part: it is correct for the failure it was written for and a lie about this one, so the customer retook the photograph and failed again. | Repointed at `gemini-2.5-pro`, verified against ListModels and a real call; `refconcept:verify-ai-models` added so it cannot recur quietly |
 | PX-D002 | **P1** | Room photographs were passed to the provider as a signed URL. Gemini's `file_uri` accepts a URI from Google's Files API and nothing else, so every image call failed — *and* a signed link to a customer's private photograph was being handed to a third party, quietly breaking the Phase 5 rule that no such URL leaves the system. | Bytes are read inside our own network and sent inline, capped at 8MB, with the URL kept out of the logs |
-| PX-D003 | P2 | AI spend was stored and displayed in USD while every other money figure was TRY. | Converted to lira at record time with a configurable rate; existing rows migrated |
-| PX-D004 | P3 | The SKU form accepted EUR, USD and GBP from a hardcoded list while the config supported only TRY. | Reads the config |
+| PX-D003 | **P1** | Every signed link pointed at the container's own name for object storage, so a browser could not open one. Room photographs rendered as an alt-text filename, which reads to a customer as "my upload failed"; onboarding documents and payment receipts were affected identically. The host is part of the SigV4 signature, so it cannot be rewritten after signing. | Links are signed against the host the browser will use, configured per environment |
+| PX-D004 | P2 | AI spend was stored and displayed in USD while every other money figure was TRY. | Converted to lira at record time with a configurable rate; existing rows migrated |
+| PX-D005 | P3 | The SKU form accepted EUR, USD and GBP from a hardcoded list while the config supported only TRY. | Reads the config |
 
 ### Verification
 
 | Check | Result |
 |---|---|
 | A real room photograph through the real Gemini | **PASS** — analysed, structured output returned |
+| A signed link fetched from outside the container | **PASS** — 200, correct bytes |
+| The thumbnail actually loads in the browser | **PASS** — asserted on `naturalWidth`, and verified to fail without the fix |
 | `refconcept:verify-ai-models` | **PASS** — all three Google models exist |
 | Currency consistency suite | **PASS** — 6 new tests |
 | Every currency column in the database | **TRY**, without exception |
 | Backend | **811 passed**, 2547 assertions |
 | PHPStan level 6, Pint, ESLint, vue-tsc | Clean |
+
+### The assertion that was missing
+
+The journey already uploaded a photograph and checked that the badge beside it appeared. The
+badge renders whether or not the image does, so a thumbnail that had never loaded passed
+every run — for seventeen phases.
+
+`naturalWidth` is the difference between an `<img>` that is *present* and an `<img>` that
+*works*, and it is now asserted. The guard was checked the only way a guard can be: by
+disabling the fix and confirming the test fails.
 
 ### What this says about the test strategy
 

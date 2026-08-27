@@ -9,6 +9,7 @@ use App\Domains\Identity\Models\User;
 use App\Domains\Projects\Models\DesignAsset;
 use App\Domains\Projects\Models\Room;
 use App\Domains\Projects\Models\RoomMedia;
+use App\Support\Storage\PrivateLinkSigner;
 use finfo;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
@@ -39,6 +40,8 @@ use RuntimeException;
  */
 final class RoomPhotoStorage
 {
+    public function __construct(private readonly PrivateLinkSigner $links) {}
+
     /** What a phone camera actually produces, and what the engine can read. */
     public const ALLOWED_MIME_TYPES = [
         'image/jpeg',
@@ -331,17 +334,17 @@ final class RoomPhotoStorage
      */
     private function signed(string $disk, string $path, callable $fallback): string
     {
-        $filesystem = Storage::disk($disk);
-
-        // The local driver cannot sign, so tests and bare setups fall back to streaming
-        // through the application rather than silently exposing a public path.
-        if (! method_exists($filesystem, 'temporaryUrl')) {
-            return $fallback();
-        }
-
         try {
-            return $filesystem->temporaryUrl($path, now()->addMinutes(self::SIGNED_URL_TTL_MINUTES));
+            /*
+             * Signed for the host the browser will use, which is not always the host this
+             * container talks to. See PrivateLinkSigner: locally they differ, and a link
+             * signed for the wrong one is rejected — every room photograph rendered as a
+             * broken image with its filename showing.
+             */
+            return $this->links->url($disk, $path, now()->addMinutes(self::SIGNED_URL_TTL_MINUTES));
         } catch (RuntimeException) {
+            // The local driver cannot sign, so tests and bare setups fall back to streaming
+            // through the application rather than silently exposing a public path.
             return $fallback();
         }
     }

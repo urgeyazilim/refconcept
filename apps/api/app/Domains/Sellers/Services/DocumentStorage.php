@@ -8,6 +8,7 @@ use App\Domains\Identity\Models\User;
 use App\Domains\Sellers\Enums\DocumentType;
 use App\Domains\Sellers\Models\SellerApplication;
 use App\Domains\Sellers\Models\SellerDocument;
+use App\Support\Storage\PrivateLinkSigner;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -27,6 +28,8 @@ use RuntimeException;
  */
 final class DocumentStorage
 {
+    public function __construct(private readonly PrivateLinkSigner $links) {}
+
     /** Formats a reviewer can actually read; anything else is refused at upload. */
     public const ALLOWED_MIME_TYPES = [
         'application/pdf',
@@ -102,7 +105,11 @@ final class DocumentStorage
         }
 
         try {
-            return Storage::disk($disk)->temporaryUrl(
+            // Signed for the host the browser will use rather than the one this container
+            // talks to. See PrivateLinkSigner: locally they differ, and a link signed for
+            // the wrong one is rejected — the file appears to be missing when it is not.
+            return $this->links->url(
+                $disk,
                 $document->storage_path,
                 now()->addMinutes(self::SIGNED_URL_TTL_MINUTES),
             );

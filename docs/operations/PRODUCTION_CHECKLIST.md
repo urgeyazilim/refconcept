@@ -65,6 +65,11 @@ checklist.
 - [ ] Public bucket is readable and fronted by a CDN. **BLOCKED** — the cache headers are set
       (`public, max-age=31536000, immutable`); nothing is distributing them yet.
 - [ ] Uploads are size-limited at the proxy as well as in the application.
+- [ ] `AWS_PUBLIC_ENDPOINT` matches the host a **browser** reaches the bucket by. A signed
+      URL carries the host in its signature, so a link signed for the name the API container
+      uses is rejected at the name the browser uses — and the symptom is not an error page,
+      it is a photograph that renders as a broken image. Leave it equal to `AWS_ENDPOINT`
+      when the two are the same, which is the usual production case.
 
 ### Payments
 

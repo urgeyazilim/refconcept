@@ -105,6 +105,20 @@ return [
 
     'storage' => [
         'private_disk' => env('REFCONCEPT_PRIVATE_DISK', 's3'),
+
+        /*
+         * The name a browser reaches object storage by, when it differs from the name this
+         * container reaches it by.
+         *
+         * Locally they differ: the API talks to MinIO at http://minio:9000 on the Docker
+         * network, and the browser at http://localhost:59000. A signed URL carries the host
+         * in its signature, so a link signed for the first is rejected at the second — which
+         * is why every room photograph rendered as a broken image with its filename showing.
+         *
+         * Empty in a deployment where the two names are the same, which is most of them.
+         * See PrivateLinkSigner.
+         */
+        'public_endpoint' => env('AWS_PUBLIC_ENDPOINT', env('AWS_URL', '')),
         'public_disk' => env('REFCONCEPT_PUBLIC_DISK', 's3-public'),
     ],
 

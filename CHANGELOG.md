@@ -264,6 +264,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   provider whether the configured model codes exist and suggests near misses. Deliberately
   not in the test suite: it needs the network and a live key, and a suite that fails when a
   third party is having a bad morning is a suite people learn to ignore.
+- **Every room photograph rendered as a broken image.** Object storage is reached by two
+  names — this container talks to MinIO on the Docker network, a browser talks to it through
+  a published port — and a signed URL carries the host in its signature, so a link signed for
+  the first is rejected at the second. The host cannot be swapped afterwards without
+  invalidating the signature, so links are now *signed* for the host the browser will use.
+  The same bug silently affected onboarding documents and payment receipts. In a deployment
+  where the two names are the same this changes nothing; it exists for every one where they
+  are not.
 - **Room photographs were being handed to the provider as a URL.** Wrong twice over. It does
   not work — Gemini's `file_uri` accepts a URI from Google's own Files API, not an arbitrary
   link, so every design generation failed with *"Cannot fetch content from the provided
