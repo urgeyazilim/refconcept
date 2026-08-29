@@ -44,6 +44,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $completed_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property-read DesignBrief|null $brief
  */
 class DesignVersion extends Model
 {
@@ -117,6 +118,19 @@ class DesignVersion extends Model
     public function plan(): HasOne
     {
         return $this->hasOne(DesignPlan::class, 'design_version_id');
+    }
+
+    /**
+     * What the customer chose, before any of this ran.
+     *
+     * Null for a version started before the guided brief existed, or by a client that
+     * skipped it — the free-text path still works and the pipeline still handles it.
+     *
+     * @return HasOne<DesignBrief, $this>
+     */
+    public function brief(): HasOne
+    {
+        return $this->hasOne(DesignBrief::class, 'design_version_id');
     }
 
     /**

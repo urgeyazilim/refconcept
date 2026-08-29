@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Domains\Ai\Enums\AiTask;
 use App\Domains\Ai\Providers\FakeAiProvider;
+use App\Domains\Catalog\Models\Style;
+use App\Domains\Catalog\Services\StyleAffinity;
 use App\Domains\Credits\Enums\CreditLotSource;
 use App\Domains\Credits\Services\CreditLedger;
 use App\Domains\Identity\Models\User;
@@ -13,8 +15,10 @@ use App\Domains\Matching\Models\DesignMatch;
 use App\Domains\Matching\Models\DesignMatchFeedback;
 use App\Domains\Matching\Services\ProductEmbedder;
 use App\Domains\Matching\Services\ShoppingListBuilder;
+use App\Domains\Projects\Models\DesignBrief;
 use App\Domains\Projects\Models\DesignPlan;
 use App\Domains\Projects\Models\Project;
+use Database\Seeders\CatalogTaxonomySeeder;
 use Database\Seeders\RolesAndPermissionsSeeder;
 
 /**
@@ -390,4 +394,57 @@ it('does not reject a suggestion the customer liked', function (): void {
         ->assertOk();
 
     expect($match->fresh()->status)->toBe(MatchStatus::Suggested);
+});
+
+it('prefers the chosen style without hiding everything else', function (): void {
+    /*
+     * Style ranks; it does not filter.
+     *
+     * A strict `WHERE style = luxury` over a catalogue of a dozen products returns nothing,
+     * and a customer reads nothing as a broken page rather than as a shop that has not
+     * stocked their taste yet. So the exact match rises, the neighbour follows, and the
+     * unrelated one is still there — reachable, and last.
+     */
+    // Styles and their adjacency are reference data this suite does not otherwise need.
+    $this->seed(CatalogTaxonomySeeder::class);
+
+    $styles = Style::query()->pluck('id', 'code');
+
+    $this->sofa->styles()->sync([$styles['modern'] => ['strength_bps' => 10_000, 'is_primary' => true]]);
+    // Minimal is modern's nearest neighbour; industrial is not related to it at all.
+    $this->secondSofa->styles()->sync([$styles['industrial'] => ['strength_bps' => 10_000, 'is_primary' => true]]);
+
+    app(StyleAffinity::class)->forget();
+
+    /*
+     * The style goes on the brief, not on the plan.
+     *
+     * A finished plan is immutable by trigger — rewriting one would make "v4" mean two
+     * different things — and its `style` column holds whatever the model echoed back,
+     * which is as often a Turkish label as a code. The brief is where the code the
+     * customer tapped lives.
+     */
+    DesignBrief::query()->create([
+        'design_version_id' => $this->version->getKey(),
+        'style_code' => 'modern',
+        'answers' => [],
+    ]);
+
+    $matches = $this->builder->build($this->version->fresh());
+
+    $sofas = $matches->where('placement_category', 'kanepe')->sortBy('rank')->values();
+
+    expect($sofas->first()?->product_id)->toBe($this->sofa->getKey())
+        // The industrial sofa is still offered. Withholding it would leave the placement
+        // empty on a catalogue this thin, which is the failure being avoided.
+        ->and($sofas->pluck('product_id')->all())->toContain($this->secondSofa->getKey());
+});
+
+it('does not let style overrule the measurements', function (): void {
+    /*
+     * A quarter of the score at most. Somebody shown a scandinavian sofa that fits their
+     * room, their wall and their budget has been served well; a weighting that let style
+     * win outright would put the right-looking sofa in a room it does not fit.
+     */
+    expect(StyleAffinity::WEIGHT_BPS)->toBeLessThanOrEqual(2_500);
 });

@@ -53,6 +53,18 @@ final class CandidateQuery
             ->join('sellers as sel', 'sel.id', '=', 's.seller_id')
             ->leftJoin('product_dimensions as d', 'd.sku_id', '=', 's.id')
             ->leftJoin('categories as c', 'c.id', '=', 'p.primary_category_id')
+            /*
+             * The style this product is, mainly.
+             *
+             * Joined rather than filtered on. With a thin catalogue a strict style filter
+             * empties the room — which a customer reads as a broken page rather than as a
+             * shop that has not stocked their taste yet. The code comes back on the row and
+             * the ranking above decides what it is worth.
+             */
+            ->leftJoin('product_styles as pst', function ($join): void {
+                $join->on('pst.product_id', '=', 'p.id')->where('pst.is_primary', true);
+            })
+            ->leftJoin('styles as st', 'st.id', '=', 'pst.style_id')
             ->where('pe.source', EmbeddingSource::Text->value)
 
             /*
@@ -101,6 +113,7 @@ final class CandidateQuery
             d.depth_mm,
             c.name as category_name,
             c.room_type,
+            st.code as style_code,
             (pe.embedding <=> ?::vector) as distance
         ', [$literal])
             // Within one product, the nearest offer wins and price breaks the tie — so the

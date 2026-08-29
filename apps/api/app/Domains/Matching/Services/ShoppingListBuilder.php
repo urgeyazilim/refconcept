@@ -7,6 +7,7 @@ namespace App\Domains\Matching\Services;
 use App\Domains\Ai\Enums\AiJobStatus;
 use App\Domains\Ai\Enums\AiTask;
 use App\Domains\Ai\Services\AiJobDispatcher;
+use App\Domains\Catalog\Services\StyleAffinity;
 use App\Domains\Matching\Models\DesignMatch;
 use App\Domains\Projects\Models\DesignPlan;
 use App\Domains\Projects\Models\DesignVersion;
@@ -45,10 +46,14 @@ final class ShoppingListBuilder
     /** How many go to the model for reranking. More is a bill, fewer is not a shortlist. */
     private const RERANK_WINDOW = 10;
 
+    /** Set for the duration of one build; null when the design was written free-hand. */
+    private ?string $styleCode = null;
+
     public function __construct(
         private readonly ProductEmbedder $embedder,
         private readonly CandidateQuery $candidates,
         private readonly AiJobDispatcher $dispatcher,
+        private readonly StyleAffinity $styles,
     ) {}
 
     /**
@@ -69,6 +74,17 @@ final class ShoppingListBuilder
         if ($plan === null) {
             return collect();
         }
+
+        /*
+         * The style the customer actually chose, by code.
+         *
+         * Read from the brief rather than from the plan. `design_plans.style` holds
+         * whatever the model echoed back — "İskandinav" as often as "scandinavian" — and
+         * the affinity map is keyed by code, so a label there quietly scores every product
+         * at zero and the ranking silently stops working. The brief holds the code the
+         * customer tapped, which is the only version of this fact that is not a guess.
+         */
+        $this->styleCode = $version->brief()->first()?->style_code;
 
         $room = $version->design?->room;
         /*
@@ -202,9 +218,34 @@ final class ShoppingListBuilder
      */
     private function rerank(Collection $rows, DesignPlan $plan, array $placement, string $query): Collection
     {
-        $withSimilarity = $rows->map(function (stdClass $row): stdClass {
+        $wantedStyle = $this->styleCode;
+
+        $withSimilarity = $rows->map(function (stdClass $row) use ($wantedStyle): stdClass {
             $row->similarity_bps = $this->candidates->similarityBps((float) $row->distance);
-            $row->score_bps = $row->similarity_bps;
+
+            /*
+             * The chosen style, applied as a nudge rather than a gate.
+             *
+             * A customer who picked "Lüks" and gets a strict `WHERE style = luxury` sees an
+             * empty room, because a catalogue of a dozen products has almost nothing tagged
+             * any one word. So an exact match lifts a product, a neighbouring style lifts it
+             * less, and an unrelated or untagged one is left where it is. Everything stays
+             * reachable and the order carries the preference; as the catalogue fills, exact
+             * matches crowd out the near ones on their own.
+             *
+             * A quarter of the score at most. Style is a preference, not a specification:
+             * somebody shown a scandinavian sofa that fits their room, their wall and their
+             * budget has been served well, and a weighting that let style overrule the
+             * measurements would put the right-looking sofa in a room it does not fit.
+             */
+            $affinity = $this->styles->between($wantedStyle, $row->style_code ?? null);
+
+            $row->style_bps = $affinity;
+            $row->score_bps = (int) round(
+                $row->similarity_bps * (10_000 - StyleAffinity::WEIGHT_BPS) / 10_000
+                + $affinity * StyleAffinity::WEIGHT_BPS / 10_000
+            );
+
             $row->rerank_bps = null;
             $row->reason = null;
 

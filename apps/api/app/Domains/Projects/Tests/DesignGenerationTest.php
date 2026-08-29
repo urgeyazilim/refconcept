@@ -16,14 +16,18 @@ use App\Domains\Projects\Enums\DesignVersionStatus;
 use App\Domains\Projects\Enums\GenerationStage;
 use App\Domains\Projects\Enums\RenderQuality;
 use App\Domains\Projects\Jobs\GenerateDesignVersion;
+use App\Domains\Projects\Models\DesignBrief;
 use App\Domains\Projects\Models\DesignPlan;
 use App\Domains\Projects\Models\DesignVersionEvent;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\RoomAnalysis;
 use App\Domains\Projects\Models\RoomMedia;
+use App\Domains\Projects\Services\BriefToPlacements;
 use App\Domains\Projects\Services\DesignGenerationPipeline;
 use App\Domains\Projects\Services\DesignVersionLauncher;
+use Database\Seeders\CatalogTaxonomySeeder;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Database\Seeders\RoomProgrammeSeeder;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -570,4 +574,94 @@ it('refuses to render a room it cannot furnish from the catalogue', function ():
         // And nothing was charged for it. A refusal the customer pays for is worse than
         // the picture it refused to draw.
         ->and($this->ledger->walletFor($this->owner)->balance)->toBe(500);
+});
+
+it('builds the plan from what the customer chose, not from what the model imagined', function (): void {
+    /*
+     * The inversion this all rests on.
+     *
+     * The model used to decide what furniture a room needed, and it was backwards twice
+     * over: the customer knows whether they want a corner sofa better than any model does,
+     * and the catalogue knows what it stocks better than either. Left to itself it asked
+     * for a television unit, curtains, a picture and four cushions against a shop that
+     * sells none of them.
+     */
+    $this->seed(CatalogTaxonomySeeder::class);
+    $this->seed(RoomProgrammeSeeder::class);
+
+    $version = $this->launcher->launch($this->design, null, $this->owner);
+
+    $programmeId = DB::table('room_programmes')->where('room_type', 'living_room')->value('id');
+
+    DesignBrief::query()->create([
+        'design_version_id' => $version->getKey(),
+        'programme_id' => $programmeId,
+        'style_code' => 'modern',
+        'answers' => [
+            'seating' => ['three-seater'],
+            'coffee-table' => ['center-and-side'],
+            // Explicitly declined. A none-option is a real answer and must ask for nothing.
+            'tv-unit' => ['no'],
+        ],
+    ]);
+
+    $placements = app(BriefToPlacements::class)
+        ->build($version->brief()->firstOrFail(), $this->room->fresh());
+
+    $categories = array_column($placements, 'category');
+
+    // One sofa, two side tables — "orta ve yan sehpa" is one option asking for a category
+    // twice, and the shopping list needs a line for each. No television unit at all.
+    expect($categories)->toBe(['kanepe', 'sehpa', 'sehpa'])
+        ->and($categories)->not->toContain('tv-unitesi');
+});
+
+it('sizes a placement from the room rather than asking the customer', function (): void {
+    $this->seed(CatalogTaxonomySeeder::class);
+    $this->seed(RoomProgrammeSeeder::class);
+
+    $version = $this->launcher->launch($this->design, null, $this->owner);
+
+    DesignBrief::query()->create([
+        'design_version_id' => $version->getKey(),
+        'programme_id' => DB::table('room_programmes')->where('room_type', 'living_room')->value('id'),
+        'answers' => ['seating' => ['three-seater']],
+    ]);
+
+    $placements = app(BriefToPlacements::class)
+        ->build($version->brief()->firstOrFail(), $this->room->fresh());
+
+    /*
+     * Nobody knows how wide a sofa should be in their own living room, and asking would be
+     * the textarea again in a different costume. The room's longest wall is 5000mm and a
+     * sofa may claim three fifths of it.
+     */
+    expect($placements[0]['max_width_mm'])->toBe(3_000);
+});
+
+it('gives an unmeasured room no width ceiling rather than a guessed one', function (): void {
+    $this->seed(CatalogTaxonomySeeder::class);
+    $this->seed(RoomProgrammeSeeder::class);
+
+    $version = $this->launcher->launch($this->design, null, $this->owner);
+
+    DesignBrief::query()->create([
+        'design_version_id' => $version->getKey(),
+        'programme_id' => DB::table('room_programmes')->where('room_type', 'living_room')->value('id'),
+        'answers' => ['seating' => ['three-seater']],
+    ]);
+
+    $this->room->forceFill([
+        'width_mm' => null,
+        'length_mm' => null,
+        'height_mm' => null,
+        'measurement_quality' => 'unknown',
+    ])->save();
+
+    $placements = app(BriefToPlacements::class)
+        ->build($version->brief()->firstOrFail(), $this->room->fresh());
+
+    // A made-up limit would quietly exclude products that fit perfectly well, and nobody
+    // would ever know why.
+    expect($placements[0]['max_width_mm'])->toBeNull();
 });

@@ -7,6 +7,7 @@ namespace App\Domains\Projects\Http\Controllers;
 use App\Domains\Projects\Enums\RenderQuality;
 use App\Domains\Projects\Exceptions\DesignVersionRefused;
 use App\Domains\Projects\Models\Design;
+use App\Domains\Projects\Models\DesignBrief;
 use App\Domains\Projects\Models\DesignVersion;
 use App\Domains\Projects\Models\DesignVersionEvent;
 use App\Domains\Projects\Models\Project;
@@ -62,6 +63,27 @@ final class DesignController
             'style_code' => ['sometimes', 'nullable', 'string', 'max:60'],
             'user_prompt' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'render_quality' => ['sometimes', Rule::enum(RenderQuality::class)],
+
+            /*
+             * What the customer chose, when they were asked in pictures.
+             *
+             * Optional, and that is deliberate rather than transitional: a design started
+             * from the old free-text form, or by a client that has not caught up, still
+             * works. The pipeline handles both and this endpoint does not have to choose.
+             *
+             * Answers are validated for shape only — whether "corner-sofa" is a real option
+             * of a real question is the programme's business, and duplicating that here
+             * would be two places to keep in step.
+             */
+            'brief' => ['sometimes', 'array'],
+            'brief.programme_id' => ['required_with:brief', 'uuid', Rule::exists('room_programmes', 'id')],
+            'brief.style_code' => ['sometimes', 'nullable', 'string', Rule::exists('styles', 'code')],
+            'brief.palette_code' => ['sometimes', 'nullable', 'string', Rule::exists('palettes', 'code')],
+            'brief.budget_minor' => ['sometimes', 'nullable', 'integer', 'min:0'],
+            'brief.answers' => ['sometimes', 'array'],
+            'brief.answers.*' => ['array'],
+            'brief.answers.*.*' => ['string', 'max:60'],
+            'brief.note' => ['sometimes', 'nullable', 'string', 'max:2000'],
         ]);
 
         abort_unless(
@@ -83,10 +105,26 @@ final class DesignController
                 actor: $request->user(),
                 quality: RenderQuality::from((string) ($validated['render_quality'] ?? 'draft')),
                 userPrompt: $validated['user_prompt'] ?? null,
-                styleCode: $validated['style_code'] ?? null,
+                // The brief's style wins when there is one: it is what the customer just
+                // tapped, and the top-level field is the old form's way of saying the
+                // same thing.
+                styleCode: $validated['brief']['style_code'] ?? $validated['style_code'] ?? null,
             );
         } catch (DesignVersionRefused $e) {
             throw $e->toValidationException();
+        }
+
+        if (isset($validated['brief'])) {
+            $this->recordBrief($version, $validated['brief']);
+
+            /*
+             * Recorded after the launch, not before.
+             *
+             * The launcher is the step that refuses — a room with no photograph, an
+             * archived project, not enough credits — and it takes the customer's credits
+             * once it is satisfied. Writing the brief first would leave one behind for a
+             * version that was never created.
+             */
         }
 
         return response()->json([
@@ -386,6 +424,52 @@ final class DesignController
         } catch (RuntimeException) {
             return null;
         }
+    }
+
+    /**
+     * Keeps what the customer chose, beside the version it produced.
+     *
+     * On the version rather than the room, because two designs for one room are two
+     * different briefs — which is the point of keeping a tree of them. A refinement can
+     * start from the answers, and a customer can see next spring what they asked for.
+     *
+     * @param  array<string, mixed>  $brief
+     */
+    private function recordBrief(DesignVersion $version, array $brief): void
+    {
+        DesignBrief::query()->create([
+            'design_version_id' => $version->getKey(),
+            'programme_id' => $brief['programme_id'] ?? null,
+            'style_code' => $brief['style_code'] ?? null,
+            'palette_code' => $brief['palette_code'] ?? null,
+            'budget_minor' => $brief['budget_minor'] ?? null,
+            // Normalised to lists of strings on the way in, so nothing downstream has to
+            // wonder whether a single-choice answer might have arrived as a bare string.
+            'answers' => $this->normaliseAnswers($brief['answers'] ?? []),
+            'note' => $brief['note'] ?? null,
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $answers
+     * @return array<string, array<int, string>>
+     */
+    private function normaliseAnswers(array $answers): array
+    {
+        $normalised = [];
+
+        foreach ($answers as $question => $chosen) {
+            $codes = array_values(array_filter(
+                (array) $chosen,
+                static fn (mixed $code): bool => is_string($code) && $code !== '',
+            ));
+
+            if ($codes !== []) {
+                $normalised[(string) $question] = $codes;
+            }
+        }
+
+        return $normalised;
     }
 
     private function defaultName(Room $room): string

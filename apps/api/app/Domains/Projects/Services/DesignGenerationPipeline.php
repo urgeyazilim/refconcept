@@ -71,6 +71,7 @@ final class DesignGenerationPipeline
         private readonly RoomPhotoStorage $storage,
         private readonly CreditLedger $ledger,
         private readonly ShoppingListBuilder $shoppingList,
+        private readonly BriefToPlacements $briefPlacements,
     ) {}
 
     /**
@@ -207,14 +208,51 @@ final class DesignGenerationPipeline
 
         $this->event($version, GenerationStage::Plan, 'started', 'Yerleşim planlanıyor…');
 
+        /*
+         * Fetched through the relation rather than read as a property.
+         *
+         * The property reads as non-nullable to static analysis — a has-one is typed by the
+         * model it points at, not by whether a row exists — which made every null check
+         * here look redundant while being the only thing standing between a design without
+         * a brief and a crash. `first()` says what is actually true.
+         */
+        $brief = $version->brief()->first();
+
+        /*
+         * The customer's own answers, when they gave any.
+         *
+         * The model used to decide what furniture a room needed, and it was backwards twice
+         * over: the customer knows whether they want a corner sofa better than any model
+         * does, and the catalogue knows what it stocks better than either. Left to itself
+         * the model asked for a television unit, floor-length curtains, a framed picture and
+         * four cushions against a shop that sells none of them.
+         *
+         * With a brief the list is settled before the model is called, and the call is only
+         * about where things go — which is the part it is genuinely good at. Without one,
+         * for a design started before the wizard existed or by a client that skipped it, the
+         * old path still runs.
+         */
+        $chosen = $brief === null ? [] : $this->briefPlacements->build($brief, $room);
+
+        // Read out once, so the fallback for each is stated in one place rather than
+        // inline three times where a reader has to hold two sources of truth at once.
+        $budget = $brief === null ? null : $brief->budget_minor;
+        $style = $brief === null ? null : $brief->style_code;
+        $note = $brief === null ? null : $brief->note;
+
         $ran = $this->dispatcher->runInline(
             task: AiTask::DesignPlan,
             input: [
                 'analysis' => $analysis->payload,
                 'constraints' => $this->constraintsFor($room),
-                'budget_minor' => $room->project?->budget_minor,
-                'style' => $version->style_prompt ?? $version->style_code,
-                'prompt' => $version->user_prompt,
+                'budget_minor' => $budget ?? $room->project?->budget_minor,
+                'style' => $style ?? $version->style_prompt ?? $version->style_code,
+                'palette' => $brief?->palette_code,
+                // Named `required_placements` rather than `placements`, so a prompt asking
+                // the model to produce placements and a prompt handing it some cannot be
+                // confused for one another by whoever edits the template next.
+                'required_placements' => $chosen,
+                'prompt' => $note ?? $version->user_prompt,
             ],
             subject: $version,
             creditCostOverride: 0,
@@ -229,6 +267,21 @@ final class DesignGenerationPipeline
 
         /** @var array<int, mixed> $proposed */
         $proposed = (array) ($structured['placements'] ?? []);
+
+        /*
+         * The customer's list wins on what; the model's answer wins on where.
+         *
+         * Merged rather than one replacing the other. Taking the model's list back would
+         * throw away the choices somebody made by hand; taking only the customer's would
+         * throw away the wall the model picked after looking at where the window is. So the
+         * chosen categories are the spine and the model's matching entries fill in position.
+         *
+         * A model that ignored the list and returned something else is overruled here
+         * rather than argued with — the shape is asserted where it matters, not hoped for.
+         */
+        if ($chosen !== []) {
+            $proposed = $this->mergePlacements($chosen, $proposed);
+        }
 
         /*
          * The arithmetic the model is bad at. It will happily put a 2600mm sofa against a
@@ -497,6 +550,46 @@ final class DesignGenerationPipeline
         }
 
         return $sources;
+    }
+
+    /**
+     * The customer's list, with the model's placement decisions folded in.
+     *
+     * Matched by category and consumed once, so two side tables in the brief take the two
+     * side-table entries the model returned rather than both taking the first. Anything the
+     * model returned that nobody asked for is dropped — that is the whole point.
+     *
+     * @param  array<int, array<string, mixed>>  $chosen
+     * @param  array<int, mixed>  $proposed
+     * @return array<int, array<string, mixed>>
+     */
+    private function mergePlacements(array $chosen, array $proposed): array
+    {
+        /** @var array<string, array<int, array<string, mixed>>> $byCategory */
+        $byCategory = [];
+
+        foreach ($proposed as $placement) {
+            if (is_array($placement) && is_string($placement['category'] ?? null)) {
+                $byCategory[$placement['category']][] = $placement;
+            }
+        }
+
+        $merged = [];
+
+        foreach ($chosen as $placement) {
+            $category = (string) $placement['category'];
+            $match = array_shift($byCategory[$category]);
+
+            $merged[] = [
+                ...$placement,
+                // Only the parts the model is better placed to know. Its width is ignored:
+                // the customer's room was measured and a share-of-wall rule beats a guess.
+                'wall' => is_string($match['wall'] ?? null) ? $match['wall'] : null,
+                'notes' => is_string($match['notes'] ?? null) ? $match['notes'] : null,
+            ];
+        }
+
+        return $merged;
     }
 
     /**
