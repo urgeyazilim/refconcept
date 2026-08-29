@@ -3,6 +3,7 @@ import type { APIRequestContext, Page } from '@playwright/test'
 import { createVerifiedAccount, DEFAULT_PASSWORD, grantPlatformRole } from './support/accounts'
 import { pngBuffer } from './support/sellers'
 import { fillStable } from './support/forms'
+import { completeBrief } from './support/brief'
 import { gotoInteractive, waitForHydration } from './support/hydration'
 import { signInThrough } from './support/signin'
 
@@ -151,8 +152,7 @@ test.describe('project journey', () => {
      * is about a customer arriving with nothing.
      */
     await page.getByRole('button', { name: 'Tasarım oluştur' }).click()
-    await page.locator('#prompt').fill('İskandinav, açık renkler')
-    await page.getByRole('button', { name: 'Başlat' }).click()
+    await completeBrief(page)
 
     await expect(page.getByText(/kredi gerektiriyor/)).toBeVisible()
 

@@ -578,7 +578,19 @@ final class DesignGenerationPipeline
 
         foreach ($chosen as $placement) {
             $category = (string) $placement['category'];
-            $match = array_shift($byCategory[$category]);
+
+            /*
+             * The model may simply not have mentioned this category.
+             *
+             * It usually returns one entry per requested placement, but "usually" is not a
+             * contract, and shifting a category it skipped crashed the whole design with
+             * `array_shift(): Argument #1 must be of type array, null given` — a customer
+             * watching a spinner for a minute and then reading "beklenmeyen bir hata"
+             * because a model left out the cushions. The customer's choice stands either
+             * way; only the wall goes unanswered.
+             */
+            $match = $byCategory[$category] ?? [];
+            $match = $match === [] ? null : array_shift($byCategory[$category]);
 
             $merged[] = [
                 ...$placement,

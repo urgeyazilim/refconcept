@@ -45,6 +45,15 @@ const savingConstraint = ref(false)
 
 const creatingDesign = ref(false)
 const designForm = reactive({ prompt: '' })
+
+/**
+ * Whether to fall back to the free-text form.
+ *
+ * Set when the wizard reports there is no published question set for this room type. Not a
+ * preference the customer expresses — they should never be asked to choose between two
+ * shapes of the same form.
+ */
+const briefUnavailable = ref(false)
 const savingDesign = ref(false)
 
 const base = `/api/v1/projects/${projectId}/rooms/${roomId}`
@@ -150,13 +159,23 @@ async function removeConstraint(id: string) {
   }
 }
 
-async function createDesign() {
+/**
+ * Starts a design from the guided brief, or from the free-text form behind it.
+ *
+ * Both paths land here and both are supported. The wizard is what almost everybody will
+ * use; the textarea remains for a room type nobody has written questions for yet, and for
+ * a customer who already knows exactly what they want to say.
+ *
+ * @param brief what the customer chose, or null when they wrote it instead
+ */
+async function createDesign(brief: Record<string, unknown> | null = null) {
   savingDesign.value = true
   actionError.value = null
 
   try {
     const response = await api.post<{ data: { id: string } }>(`${base}/designs`, {
-      user_prompt: designForm.prompt || null,
+      user_prompt: brief === null ? (designForm.prompt || null) : null,
+      ...(brief === null ? {} : { brief }),
     })
 
     await navigateTo(`/projects/${projectId}/rooms/${roomId}/designs/${response.data.id}`)
@@ -215,15 +234,31 @@ const walls = [
         </ul>
       </RcAlert>
 
-      <!-- Start a design -->
-      <section v-if="creatingDesign" class="rc-card p-6 sm:p-8">
+      <!--
+        Start a design.
+
+        The guided brief first, and the textarea only when there is no question set for the
+        room type — which is the honest fallback rather than a choice put to the customer.
+        Asking somebody whether they would prefer to answer eight tapped questions or write
+        a paragraph is asking them to make a decision about a form.
+      -->
+      <DesignBriefWizard
+        v-if="creatingDesign && !briefUnavailable"
+        :project-id="projectId"
+        :room-id="roomId"
+        :budget-minor="project?.budget?.amount_minor ?? null"
+        @cancel="briefUnavailable = true"
+        @submit="createDesign"
+      />
+
+      <section v-else-if="creatingDesign" class="rc-card p-6 sm:p-8">
         <h2 class="text-lg font-medium">Yeni tasarım</h2>
         <p class="mt-1.5 max-w-[60ch] text-sm leading-relaxed text-ink-secondary">
           Nasıl bir sonuç istediğinizi kendi cümlelerinizle yazabilirsiniz. Boş
           bırakırsanız oda türüne ve ölçülerine göre bir öneri hazırlanır.
         </p>
 
-        <form class="mt-5 space-y-5" @submit.prevent="createDesign">
+        <form class="mt-5 space-y-5" @submit.prevent="createDesign(null)">
           <div>
             <label for="prompt" class="mb-1.5 block text-sm font-medium">İstekleriniz</label>
             <textarea

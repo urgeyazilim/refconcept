@@ -25,6 +25,7 @@ use App\Domains\Projects\Models\RoomMedia;
 use App\Domains\Projects\Services\BriefToPlacements;
 use App\Domains\Projects\Services\DesignGenerationPipeline;
 use App\Domains\Projects\Services\DesignVersionLauncher;
+use App\Domains\Projects\Services\DesignVersionTree;
 use Database\Seeders\CatalogTaxonomySeeder;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Database\Seeders\RoomProgrammeSeeder;
@@ -664,4 +665,49 @@ it('gives an unmeasured room no width ceiling rather than a guessed one', functi
     // A made-up limit would quietly exclude products that fit perfectly well, and nobody
     // would ever know why.
     expect($placements[0]['max_width_mm'])->toBeNull();
+});
+
+it('keeps the customer choice when the model skips one of them', function (): void {
+    /*
+     * The model returns one entry per requested placement — usually. "Usually" is not a
+     * contract, and reaching into a category it left out crashed the whole design with a
+     * type error, which reached the customer as "beklenmeyen bir hata" after a minute of
+     * watching a spinner. Their choice stands either way; only the wall goes unanswered.
+     */
+    $this->seed(CatalogTaxonomySeeder::class);
+    $this->seed(RoomProgrammeSeeder::class);
+
+    FakeAiProvider::script(
+        analysisAnswer(),
+        // The plan asks for a sofa and a rug; the model answers about the sofa only.
+        planAnswer([['category' => 'kanepe', 'wall' => 'south', 'max_width_mm' => 3_000]]),
+        renderAnswer(),
+    );
+
+    /*
+     * Branched rather than launched: the launcher runs the pipeline itself, so a brief
+     * attached afterwards would arrive too late to be read. It has to exist before the
+     * plan stage, which is the whole point of it.
+     */
+    $version = app(DesignVersionTree::class)->branch(
+        design: $this->design,
+        parent: null,
+        actor: $this->owner,
+        styleCode: 'modern',
+    );
+
+    DesignBrief::query()->create([
+        'design_version_id' => $version->getKey(),
+        'programme_id' => DB::table('room_programmes')->where('room_type', 'living_room')->value('id'),
+        'answers' => ['seating' => ['three-seater'], 'rug' => ['large']],
+    ]);
+
+    $this->pipeline->run($version->fresh());
+
+    $plan = DesignPlan::query()->where('design_version_id', $version->getKey())->firstOrFail();
+
+    expect(array_column($plan->placements, 'category'))->toBe(['kanepe', 'hali'])
+        // The sofa got the wall the model chose; the rug simply has none.
+        ->and($plan->placements[0]['wall'])->toBe('south')
+        ->and($plan->placements[1]['wall'])->toBeNull();
 });

@@ -1291,3 +1291,44 @@ export interface SellerDashboard {
     out_of_stock: number
   }
 }
+
+/**
+ * One option on a room-programme question.
+ *
+ * `available` and `exact_style` are the two the screen actually reads. They are separate
+ * because the answers are separate: "we do not sell these" sends a customer to a different
+ * plan, "we sell these but not in the style you chose" sends them to a different style or
+ * to waiting for a seller — and collapsing the two into one boolean loses the only part
+ * they can act on.
+ */
+export interface ProgrammeOption {
+  code: string
+  label: string
+  help: string | null
+  /** The drawing on the tile; the whole premise is choosing by looking. */
+  icon: string | null
+  is_default: boolean
+  is_none: boolean
+  available: boolean
+  exact_style: boolean
+  unavailable_reason: string | null
+  categories: Array<{ slug: string, quantity: number, is_required: boolean }>
+}
+
+export interface ProgrammeQuestion {
+  code: string
+  prompt: string
+  help: string | null
+  /** 'single' — one answer; 'multi' — several. Yes/no is a single with two options. */
+  kind: 'single' | 'multi'
+  is_required: boolean
+  options: ProgrammeOption[]
+}
+
+export interface RoomProgramme {
+  id: string
+  room_type: string
+  version: number
+  name: string
+  questions: ProgrammeQuestion[]
+}

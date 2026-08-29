@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests;
 
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\Cache;
 use RuntimeException;
 
 abstract class TestCase extends BaseTestCase
@@ -14,6 +15,18 @@ abstract class TestCase extends BaseTestCase
         parent::setUp();
 
         $this->guardAgainstNonTestDatabase();
+
+        /*
+         * A test starts with an empty cache.
+         *
+         * `RefreshDatabase` rolls the database back and leaves the array store alone, so a
+         * cached lookup outlived the rows it was built from — the catalogue coverage map
+         * and the style adjacency both cache for minutes, and a test that seeded a
+         * catalogue left its answers behind for the next one. The symptom was a design
+         * test that passed alone and failed in the suite, which is the worst shape a
+         * failure can take: it looks like flakiness and it is a real leak.
+         */
+        Cache::flush();
     }
 
     /**
