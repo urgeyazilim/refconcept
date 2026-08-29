@@ -338,7 +338,24 @@ final class DemoCatalogSeeder extends Seeder
     {
         $slug = Str::slug((string) $definition['name']);
 
-        if (Product::query()->where('slug', $slug)->exists()) {
+        $existing = Product::query()->where('slug', $slug)->first();
+
+        if ($existing !== null) {
+            /*
+             * Already here, but possibly from before styles were a table.
+             *
+             * The skip used to be unconditional, which meant a listing seeded last month
+             * never gained the `product_styles` row that matching now reads — every demo
+             * product stayed invisible to a customer choosing a style, on a database that
+             * looked perfectly seeded. A seeder that only ever creates cannot repair, and
+             * repairing is most of what a seeder does after the first week.
+             */
+            if ($existing->style_id !== null && $existing->styles()->count() === 0) {
+                $existing->styles()->syncWithoutDetaching([
+                    $existing->style_id => ['strength_bps' => 10_000, 'is_primary' => true],
+                ]);
+            }
+
             return false;
         }
 
@@ -372,6 +389,21 @@ final class DemoCatalogSeeder extends Seeder
                 'description' => $definition['description'],
                 'created_by' => $organization->owner_user_id,
             ]);
+
+            /*
+             * The style, in the table matching actually reads.
+             *
+             * `style_id` alone is no longer enough: a product is now allowed more than one
+             * style and the search reads `product_styles`. Writing only the column left
+             * every demo product invisible to a customer choosing a style — the wizard
+             * offered a sofa and marked it "seçtiğiniz stilde yok" while a perfectly
+             * modern sofa sat in the catalogue.
+             */
+            if ($product->style_id !== null) {
+                $product->styles()->syncWithoutDetaching([
+                    $product->style_id => ['strength_bps' => 10_000, 'is_primary' => true],
+                ]);
+            }
 
             $this->attachAttributes($product, $definition);
             $this->attachMedia($product, (string) $definition['image'], (string) $definition['name']);

@@ -10,6 +10,7 @@ use App\Domains\Projects\Enums\MeasurementQuality;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\Room;
 use App\Domains\Projects\Models\RoomConstraint;
+use App\Domains\Projects\Services\RoomProgrammeReader;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -25,6 +26,8 @@ use Illuminate\Validation\Validator as ValidatorInstance;
  */
 final class RoomController
 {
+    public function __construct(private readonly RoomProgrammeReader $programmes) {}
+
     public function store(Request $request, Project $project): JsonResponse
     {
         $this->authorizeProject($request, $project);
@@ -53,6 +56,34 @@ final class RoomController
                 'constraint_types' => ConstraintType::options(),
             ],
         ]);
+    }
+
+    /**
+     * The questions to ask about this room, and which answers the shop can honour.
+     *
+     * Replaces the blank textarea labelled "İstekleriniz" that almost nobody filled in —
+     * not for want of taste, but because "describe your living room" is a professional's
+     * question asked of somebody who has never had to answer it. People wrote "güzel olsun"
+     * or nothing, and the engine downstream guessed.
+     *
+     * The style is a query parameter rather than stored state because the customer changes
+     * it while looking at the questions: picking "Klasik" should immediately re-mark which
+     * options the catalogue can supply in that style, without saving anything first.
+     */
+    public function programme(Request $request, Project $project, Room $room): JsonResponse
+    {
+        $this->authorizeProject($request, $project, 'view');
+        $this->assertBelongs($room, $project);
+
+        $style = $request->string('style')->toString();
+
+        $programme = $this->programmes->forRoom($room, $style === '' ? null : $style);
+
+        // A room type nobody has written questions for yet. Not an error — the free-text
+        // brief still works, and the client falls back to it.
+        abort_if($programme === null, 404, 'Bu oda tipi için henüz soru seti yok.');
+
+        return response()->json(['data' => $programme]);
     }
 
     public function update(Request $request, Project $project, Room $room): JsonResponse

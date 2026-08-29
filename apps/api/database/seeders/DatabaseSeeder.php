@@ -20,6 +20,7 @@ final class DatabaseSeeder extends Seeder
         $this->call(RolesAndPermissionsSeeder::class);
         $this->call(SellerAgreementsSeeder::class);
         $this->call(CatalogTaxonomySeeder::class);
+        $this->call(RoomProgrammeSeeder::class);
 
         // Routes, models and prompts for all twelve AI tasks. Not demo data: a task
         // with no route is a feature that fails the first time somebody uses it.

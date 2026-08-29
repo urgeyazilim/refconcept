@@ -54,6 +54,8 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, EnsureEmailIsVerif
         Route::get('{project}/rooms/{room}', [RoomController::class, 'show'])->name('rooms.show');
         Route::patch('{project}/rooms/{room}', [RoomController::class, 'update'])->name('rooms.update');
         Route::delete('{project}/rooms/{room}', [RoomController::class, 'destroy'])->name('rooms.destroy');
+        Route::get('{project}/rooms/{room}/programme', [RoomController::class, 'programme'])
+            ->name('rooms.programme');
 
         Route::post('{project}/rooms/{room}/constraints', [RoomController::class, 'storeConstraint'])
             ->name('rooms.constraints.store');
