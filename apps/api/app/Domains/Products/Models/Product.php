@@ -114,10 +114,35 @@ class Product extends Model
         return $this->belongsTo(Category::class, 'primary_category_id');
     }
 
-    /** @return BelongsTo<Style, $this> */
+    /**
+     * The one style this is, mainly.
+     *
+     * Kept in step with the primary row in {@see styles()} rather than being the truth. The
+     * public catalogue and search still read it; they move over separately, and a column
+     * disappearing under running code is a worse morning than one deploy of duplication.
+     *
+     * @return BelongsTo<Style, $this>
+     */
     public function style(): BelongsTo
     {
         return $this->belongsTo(Style::class);
+    }
+
+    /**
+     * Every style this belongs to, primary first.
+     *
+     * A product is rarely one style. A plain oak sideboard is credibly scandinavian and
+     * minimal, and a seller forced to choose loses half of what makes it findable — which
+     * mattered the moment customers began choosing a style rather than typing a sentence.
+     *
+     * @return BelongsToMany<Style, $this>
+     */
+    public function styles(): BelongsToMany
+    {
+        return $this->belongsToMany(Style::class, 'product_styles')
+            ->withPivot(['strength_bps', 'is_primary'])
+            ->withTimestamps()
+            ->orderByPivot('strength_bps', 'desc');
     }
 
     /** @return BelongsTo<User, $this> */

@@ -34,7 +34,17 @@ final class UpdateProductRequest extends FormRequest
             ],
 
             'brand_id' => ['nullable', 'uuid', Rule::exists('brands', 'id')],
+            /*
+             * The style, and any others it also belongs to.
+             *
+             * Optional here and required at moderation: a seller saving a half-finished
+             * draft should not be stopped for it, and a listing reaching the catalogue
+             * without one should. The catalogue that cannot say what it stocks is the
+             * catalogue a customer choosing "Lüks" gets nothing from.
+             */
             'style_id' => ['nullable', 'uuid', Rule::exists('styles', 'id')],
+            'style_ids' => ['sometimes', 'array', 'max:3'],
+            'style_ids.*' => ['uuid', Rule::exists('styles', 'id')],
             'product_type' => ['sometimes', Rule::in(['simple', 'variant', 'bundle'])],
             'organization_id' => ['sometimes', 'uuid'],
 

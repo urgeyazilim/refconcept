@@ -12,6 +12,8 @@ use App\Domains\Catalog\Models\Color;
 use App\Domains\Catalog\Models\Material;
 use App\Domains\Catalog\Models\Style;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * The platform's descriptive vocabulary.
@@ -29,6 +31,17 @@ final class CatalogTaxonomySeeder extends Seeder
     public function run(): void
     {
         $this->seedStyles();
+        /*
+         * Adjacency and palettes are seeded here, beside the styles they point at, rather
+         * than in the migration that created their tables. The migration ran before the
+         * styles existed on any database built from scratch — CI, a new environment, the
+         * test suite — so it seeded nothing at all, and the affinity map came back empty
+         * everywhere except the one machine where the styles happened to predate it.
+         * Reference data belongs with the seeder that owns it, which is also the one thing
+         * re-run on every deploy.
+         */
+        $this->seedStyleAdjacency();
+        $this->seedPalettes();
         $this->seedBrands();
         $this->seedColors();
         $this->seedMaterials();
@@ -62,6 +75,108 @@ final class CatalogTaxonomySeeder extends Seeder
             Style::query()->updateOrCreate(
                 ['code' => $code],
                 ['name' => $name, 'description' => $description, 'position' => $index],
+            );
+        }
+    }
+
+    /**
+     * How close each style sits to each other, in basis points.
+     *
+     * Matching needs this because filtering hard on the chosen style empties the room. With
+     * a dozen products in the catalogue a customer choosing "Lüks" and getting a strict
+     * `WHERE style = luxury` sees nothing — not because the shop has nothing for them but
+     * because nothing is tagged that exact word — and a customer reads nothing as a broken
+     * page. So style ranks rather than filters: luxury first, classic just behind it,
+     * industrial not at all.
+     *
+     * Symmetric and deliberately sparse. Only pairs a person would accept as neighbours are
+     * listed; anything absent is simply unrelated. The numbers are judgement rather than
+     * measurement, which is why they live in a table — tuning them from what customers
+     * actually accept should be an UPDATE, not a deploy.
+     */
+    private function seedStyleAdjacency(): void
+    {
+        $pairs = [
+            ['modern', 'minimal', 8_000],
+            ['modern', 'scandinavian', 7_000],
+            ['modern', 'warm-contemporary', 7_500],
+            ['modern', 'industrial', 6_000],
+            ['minimal', 'scandinavian', 8_000],
+            ['minimal', 'industrial', 5_500],
+            ['scandinavian', 'warm-contemporary', 7_000],
+            ['warm-contemporary', 'bohemian', 6_000],
+            ['luxury', 'classic', 8_000],
+            ['luxury', 'warm-contemporary', 5_500],
+            ['classic', 'warm-contemporary', 5_000],
+            ['bohemian', 'scandinavian', 5_000],
+            ['industrial', 'bohemian', 5_000],
+        ];
+
+        $styles = Style::query()->pluck('id', 'code');
+
+        foreach ($pairs as [$left, $right, $affinity]) {
+            if (! isset($styles[$left], $styles[$right])) {
+                continue;
+            }
+
+            // Written both ways round, so a lookup never has to try the pair reversed.
+            foreach ([[$left, $right], [$right, $left]] as [$from, $to]) {
+                DB::table('style_adjacency')->updateOrInsert(
+                    ['style_id' => $styles[$from], 'neighbour_style_id' => $styles[$to]],
+                    ['affinity_bps' => $affinity, 'created_at' => now(), 'updated_at' => now()],
+                );
+            }
+        }
+    }
+
+    /**
+     * The colour sets a customer chooses between.
+     *
+     * Nobody picks "taupe". They pick "sıcak nötr" and mean six colours at once, and they
+     * pick it by looking at it — so a palette is a named set of the colours the catalogue
+     * already uses rather than a second colour vocabulary to keep in step.
+     *
+     * A colour belongs to more than one palette on purpose: cream is at home in both "açık
+     * ve ferah" and "sıcak nötr", and pretending otherwise would make one of them wrong.
+     */
+    private function seedPalettes(): void
+    {
+        $palettes = [
+            ['warm-neutral', 'Sıcak Nötr', 'Bej, krem ve kum tonları; yumuşak ve davetkâr.', ['beige', 'cream', 'sand', 'taupe', 'oak', 'brass']],
+            ['cool-grey', 'Soğuk Gri', 'Gri, taş ve antrasit; sakin ve dingin.', ['grey', 'stone', 'charcoal', 'white', 'chrome', 'ash']],
+            ['earthy', 'Toprak Tonları', 'Terakota, zeytin ve ceviz; doğal ve sıcak.', ['terracotta', 'olive', 'walnut', 'sand', 'mustard', 'forest']],
+            ['dark-dramatic', 'Koyu ve Dramatik', 'Siyah, lacivert ve koyu yeşil; iddialı.', ['black', 'charcoal', 'navy', 'forest', 'brass', 'walnut']],
+            ['light-airy', 'Açık ve Ferah', 'Beyaz, krem ve açık ahşap; aydınlık.', ['white', 'cream', 'beige', 'ash', 'oak', 'stone']],
+        ];
+
+        foreach ($palettes as $position => [$code, $name, $description, $colors]) {
+            $id = DB::table('palettes')->where('code', $code)->value('id') ?? (string) Str::uuid7();
+
+            DB::table('palettes')->updateOrInsert(
+                ['code' => $code],
+                [
+                    'id' => $id,
+                    'name' => $name,
+                    'description' => $description,
+                    'position' => $position,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ],
+            );
+
+            // Replaced wholesale rather than merged: a colour removed from a palette here
+            // should leave it, and updateOrInsert alone would keep the old row for ever.
+            DB::table('palette_colors')->where('palette_id', $id)->delete();
+
+            DB::table('palette_colors')->insert(
+                collect($colors)
+                    ->values()
+                    ->map(fn (string $color, int $index): array => [
+                        'palette_id' => $id,
+                        'color_value' => $color,
+                        'position' => $index,
+                    ])
+                    ->all()
             );
         }
     }

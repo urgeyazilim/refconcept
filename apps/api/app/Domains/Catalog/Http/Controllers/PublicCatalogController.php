@@ -146,8 +146,47 @@ final class PublicCatalogController
                         'name' => $style->name,
                         'description' => $style->description,
                     ])->all(),
+
+                'palettes' => $this->palettes(),
             ],
         ]);
+    }
+
+    /**
+     * The colour sets a customer chooses between, each carrying its swatches.
+     *
+     * Nobody picks "taupe". They pick "sıcak nötr" and mean six colours at once, and they
+     * pick it by looking at it — so the hex values travel with the palette rather than the
+     * client having to join them back to the colour list itself.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function palettes(): array
+    {
+        $hexByCode = Color::query()->pluck('hex', 'code');
+
+        return DB::table('palettes')
+            ->orderBy('position')
+            ->get()
+            ->map(function (object $palette) use ($hexByCode): array {
+                $codes = DB::table('palette_colors')
+                    ->where('palette_id', $palette->id)
+                    ->orderBy('position')
+                    ->pluck('color_value');
+
+                return [
+                    'code' => $palette->code,
+                    'name' => $palette->name,
+                    'description' => $palette->description,
+                    'swatches' => $codes
+                        ->map(fn (string $code): array => [
+                            'code' => $code,
+                            'hex' => $hexByCode[$code] ?? null,
+                        ])
+                        ->all(),
+                ];
+            })
+            ->all();
     }
 
     public function products(Request $request): AnonymousResourceCollection

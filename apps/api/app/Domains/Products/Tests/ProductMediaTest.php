@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Domains\Catalog\Models\Attribute;
 use App\Domains\Catalog\Models\Category;
+use App\Domains\Catalog\Models\Style;
 use App\Domains\Products\Models\Product;
 use App\Domains\Products\Models\ProductMedia;
 use App\Domains\Products\Services\ProductImageStorage;
@@ -248,10 +249,13 @@ it('unblocks submission once a listing has an image', function (): void {
     ]);
 
     // Everything the category demands except the photograph, so the image is the one
-    // thing standing between this listing and review.
+    // thing standing between this listing and review. The style is part of "everything"
+    // now: a customer picks one from a row of pictures, so a listing without one cannot
+    // answer them and is not complete.
     $this->actingAs($this->sellerUser)
         ->patchJson("/api/v1/seller/products/{$this->product->getKey()}", [
             'description' => 'Bouclé kumaş, modüler oturma grubu.',
+            'style_id' => Style::query()->value('id'),
             'attributes' => [
                 ['code' => 'color', 'value' => firstAttributeValue('color')],
                 ['code' => 'material', 'value' => firstAttributeValue('material')],

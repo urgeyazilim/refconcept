@@ -28,6 +28,7 @@ final class ProductCompleteness
             'media',
             'attributeValues.attribute',
             'primaryCategory.attributes',
+            'styles',
         ]);
 
         $missing = [];
@@ -44,6 +45,23 @@ final class ProductCompleteness
 
         if ($product->skus->isEmpty()) {
             $missing[] = 'En az bir satış seçeneği (SKU)';
+        }
+
+        /*
+         * A style, because the customer now chooses one.
+         *
+         * Design briefs used to be a blank textarea nobody filled in, so nothing downstream
+         * cared what style a listing was and the field stayed optional and empty. Now the
+         * customer picks "Lüks" from a row of pictures and the catalogue has to be able to
+         * answer — and a catalogue of untagged products answers "nothing at all", which
+         * reads to them as an empty shop.
+         *
+         * Checked at submission rather than on save: a seller filling in a draft over two
+         * evenings should not be stopped for it, and a listing reaching the storefront
+         * without one should.
+         */
+        if ($product->styles->isEmpty() && $product->style_id === null) {
+            $missing[] = 'Ürün stili (modern, klasik, lüks…)';
         }
 
         foreach ($product->skus as $sku) {

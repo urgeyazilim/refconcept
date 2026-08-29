@@ -10,16 +10,9 @@ use App\Domains\Matching\Enums\EmbeddingSource;
 use App\Domains\Matching\Models\ProductEmbedding;
 use App\Domains\Matching\Services\CandidateQuery;
 use App\Domains\Matching\Services\ProductEmbedder;
-use App\Domains\Products\Enums\ModerationStatus;
-use App\Domains\Products\Enums\ProductStatus;
-use App\Domains\Products\Enums\SkuStatus;
-use App\Domains\Products\Enums\StockPolicy;
 use App\Domains\Products\Models\Product;
-use App\Domains\Products\Models\ProductDimension;
-use App\Domains\Products\Models\ProductSku;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Str;
 
 /**
  * Matching, against a fixed catalogue whose right answers are known.
@@ -322,68 +315,3 @@ it('reports similarity as a bounded percentage', function (): void {
         // can read, so it is clamped rather than allowed negative.
         ->and($this->candidates->similarityBps(1.8))->toBe(0);
 });
-
-/** A category in the tree, with its materialised path. */
-function makeCategory(string $name, string $slug, ?string $roomType): Category
-{
-    $category = Category::query()->create([
-        'name' => $name,
-        'slug' => $slug,
-        'position' => 0,
-        'is_active' => true,
-        'room_type' => $roomType,
-    ]);
-
-    // The materialised path is maintained by the taxonomy service rather than mass
-    // assigned; a root category is its own slug.
-    $category->forceFill(['path' => $slug, 'depth' => 0])->save();
-
-    return $category;
-}
-
-/**
- * An approved, purchasable product with one offer.
- *
- * @param  array<string, mixed>  $attributes
- */
-function makeProduct(object $seller, Category $category, array $attributes): Product
-{
-    $product = Product::query()->create([
-        'organization_id' => $seller->organization_id,
-        'primary_category_id' => $category->getKey(),
-        'name' => $attributes['name'],
-        'slug' => Str::slug($attributes['name']).'-'.Str::lower(Str::random(6)),
-        'product_type' => 'simple',
-        'description' => $attributes['description'] ?? null,
-    ]);
-
-    $product->forceFill([
-        'status' => ProductStatus::Active,
-        'moderation_status' => ModerationStatus::Approved,
-        'published_at' => now(),
-    ])->save();
-
-    $sku = ProductSku::query()->create([
-        'product_id' => $product->getKey(),
-        'seller_id' => $seller->getKey(),
-        'sku' => Str::upper(Str::random(10)),
-        'currency' => 'TRY',
-        'list_price_minor' => $attributes['price_minor'],
-        'tax_rate_bps' => 2_000,
-        'stock_policy' => StockPolicy::Track,
-        'stock_quantity' => $attributes['stock_quantity'] ?? 10,
-    ]);
-
-    $sku->forceFill(['status' => SkuStatus::Active])->save();
-
-    if (($attributes['width_mm'] ?? null) !== null) {
-        ProductDimension::query()->create([
-            'sku_id' => $sku->getKey(),
-            'width_mm' => $attributes['width_mm'],
-            'height_mm' => 850,
-            'depth_mm' => 900,
-        ]);
-    }
-
-    return $product->fresh(['skus.dimensions', 'primaryCategory']);
-}

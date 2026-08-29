@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Factories;
 
 use App\Domains\Catalog\Models\Category;
+use App\Domains\Catalog\Models\Style;
 use App\Domains\Products\Enums\ModerationStatus;
 use App\Domains\Products\Enums\ProductStatus;
 use App\Domains\Products\Enums\SkuStatus;
@@ -56,6 +57,23 @@ final class ProductFactory extends Factory
     {
         return $this->afterCreating(function (Product $product) use ($seller): void {
             $seller ??= Seller::query()->where('organization_id', $product->organization_id)->first();
+
+            /*
+             * A style, because a listing is no longer complete without one.
+             *
+             * The customer chooses a style from a row of pictures now, and a catalogue full
+             * of untagged products answers that choice with nothing — which reads to them as
+             * an empty shop rather than as an untagged one. "Complete" has to mean findable.
+             */
+            $style = Style::query()->inRandomOrder()->first();
+
+            if ($style !== null) {
+                $product->styles()->syncWithoutDetaching([
+                    $style->getKey() => ['strength_bps' => 10_000, 'is_primary' => true],
+                ]);
+
+                $product->forceFill(['style_id' => $style->getKey()])->save();
+            }
 
             $product->media()->create([
                 'type' => 'image',

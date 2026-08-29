@@ -92,13 +92,14 @@ final class SellerProductController
             // on the model: the first is synced through the pivot below, and the second
             // is resolved from the signed-in user rather than trusted from the body.
             $product = Product::query()->create([
-                ...Arr::except($validated, ['attributes', 'organization_id']),
+                ...Arr::except($validated, ['attributes', 'organization_id', 'style_ids']),
                 'organization_id' => $organizationId,
                 'slug' => $this->uniqueSlug($validated['name']),
                 'created_by' => $user->getKey(),
             ]);
 
             $this->syncAttributes($product, $request->input('attributes', []));
+            $this->syncStyles($product, $validated);
 
             return $product;
         });
@@ -131,10 +132,14 @@ final class SellerProductController
         $this->authorizeProduct($request, 'update', $product);
 
         DB::transaction(function () use ($request, $product): void {
-            $product->fill(Arr::except($request->validated(), ['attributes', 'organization_id']))->save();
+            $product->fill(Arr::except($request->validated(), ['attributes', 'organization_id', 'style_ids']))->save();
 
             if ($request->has('attributes')) {
                 $this->syncAttributes($product, $request->input('attributes', []));
+            }
+
+            if ($request->has('style_ids') || $request->has('style_id')) {
+                $this->syncStyles($product, $request->validated());
             }
 
             // A published listing that changed has to be looked at again before a
@@ -288,6 +293,54 @@ final class SellerProductController
     }
 
     // --- helpers -------------------------------------------------------------
+
+    /**
+     * Records which styles a listing belongs to.
+     *
+     * `style_id` is the one it is mainly, and `style_ids` any others it is also — a plain
+     * oak sideboard is credibly scandinavian and minimal, and a seller made to choose one
+     * loses half of what makes it findable. The primary is weighted at full strength and
+     * secondaries at half, so matching can prefer "a modern sofa" over "a sofa that is
+     * also a bit modern" without either being invisible.
+     *
+     * The single column is written too. The public catalogue and search still read it, and
+     * two sources of truth for one deploy is safer than a column changing meaning under
+     * running code.
+     *
+     * @param  array<string, mixed>  $validated
+     */
+    private function syncStyles(Product $product, array $validated): void
+    {
+        $primary = is_string($validated['style_id'] ?? null) ? $validated['style_id'] : null;
+
+        /** @var array<int, string> $secondary */
+        $secondary = array_values(array_filter(
+            (array) ($validated['style_ids'] ?? []),
+            static fn (mixed $id): bool => is_string($id) && $id !== $primary,
+        ));
+
+        // A seller who supplied only secondaries still meant the first one as the main
+        // style; asking them to say it twice would be a form asking for its own bookkeeping.
+        if ($primary === null && $secondary !== []) {
+            $primary = array_shift($secondary);
+        }
+
+        if ($primary === null) {
+            $product->styles()->detach();
+            $product->forceFill(['style_id' => null])->save();
+
+            return;
+        }
+
+        $pivot = [$primary => ['strength_bps' => 10_000, 'is_primary' => true]];
+
+        foreach ($secondary as $id) {
+            $pivot[$id] = ['strength_bps' => 5_000, 'is_primary' => false];
+        }
+
+        $product->styles()->sync($pivot);
+        $product->forceFill(['style_id' => $primary])->save();
+    }
 
     /**
      * @param  array<int, array{code: string, value: mixed}>  $attributes
