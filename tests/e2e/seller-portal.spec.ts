@@ -76,9 +76,19 @@ test.describe('seller portal', () => {
     await expect(page.getByRole('heading', { name: 'Sizi bekleyenler' })).toBeVisible()
     await expect(page.getByTestId('seller-queue-unconfirmed')).toContainText('1')
 
-    // And it is a way in, not a number to write down.
-    await page.getByTestId('seller-queue-unconfirmed').click()
-    await expect(page).toHaveURL(/\/orders$/)
+    /*
+     * And it is a way in, not a number to write down.
+     *
+     * The wait is armed before the click rather than asserted after it. The tile is a link
+     * inside a list that re-renders as the queue counts arrive, so a click and a separate
+     * URL assertion race each other — which is how this passed on its own and failed once
+     * at the end of a half-hour run. That is the worst shape a failure can take: it reads
+     * as flakiness and it is a real race.
+     */
+    await Promise.all([
+      page.waitForURL(/\/orders$/),
+      page.getByTestId('seller-queue-unconfirmed').click(),
+    ])
   })
 
   test('a parcel carries part of an order and the screen knows what is left', async ({ page, request }) => {
