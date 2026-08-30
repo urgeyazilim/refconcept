@@ -65,6 +65,13 @@ interface PlacementGroup {
   wall: string | null
   max_width_mm: number | null
   matches: MatchRow[]
+  /**
+   * How many of whichever product is chosen here.
+   *
+   * Six matching dining chairs are one decision and one product bought six times, not six
+   * separate suggestions — which is what they were until the plan learned to say so.
+   */
+  quantity: number
   /** Why this planned item has no suggestion, when it has none. */
   unavailable_reason: string | null
 }
@@ -342,15 +349,24 @@ const shownVersion = computed<DesignTreeNode | null>(() => {
   return flatten(design.value.tree).find(row => row.node.id === id)?.node ?? null
 })
 
-/** What the customer has actually chosen, across every placement. */
-const chosen = computed<MatchRow[]>(() =>
-  (shoppingList.value?.placements ?? [])
-    .flatMap(group => group.matches)
-    .filter(match => match.status === 'accepted'),
+/**
+ * What the customer has actually chosen, with how many of each.
+ *
+ * The quantity belongs to the placement, not the suggestion: "six dining chairs" is one
+ * decision about the room and one product bought six times. Carried alongside the match
+ * because both the total and the basket need it, and reading it back off the group at each
+ * call site is how one of them ends up forgetting.
+ */
+const chosen = computed<Array<{ match: MatchRow, quantity: number }>>(() =>
+  (shoppingList.value?.placements ?? []).flatMap(group =>
+    group.matches
+      .filter(match => match.status === 'accepted')
+      .map(match => ({ match, quantity: Math.max(1, group.quantity) })),
+  ),
 )
 
 const chosenTotal = computed(() =>
-  chosen.value.reduce((total, match) => total + match.price.amount_minor, 0),
+  chosen.value.reduce((total, row) => total + row.match.price.amount_minor * row.quantity, 0),
 )
 
 /**
@@ -373,9 +389,12 @@ async function addChosenToCart() {
 
   const failed: string[] = []
 
-  for (const match of chosen.value) {
+  for (const { match, quantity } of chosen.value) {
     try {
-      await api.post('/api/v1/cart/items', { sku_id: match.sku.id, quantity: 1 })
+      // The plan asked for six of this chair, so six go in the basket. Adding one and
+      // leaving the customer to notice would be the design quietly not being the thing
+      // they are buying.
+      await api.post('/api/v1/cart/items', { sku_id: match.sku.id, quantity })
     } catch {
       failed.push(match.product.name ?? 'ürün')
     }
@@ -664,6 +683,15 @@ const statusTone: Record<string, string> = {
           <div v-for="group in shoppingList.placements" :key="group.index">
             <h3 class="text-sm font-medium">
               {{ group.category }}
+              <!--
+                Six matching dining chairs are one decision bought six times, not six
+                suggestions. Said on the heading because it changes what the prices below
+                mean — and because the plan used to repeat the placement instead, which
+                left a six-person table with one chair and five empty groups.
+              -->
+              <span v-if="group.quantity > 1" class="font-normal text-ink-secondary">
+                × {{ group.quantity }}
+              </span>
               <span v-if="group.max_width_mm" class="font-normal text-muted">
                 · en fazla {{ Math.round(group.max_width_mm / 10) }} cm
               </span>

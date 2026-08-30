@@ -60,7 +60,7 @@ final class DesignMatchController
         return response()->json([
             'data' => [
                 'placements' => $this->groupByPlacement($matches, $version),
-                'total_minor' => $this->chosenTotal($matches),
+                'total_minor' => $this->chosenTotal($matches, $version),
                 'currency' => $matches->first()->currency ?? 'TRY',
                 'verdicts' => FeedbackVerdict::options(),
             ],
@@ -218,6 +218,15 @@ final class DesignMatchController
                 'name' => $placement['name'] ?? null,
                 'wall' => $placement['wall'] ?? null,
                 'max_width_mm' => $placement['max_width_mm'] ?? null,
+                /*
+                 * How many of whichever product is chosen here.
+                 *
+                 * Six matching dining chairs are one decision and one product bought six
+                 * times, not six suggestions. Before this the plan repeated the placement
+                 * and the list refused to suggest the same chair twice, so the table came
+                 * back with one chair and five groups saying nobody sells them.
+                 */
+                'quantity' => max(1, (int) ($placement['quantity'] ?? 1)),
                 'matches' => $group->map(fn (DesignMatch $match): array => $this->payload($match))->values()->all(),
                 // Why there is nothing here, in the customer's own terms. "Nothing in the
                 // catalogue" and "there is one but it is 900mm and you asked for 800" are
@@ -322,11 +331,42 @@ final class DesignMatchController
      *
      * @param  Collection<int, DesignMatch>  $matches
      */
-    private function chosenTotal(Collection $matches): int
+    /**
+     * How many of each placement the plan asked for, by index.
+     *
+     * Read from the plan rather than stored on the match, because the plan is where the
+     * decision lives — a match is a suggestion for a placement, and how many of it are
+     * wanted is a property of the placement.
+     *
+     * @return array<int, int>
+     */
+    private function quantitiesByPlacement(DesignVersion $version): array
     {
+        // Taken as an argument rather than reached for through a match: lazy loading is
+        // disabled, and `$match->version` is a query nobody asked for on a page that
+        // already has the version in hand.
+        $version->loadMissing('plan');
+
+        $quantities = [];
+
+        foreach ($version->plan->placements ?? [] as $index => $placement) {
+            $quantities[(int) $index] = is_array($placement)
+                ? max(1, (int) ($placement['quantity'] ?? 1))
+                : 1;
+        }
+
+        return $quantities;
+    }
+
+    /** @param  Collection<int, DesignMatch>  $matches */
+    private function chosenTotal(Collection $matches, DesignVersion $version): int
+    {
+        $quantities = $this->quantitiesByPlacement($version);
+
         return (int) $matches
             ->filter(static fn (DesignMatch $match): bool => $match->status === MatchStatus::Accepted)
-            ->sum(static fn (DesignMatch $match): int => $match->price_minor->amountMinor);
+            ->sum(static fn (DesignMatch $match): int => $match->price_minor->amountMinor
+                * ($quantities[$match->placement_index] ?? 1));
     }
 
     private function authorize(

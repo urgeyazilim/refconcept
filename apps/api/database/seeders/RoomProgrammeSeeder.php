@@ -67,7 +67,18 @@ final class RoomProgrammeSeeder extends Seeder
                         'options' => [
                             ['three-seater', 'Üçlü kanepe', 'sofa-three', null, [['kanepe', 1, true]], true],
                             ['corner', 'Köşe koltuk', 'sofa-corner', 2_600, [['oturma-grubu', 1, true]]],
+                            /*
+                             * Two sofas facing each other across the coffee table — the
+                             * classic symmetrical grouping, and the one arrangement the
+                             * question could not express at all. A matching pair, so both
+                             * are the same sofa; two different three-seaters facing each
+                             * other is not a design anybody asks for.
+                             */
+                            ['two-sofas', 'Karşılıklı iki kanepe', 'sofa-facing', 3_400, [['kanepe', 2, true]]],
                             ['two-plus-chairs', 'İkili kanepe + iki berjer', 'sofa-two-chairs', null, [['kanepe', 1, true], ['koltuk', 2, false]]],
+                            // No sofa at all: two armchairs and a table is a reading room,
+                            // and a small living room is often better for it.
+                            ['chairs-only', 'Sadece iki berjer', 'armchair-pair', null, [['koltuk', 2, true]]],
                             ['none', 'Şimdilik istemiyorum', 'skip', null, [], false, true],
                         ],
                     ],
@@ -76,7 +87,7 @@ final class RoomProgrammeSeeder extends Seeder
                         'prompt' => 'Sehpa ister misiniz?',
                         'options' => [
                             ['center', 'Orta sehpa', 'table-coffee', null, [['sehpa', 1, true]], true],
-                            ['center-and-side', 'Orta ve yan sehpa', 'table-coffee-side', null, [['sehpa', 2, true]]],
+                            ['center-and-side', 'Orta ve yan sehpa', 'table-coffee-side', null, [['sehpa', 2, true, false]]],
                             ['side-only', 'Sadece yan sehpa', 'table-side', null, [['sehpa', 1, true]]],
                             ['none', 'İstemiyorum', 'skip', null, [], false, true],
                         ],
@@ -105,7 +116,7 @@ final class RoomProgrammeSeeder extends Seeder
                         'options' => [
                             ['pendant', 'Tavan sarkıtı', 'light-pendant', null, [['tavan-aydinlatma', 1, true]], true],
                             ['floor', 'Lambader', 'light-floor', null, [['lambader', 1, true]]],
-                            ['both', 'İkisi de', 'light-both', null, [['tavan-aydinlatma', 1, true], ['lambader', 1, false]]],
+                            ['both', 'İkisi de', 'light-both', null, [['tavan-aydinlatma', 1, true, false], ['lambader', 1, false, false]]],
                             ['none', 'Mevcut aydınlatma kalsın', 'skip', null, [], false, true],
                         ],
                     ],
@@ -647,14 +658,30 @@ final class RoomProgrammeSeeder extends Seeder
                 'updated_at' => now(),
             ]);
 
-            /** @var array<int, array{0: string, 1: int, 2: bool}> $categories */
-            foreach ($categories as $categoryIndex => [$slug, $quantity, $required]) {
+            /** @var array<int, array{0: string, 1: int, 2: bool, 3?: bool}> $categories */
+            foreach ($categories as $categoryIndex => $category) {
+                [$slug, $quantity, $required] = [$category[0], $category[1], $category[2]];
+
                 DB::table('programme_option_categories')->insert([
                     'id' => (string) Str::uuid7(),
                     'option_id' => $optionId,
                     'category_slug' => $slug,
                     'quantity' => $quantity,
                     'is_required' => $required,
+                    /*
+                     * Whether the quantity is a set of the same thing.
+                     *
+                     * Six matching dining chairs, a pair of nightstands, two armchairs
+                     * either side of a window — one product bought several times. Against
+                     * that, "orta ve yan sehpa" is two tables that should not match. The
+                     * quantity cannot tell you which, so the option says.
+                     *
+                     * Defaults to true because the wrong answer is kinder that way: a set
+                     * treated as separate items gives a dining table one chair, which is
+                     * visibly broken; separate items treated as a set gives two matching
+                     * side tables, which somebody might have chosen on purpose.
+                     */
+                    'identical' => $category[3] ?? true,
                     'position' => $categoryIndex,
                 ]);
             }

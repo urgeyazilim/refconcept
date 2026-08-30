@@ -46,6 +46,10 @@ const paths: Record<string, string> = {
   // --- seating ---------------------------------------------------------------
   'sofa-three': 'M3 11v6M21 11v6M3 13h18M6 13v-2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2M9 13V9M15 13V9M5 17v2M19 17v2',
   'sofa-corner': 'M3 6v11M3 17h13M3 8h5a2 2 0 0 1 2 2v7M12 12h7a2 2 0 0 1 2 2v3M12 12v5M5 19v-2M19 19v-2',
+  // Two sofas facing each other across a table, seen from above — the only way to draw
+  // "karşılıklı" that reads at this size.
+  'sofa-facing': 'M3 7h18v3H3zM3 15h18v3H3zM9 11h6v2H9zM5 10v5M19 10v5',
+  'armchair-pair': 'M3 11v6M9 11v6M3 13h6M5 13v-2h2v2M14 11v6M20 11v6M14 13h6M16 13v-2h2v2',
   'sofa-two-chairs': 'M3 12v5M11 12v5M3 14h8M5 14v-2h4v2M14 13v4M20 13v4M14 15h6M15 15v-2h4v2',
   armchair: 'M7 11v6M17 11v6M7 13h10M9 13v-2a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M8 17v2M16 17v2',
   pouffe: 'M6 12h12v4a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2zM6 14h12',

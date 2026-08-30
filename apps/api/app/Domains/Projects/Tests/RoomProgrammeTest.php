@@ -400,3 +400,89 @@ describe('every room in a home', function (): void {
         'bathroom', 'office', 'hallway', 'balcony', 'other',
     ]);
 });
+
+describe('a set is one product bought several times', function (): void {
+    /*
+     * Everything downstream was built for one of a thing. Six dining chairs became six
+     * placements, and the shopping list refuses to suggest the same product twice — rightly,
+     * because two placements that both want "a lamp" should produce two different lamps. So
+     * a six-person table came back with one chair and five groups saying nobody sells them,
+     * a pair of nightstands came back as one nightstand, and two armchairs either side of a
+     * window came back mismatched.
+     */
+    beforeEach(function (): void {
+        $this->owner = User::factory()->create();
+        $this->project = Project::factory()->ownedBy($this->owner)->withRoom()->create();
+        $this->room = $this->project->rooms()->firstOrFail();
+        $this->room->forceFill(['width_mm' => 4_000, 'length_mm' => 5_000])->save();
+    });
+
+    /**
+     * @param  array<string, array<int, string>>  $answers
+     * @return array<int, array<string, mixed>>
+     */
+    function placementsFor(object $test, string $roomType, array $answers): array
+    {
+        $test->room->forceFill(['room_type' => $roomType])->save();
+
+        $design = $test->room->designs()->create(['name' => 'T', 'created_by' => $test->owner->getKey()]);
+        $version = $design->versions()->create(['version_number' => 1, 'created_by' => $test->owner->getKey()]);
+
+        $brief = DesignBrief::query()->create([
+            'design_version_id' => $version->getKey(),
+            'programme_id' => DB::table('room_programmes')->where('room_type', $roomType)->value('id'),
+            'answers' => $answers,
+        ]);
+
+        return app(BriefToPlacements::class)->build($brief, $test->room->fresh());
+    }
+
+    it('asks for six matching chairs once, not six times', function (): void {
+        $placements = placementsFor($this, 'dining_room', ['table' => ['six']]);
+
+        $chairs = collect($placements)->firstWhere('category', 'sandalye');
+
+        // One placement, six of it. Six placements would have found one chair and then
+        // nothing, because the list will not suggest the same product twice.
+        expect(collect($placements)->where('category', 'sandalye'))->toHaveCount(1)
+            ->and($chairs['quantity'])->toBe(6);
+    });
+
+    it('keeps a pair of nightstands as a pair', function (): void {
+        $placements = placementsFor($this, 'bedroom', ['nightstand' => ['pair']]);
+
+        // Two matching nightstands either side of the bed — not two different ones, and
+        // certainly not one.
+        expect(collect($placements)->where('category', 'komodin'))->toHaveCount(1)
+            ->and(collect($placements)->firstWhere('category', 'komodin')['quantity'])->toBe(2);
+    });
+
+    it('lets a customer ask for two armchairs and nothing else', function (): void {
+        // The arrangement the question could not express: no sofa, two matching chairs.
+        $placements = placementsFor($this, 'living_room', ['seating' => ['chairs-only']]);
+
+        expect(collect($placements)->pluck('category')->all())->toBe(['koltuk'])
+            ->and($placements[0]['quantity'])->toBe(2);
+    });
+
+    it('lets a customer ask for two sofas facing each other', function (): void {
+        $placements = placementsFor($this, 'living_room', ['seating' => ['two-sofas']]);
+
+        // A matching pair: two different three-seaters facing each other is not a design
+        // anybody asks for.
+        expect($placements[0]['category'])->toBe('kanepe')
+            ->and($placements[0]['quantity'])->toBe(2);
+    });
+
+    it('still treats a coffee table and a side table as two different things', function (): void {
+        $placements = placementsFor($this, 'living_room', ['coffee-table' => ['center-and-side']]);
+
+        /*
+         * The distinction the quantity alone cannot make. "Orta ve yan sehpa" is two tables
+         * that should not match, so they stay separate and each finds its own product —
+         * which is exactly the behaviour that was wrong for the dining chairs.
+         */
+        expect(collect($placements)->where('category', 'sehpa'))->toHaveCount(2)
+            ->and(collect($placements)->pluck('quantity')->unique()->all())->toBe([1]);
+    });
+});

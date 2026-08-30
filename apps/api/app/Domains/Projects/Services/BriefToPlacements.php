@@ -161,18 +161,31 @@ final class BriefToPlacements
 
         foreach ($this->chosenOptions($brief) as $option) {
             foreach ($this->categoriesFor((string) $option->id) as $category) {
+                $quantity = max(1, (int) $category->quantity);
+
                 /*
-                 * Repeated rather than carrying a count.
+                 * A set is one placement bought several times; a mixture is several
+                 * placements.
                  *
-                 * "Two nightstands" is two placements, because they end up either side of
-                 * the bed and the shopping list needs a line for each. A quantity field
-                 * would push the same loop into every consumer, and the first one to forget
-                 * it would silently order one nightstand.
+                 * Everything used to be repeated. Six dining chairs became six placements,
+                 * and the shopping list refuses to suggest the same product twice — rightly,
+                 * because two placements that both want "a lamp" should produce two
+                 * different lamps. So a six-person table came back with one chair and five
+                 * groups saying nobody sells them, a pair of nightstands came back as one
+                 * nightstand, and two armchairs either side of a window came back mismatched.
+                 *
+                 * Six matching chairs is one decision and one product, and saying so is also
+                 * how the shopping list gets to read "×6" instead of listing a chair six
+                 * times. "Orta ve yan sehpa" is the other kind: two tables that should not
+                 * match, and those stay separate.
                  */
-                for ($index = 0; $index < max(1, (int) $category->quantity); $index++) {
+                $entries = ((bool) $category->identical) ? 1 : $quantity;
+
+                for ($index = 0; $index < $entries; $index++) {
                     $placements[] = [
                         'category' => $category->category_slug,
                         'name' => $option->label,
+                        'quantity' => $entries === 1 ? $quantity : 1,
                         'max_width_mm' => $this->widthFor((string) $category->category_slug, $longestWall),
                         // The wall is the model's decision. It has the photograph and can
                         // see where the window is; this has a row in a database.
@@ -202,8 +215,18 @@ final class BriefToPlacements
             return array_values($placements);
         }
 
+        /*
+         * Weighted by how many, because six chairs cost six times one chair.
+         *
+         * The total counts each placement's weight times its quantity, and the ceiling that
+         * comes back out is per unit — the matcher compares it against one product's price.
+         * Without the multiplication, six dining chairs would claim one chair's share of the
+         * budget and a plan that respected every ceiling would still overspend by five
+         * chairs.
+         */
         $total = array_sum(array_map(
-            fn (array $placement): int => self::BUDGET_WEIGHT[(string) $placement['category']] ?? self::DEFAULT_WEIGHT,
+            fn (array $placement): int => (self::BUDGET_WEIGHT[(string) $placement['category']] ?? self::DEFAULT_WEIGHT)
+                * max(1, (int) ($placement['quantity'] ?? 1)),
             $placements,
         ));
 
@@ -266,7 +289,7 @@ final class BriefToPlacements
         return DB::table('programme_option_categories')
             ->where('option_id', $optionId)
             ->orderBy('position')
-            ->get(['category_slug', 'quantity', 'is_required'])
+            ->get(['category_slug', 'quantity', 'is_required', 'identical'])
             ->all();
     }
 
