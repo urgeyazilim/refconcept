@@ -300,6 +300,15 @@ final class DesignGenerationPipeline
             'room_analysis_id' => $analysis->getKey(),
             'style' => $this->stringOrNull($structured['style'] ?? null),
             'palette' => is_array($structured['palette'] ?? null) ? $structured['palette'] : null,
+            /*
+             * The room-level design decisions, kept because the renderer reads them.
+             *
+             * Without these the plan was an inventory with compass directions and the
+             * render was a collage: everything flat against a wall, evenly spaced, one
+             * ceiling light. A focal point and a sightline are what make it a room rather
+             * than furniture correctly positioned in one.
+             */
+            'composition' => is_array($structured['composition'] ?? null) ? $structured['composition'] : null,
             'placements' => $checked['accepted'],
             'notes' => $this->stringOrNull($structured['notes'] ?? null),
             // Kept rather than dropped: a plan that quietly loses a piece of furniture
@@ -384,6 +393,15 @@ final class DesignGenerationPipeline
                  * not exist.
                  */
                 'plan' => $purchasable,
+                /*
+                 * The design decisions, not just the furniture.
+                 *
+                 * A renderer given a list and a wall name produces a collage: everything
+                 * flat against a wall, evenly spaced, one ceiling light. Told the focal
+                 * point and what somebody sees walking in, it has something to stage
+                 * towards — which is the whole difference between arranging and designing.
+                 */
+                'composition' => $plan->composition,
                 'palette' => $plan->palette,
                 /*
                  * Named explicitly in the prompt rather than left to the model to infer
@@ -594,8 +612,16 @@ final class DesignGenerationPipeline
 
             $merged[] = [
                 ...$placement,
-                // Only the parts the model is better placed to know. Its width is ignored:
-                // the customer's room was measured and a share-of-wall rule beats a guess.
+                /*
+                 * Only the parts the model is better placed to know. Its width is ignored:
+                 * the customer's room was measured and a share-of-wall rule beats a guess.
+                 *
+                 * `position` is the one that matters. A wall name is a bearing; "pencereye
+                 * bakacak şekilde, duvardan 40 cm ayrık, ön ayakları halının üzerinde" is a
+                 * design decision — and it is the difference between a renderer that stages
+                 * a room and one that pastes products onto a photograph.
+                 */
+                'position' => is_string($match['position'] ?? null) ? $match['position'] : null,
                 'wall' => is_string($match['wall'] ?? null) ? $match['wall'] : null,
                 'notes' => is_string($match['notes'] ?? null) ? $match['notes'] : null,
             ];

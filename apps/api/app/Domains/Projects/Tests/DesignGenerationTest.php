@@ -492,8 +492,24 @@ function planAnswer(?array $placements = null): AiResult
     $structured = [
         'style' => 'modern',
         'palette' => ['warm_white', 'oak'],
+        /*
+         * The room-level decisions an interior designer makes before moving anything.
+         *
+         * Without them the plan was an inventory with compass bearings and the render was
+         * a collage — everything flat against a wall, evenly spaced, one ceiling light.
+         */
+        'composition' => [
+            'focal_point' => 'Pencere duvarı',
+            'entry_view' => 'Kapıdan girildiğinde oturma grubunun yan cephesi görünür.',
+            'zone' => 'Oturma grubu duvardan 40 cm ayrık, 2,7 m çapında.',
+        ],
         'placements' => $placements ?? [
-            ['category' => 'kanepe', 'wall' => 'south', 'max_width_mm' => 2_200],
+            [
+                'category' => 'kanepe',
+                'wall' => 'south',
+                'max_width_mm' => 2_200,
+                'position' => 'Pencereye bakacak şekilde, duvardan 40 cm ayrık, ön ayakları halının üzerinde.',
+            ],
         ],
         'notes' => 'Pencere önü boş bırakıldı.',
     ];
@@ -789,4 +805,43 @@ it('does not price the small things out of a large room', function (): void {
     foreach ($placements as $category => $placement) {
         expect([$category => $placement['max_price_minor'] >= 1_200_000])->toBe([$category => true]);
     }
+});
+
+it('keeps the design decisions, not just the furniture list', function (): void {
+    /*
+     * The complaint that produced this: "bu yerleşimi resimleri kopyala yapıştır ile bende
+     * yaparım". Quite right. The plan held an inventory with compass bearings — "kanepe,
+     * south wall, 2200mm" — and the renderer did exactly that: everything flat against a
+     * wall, evenly spaced, symmetrical, one ceiling light. Furniture correctly positioned
+     * in a room, with no design in it.
+     *
+     * A focal point, what somebody sees walking in, and each piece written as a relation
+     * rather than a bearing are what the renderer needs to stage a room instead of pasting
+     * products onto a photograph.
+     */
+    $version = $this->launcher->launch($this->design, null, $this->owner);
+
+    $plan = DesignPlan::query()->where('design_version_id', $version->getKey())->firstOrFail();
+
+    expect($plan->composition)->not->toBeNull()
+        ->and($plan->composition['focal_point'])->not->toBeEmpty()
+        ->and($plan->composition['entry_view'])->not->toBeEmpty()
+        // And the position survives to the placement, because that is what the render
+        // prompt reads. A wall name is a bearing; this is a decision.
+        ->and($plan->placements[0]['position'])->toContain('duvardan 40 cm ayrık');
+});
+
+it('hands the render the composition as well as the products', function (): void {
+    // The renderer is told the focal point, not only what to put in the room. Asserted on
+    // the job input because that is the contract; a beautiful render proves nothing about
+    // whether the next one will be.
+    $version = $this->launcher->launch($this->design, null, $this->owner);
+
+    $render = AiJob::query()
+        ->where('subject_id', $version->getKey())
+        ->where('task', AiTask::ImageRenderDraft->value)
+        ->firstOrFail();
+
+    expect($render->input['composition']['focal_point'] ?? null)->toBe('Pencere duvarı')
+        ->and($render->input['plan'][0]['position'] ?? null)->toContain('halının üzerinde');
 });

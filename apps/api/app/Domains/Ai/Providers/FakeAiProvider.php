@@ -208,12 +208,40 @@ final class FakeAiProvider implements AiProvider
                 'warnings' => [],
             ],
 
+            /*
+             * A plan, not an inventory.
+             *
+             * The fake used to answer with categories and compass bearings, which is what
+             * the real prompt used to ask for — and it produced renders anybody could have
+             * made by pasting product photographs onto the customer's picture. Everything
+             * flat against a wall, evenly spaced, one ceiling light.
+             *
+             * The composition and the relational positions are what a designer decides, so
+             * the fake decides them too. A stand-in that answers in the old shape lets the
+             * pipeline drop the new fields without a single test noticing.
+             */
             AiTask::DesignPlan => [
                 'style' => 'modern',
                 'palette' => ['warm_white', 'oak', 'sand'],
+                'composition' => [
+                    'focal_point' => 'Pencere duvarı',
+                    'entry_view' => 'Kapıdan girildiğinde oturma grubunun yan cephesi görünür.',
+                    'zone' => 'Oturma grubu duvardan 40 cm ayrık, 2,7 m çapında bir ada.',
+                    'circulation' => 'Grubun çevresinde 80 cm geçiş payı.',
+                ],
                 'placements' => [
-                    ['category' => 'kanepe', 'wall' => 'south', 'max_width_mm' => 2200],
-                    ['category' => 'sehpa', 'wall' => null, 'max_width_mm' => 900],
+                    [
+                        'category' => 'kanepe',
+                        'wall' => 'south',
+                        'max_width_mm' => 2200,
+                        'position' => 'Pencereye bakacak şekilde, duvardan 40 cm ayrık, ön ayakları halının üzerinde.',
+                    ],
+                    [
+                        'category' => 'sehpa',
+                        'wall' => null,
+                        'max_width_mm' => 900,
+                        'position' => 'Kanepenin 45 cm önünde, oturma yüksekliğinin biraz altında.',
+                    ],
                 ],
                 'notes' => 'Pencere önü boş bırakıldı.',
             ],

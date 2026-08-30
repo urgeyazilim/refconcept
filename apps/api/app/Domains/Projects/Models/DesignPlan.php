@@ -27,6 +27,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $room_analysis_id
  * @property string|null $style
  * @property array<int, string>|null $palette
+ * @property array<string, mixed>|null $composition
  * @property array<int, mixed> $placements
  * @property string|null $notes
  * @property array<int, mixed>|null $rejected
@@ -46,6 +47,7 @@ class DesignPlan extends Model
         'room_analysis_id',
         'style',
         'palette',
+        'composition',
         'placements',
         'notes',
         'rejected',
@@ -58,6 +60,7 @@ class DesignPlan extends Model
     {
         return [
             'palette' => 'array',
+            'composition' => 'array',
             'placements' => 'array',
             'rejected' => 'array',
         ];
