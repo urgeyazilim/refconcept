@@ -70,6 +70,81 @@ final class BriefToPlacements
     private const DEFAULT_SHARE_BPS = 3_300;
 
     /**
+     * How much of the budget each kind of thing is worth, relative to the others.
+     *
+     * Weights rather than percentages, normalised across whatever the customer actually
+     * chose — so a brief with four items and a brief with fourteen both spend the whole
+     * budget, and dropping the rug gives the sofa more room rather than leaving money
+     * unspent.
+     *
+     * The equal split this replaces was quietly indefensible: a hundred and fifty thousand
+     * lira across ten placements gave the sofa the same allowance as a cushion, and the
+     * only sofa in the catalogue was excluded from its own living room for costing more
+     * than a fifteen-thousand-lira ceiling nobody chose. The customer saw a shopping list
+     * with everything on it except the thing the room is built around.
+     */
+    private const BUDGET_WEIGHT = [
+        'oturma-grubu' => 34,
+        'kanepe' => 28,
+        'yatak' => 24,
+        'gardirop' => 22,
+        'mutfak-dolabi' => 22,
+        'yemek-masasi' => 16,
+        'tezgah' => 14,
+        'tv-unitesi' => 12,
+        'hali' => 12,
+        'koltuk' => 12,
+        'kitaplik' => 10,
+        'konsol' => 9,
+        'banyo-dolabi' => 9,
+        'sehpa' => 7,
+        'lavabo' => 6,
+        'perde' => 6,
+        'komodin' => 5,
+        'nevresim' => 5,
+        'sandalye' => 5,
+        'tavan-aydinlatma' => 5,
+        'lambader' => 4,
+        'bar-taburesi' => 4,
+        'tablo' => 4,
+        'ayna' => 4,
+        'puf' => 3,
+        'masa-lambasi' => 3,
+        'duvar-aydinlatma' => 3,
+        'banyo-aksesuar' => 2,
+        'bitki' => 2,
+        'vazo' => 2,
+        'kirlent' => 1,
+    ];
+
+    /** Anything unlisted sits with the small decorative things rather than the furniture. */
+    private const DEFAULT_WEIGHT = 4;
+
+    /**
+     * How far over its share a suggestion may go.
+     *
+     * A ceiling exactly at the share would mean a sofa priced a hundred lira over its slice
+     * is invisible, which is not how anybody shops. Half again is loose enough to be useful
+     * and tight enough that a total still lands near the budget, because most placements
+     * come in under their share.
+     */
+    private const BUDGET_TOLERANCE_BPS = 15_000;
+
+    /**
+     * The smallest ceiling any one placement gets, as a share of the whole budget.
+     *
+     * Weights describe how a budget *should* be divided; they do not describe how the
+     * catalogue is priced. A framed canvas is worth two per cent of a room by any sensible
+     * reckoning and costs eight, because a picture costs what a picture costs however large
+     * the room budget is — so a strict share priced the artwork and the plant out of a
+     * hundred-and-fifty-thousand-lira living room while the sofa had money to spare.
+     *
+     * The ceiling exists to stop something absurd being suggested, not to allocate to the
+     * lira. A floor keeps it doing the first job without pretending to do the second.
+     */
+    private const BUDGET_FLOOR_BPS = 800;
+
+    /**
      * The placements a brief asks for.
      *
      * @return array<int, array<string, mixed>>
@@ -108,7 +183,40 @@ final class BriefToPlacements
             }
         }
 
-        return $placements;
+        return $this->withBudgetShares($placements, $brief->budget_minor);
+    }
+
+    /**
+     * Gives each placement its slice of the budget.
+     *
+     * Done here rather than in the shopping list because this is where the whole plan is
+     * visible at once — a share is only meaningful against what else was asked for, and a
+     * builder handed one placement at a time can do no better than divide by the count.
+     *
+     * @param  array<int, array<string, mixed>>  $placements
+     * @return list<array<string, mixed>>
+     */
+    private function withBudgetShares(array $placements, ?int $budgetMinor): array
+    {
+        if ($budgetMinor === null || $budgetMinor <= 0 || $placements === []) {
+            return array_values($placements);
+        }
+
+        $total = array_sum(array_map(
+            fn (array $placement): int => self::BUDGET_WEIGHT[(string) $placement['category']] ?? self::DEFAULT_WEIGHT,
+            $placements,
+        ));
+
+        return array_values(array_map(function (array $placement) use ($budgetMinor, $total): array {
+            $weight = self::BUDGET_WEIGHT[(string) $placement['category']] ?? self::DEFAULT_WEIGHT;
+
+            $placement['max_price_minor'] = (int) max(
+                round($budgetMinor * $weight / max(1, $total) * self::BUDGET_TOLERANCE_BPS / 10_000),
+                round($budgetMinor * self::BUDGET_FLOOR_BPS / 10_000),
+            );
+
+            return $placement;
+        }, $placements));
     }
 
     /**

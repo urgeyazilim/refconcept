@@ -162,20 +162,32 @@ async function submit() {
       </div>
 
       <div>
-        <label for="style_id" class="mb-1.5 block text-sm font-medium">Tasarım stili</label>
+        <label for="style_id" class="mb-1.5 block text-sm font-medium">
+          Tasarım stili
+          <span class="text-danger">*</span>
+        </label>
         <select
           id="style_id"
           v-model="form.style_id"
           name="style_id"
           class="w-full rounded-sm border border-line bg-surface px-4 py-2.5 text-sm"
         >
-          <option value="">Stil belirtmeyeceğim</option>
+          <!--
+            No longer an opt-out.
+
+            Customers now choose a style from a row of tiles and the catalogue has to be
+            able to answer; a listing with no style is one nobody choosing "Lüks" will ever
+            see. Moderation refuses it, so leaving "Stil belirtmeyeceğim" here would be a
+            form offering a choice that gets the listing rejected two screens later.
+          -->
+          <option value="">Seçiniz</option>
           <option v-for="style in styles" :key="style.id" :value="style.id">
             {{ style.name }}
           </option>
         </select>
         <p class="mt-1.5 text-xs text-muted">
-          Stil, ürününüzün hangi tasarım önerilerinde eşleşeceğini etkiler.
+          Müşteriler tasarıma başlarken bir stil seçiyor. Stil girilmemiş ürünler bu
+          önerilerde çıkmaz, bu yüzden incelemeye göndermek için gereklidir.
         </p>
       </div>
 

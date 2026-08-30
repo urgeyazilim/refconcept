@@ -60,12 +60,24 @@ export async function listProduct(
       value: attribute.values[0]!.value,
     }))
 
+  /*
+   * A style, because a listing without one cannot be submitted for review.
+   *
+   * The customer picks a style from a row of tiles now, and a catalogue of untagged
+   * products answers that choice with nothing — so moderation refuses a listing that
+   * cannot be found. Taken from the vocabulary endpoint rather than hard-coded, so a
+   * renamed style breaks the seed data rather than this fixture.
+   */
+  const vocabulary = await (await request.get(`${API}/api/v1/catalog/vocabulary`)).json()
+  const style = vocabulary.data.styles[0]
+
   const created = await request.post(`${API}/api/v1/seller/products`, {
     headers,
     data: {
       name,
       description: 'Sepet, arama ve ödeme testleri için üretilmiş bir ürün.',
       primary_category_id: category.id,
+      style_id: style.id,
       attributes: required,
     },
   })

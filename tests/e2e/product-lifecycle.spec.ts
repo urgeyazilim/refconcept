@@ -72,6 +72,10 @@ test.describe('product lifecycle', () => {
 
     await fillStable(page, '#name', productName)
     await page.locator('#primary_category_id').selectOption({ label: 'Kanepe' })
+    // Required to reach moderation: a listing with no style is one nobody choosing a
+    // style will ever be shown, and the form now says so rather than letting a seller
+    // find out two screens later.
+    await page.locator('#style_id').selectOption({ index: 1 })
     await page.getByRole('button', { name: 'Ürünü oluştur' }).click()
 
     // The editor is where completeness is worked through, so creation lands there.
@@ -225,12 +229,18 @@ test.describe('product lifecycle', () => {
         value: attribute.values[0]!.value,
       }))
 
+    const vocabulary = await (await request.get(`${API}/api/v1/catalog/vocabulary`)).json()
+    const style = vocabulary.data.styles[0]
+
     const created = await (await request.post(`${API}/api/v1/seller/products`, {
       headers,
       data: {
         name: productName,
         description: 'Deneme amaçlı ürün açıklaması.',
         primary_category_id: category.id,
+        // Required to submit: a listing with no style cannot answer a customer who chose
+        // one, and moderation refuses what the catalogue cannot find.
+        style_id: style.id,
         attributes: required,
       },
     })).json()

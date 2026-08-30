@@ -374,6 +374,20 @@ final class GoogleAiProvider implements AiProvider
      */
     private function aspectRatioOf(AiCall $call): ?string
     {
+        /*
+         * An explicit ratio wins, for a call with nothing to measure.
+         *
+         * Editing a room infers the frame from the photograph, which is the whole point.
+         * Generating from a sentence has no photograph, and left to itself the model
+         * answers in a wide cinematic frame — fine for a room, wrong for a product shot
+         * that will sit in a square grid with its legs cropped off.
+         */
+        $requested = $call->options['aspect_ratio'] ?? null;
+
+        if (is_string($requested) && $requested !== '') {
+            return $requested;
+        }
+
         $first = $call->imageBlobs[0] ?? null;
 
         if ($first === null || ($first['width'] ?? 0) <= 0 || ($first['height'] ?? 0) <= 0) {

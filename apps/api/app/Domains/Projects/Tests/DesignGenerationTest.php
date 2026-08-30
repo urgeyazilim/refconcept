@@ -711,3 +711,82 @@ it('keeps the customer choice when the model skips one of them', function (): vo
         ->and($plan->placements[0]['wall'])->toBe('south')
         ->and($plan->placements[1]['wall'])->toBeNull();
 });
+
+it('gives the sofa more of the budget than the cushions', function (): void {
+    /*
+     * The equal split this replaced was quietly indefensible. A hundred and fifty thousand
+     * lira across ten placements gave the sofa the same allowance as a cushion, and the only
+     * sofa in the catalogue was excluded from its own living room for costing more than a
+     * fifteen-thousand-lira ceiling nobody had chosen — so the shopping list came back with
+     * everything on it except the thing the room is built around.
+     */
+    $this->seed(CatalogTaxonomySeeder::class);
+    $this->seed(RoomProgrammeSeeder::class);
+
+    $version = app(DesignVersionTree::class)->branch(
+        design: $this->design,
+        parent: null,
+        actor: $this->owner,
+        styleCode: 'modern',
+    );
+
+    $brief = DesignBrief::query()->create([
+        'design_version_id' => $version->getKey(),
+        'programme_id' => DB::table('room_programmes')->where('room_type', 'living_room')->value('id'),
+        'budget_minor' => 15_000_000,
+        'answers' => ['seating' => ['three-seater'], 'decor' => ['cushions']],
+    ]);
+
+    $placements = collect(app(BriefToPlacements::class)->build($brief, $this->room->fresh()))
+        ->keyBy('category');
+
+    expect($placements['kanepe']['max_price_minor'])
+        ->toBeGreaterThan($placements['kirlent']['max_price_minor'])
+        // And the sofa's own ceiling is above what the catalogue actually charges for one,
+        // which is the only test of a ceiling that matters.
+        ->and($placements['kanepe']['max_price_minor'])->toBeGreaterThan(4_890_000);
+});
+
+it('does not price the small things out of a large room', function (): void {
+    /*
+     * Weights describe how a budget should be divided; they do not describe how the
+     * catalogue is priced. A framed canvas is worth two per cent of a room by any sensible
+     * reckoning and costs eight, because a picture costs what a picture costs however large
+     * the budget is — and a strict share priced the artwork and the plant out of a living
+     * room while the sofa had money to spare.
+     */
+    $this->seed(CatalogTaxonomySeeder::class);
+    $this->seed(RoomProgrammeSeeder::class);
+
+    $version = app(DesignVersionTree::class)->branch(
+        design: $this->design,
+        parent: null,
+        actor: $this->owner,
+        styleCode: 'modern',
+    );
+
+    $brief = DesignBrief::query()->create([
+        'design_version_id' => $version->getKey(),
+        'programme_id' => DB::table('room_programmes')->where('room_type', 'living_room')->value('id'),
+        'budget_minor' => 15_000_000,
+        'answers' => [
+            'seating' => ['three-seater'],
+            'coffee-table' => ['center'],
+            'tv-unit' => ['yes'],
+            'rug' => ['large'],
+            'lighting' => ['pendant'],
+            'storage' => ['console'],
+            'curtain' => ['yes'],
+            'decor' => ['art', 'plant', 'vase', 'cushions'],
+        ],
+    ]);
+
+    $placements = collect(app(BriefToPlacements::class)->build($brief, $this->room->fresh()))
+        ->keyBy('category');
+
+    // No placement is capped below eight per cent of the budget, however many things were
+    // asked for and however light its own weight.
+    foreach ($placements as $category => $placement) {
+        expect([$category => $placement['max_price_minor'] >= 1_200_000])->toBe([$category => true]);
+    }
+});

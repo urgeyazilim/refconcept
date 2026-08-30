@@ -76,8 +76,13 @@ final class ProgrammeCoverageReport
              * "Sehpa ister misiniz?" with two of three options in stock is a question a
              * customer can answer well; only a question with nothing behind any of it is
              * a hole.
+             *
+             * A question that asks the catalogue for nothing — "Çocuğun yaşı", which only
+             * steers the sizes — is always answerable. Counting it against the shop made
+             * the children's room read 5 / 6 with no missing categories listed, which is a
+             * number nobody can act on and, worse, one that can never be improved.
              */
-            if ($stocked->isNotEmpty()) {
+            if ($categories->isEmpty() || $stocked->isNotEmpty()) {
                 $answerable++;
             }
 

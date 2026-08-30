@@ -167,10 +167,26 @@ final class ShoppingListBuilder
             return collect();
         }
 
+        /*
+         * The placement's own slice of the budget, when the brief worked one out.
+         *
+         * An equal split was quietly indefensible: a hundred and fifty thousand lira across
+         * ten placements gave the sofa the same allowance as a cushion, and the only sofa in
+         * the catalogue was excluded from its own living room for costing more than a
+         * fifteen-thousand-lira ceiling nobody had chosen. The customer got a shopping list
+         * with everything on it except the thing the room is built around.
+         *
+         * A plan written the old way — no brief, no share — still divides by the count,
+         * which is wrong in the same way but is at least what those designs were built on.
+         */
+        $ceiling = is_int($placement['max_price_minor'] ?? null)
+            ? $placement['max_price_minor']
+            : $budgetMinor;
+
         $rows = $this->candidates->nearest($vector, [
             'category' => $category,
             'room_type' => $roomType,
-            'max_price_minor' => $budgetMinor,
+            'max_price_minor' => $ceiling,
             'max_width_mm' => $this->widthOf($placement),
             'exclude_product_ids' => $exclude,
         ], self::RERANK_WINDOW);
