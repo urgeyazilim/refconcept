@@ -7,7 +7,9 @@ use App\Domains\Catalog\Models\Category;
 use App\Domains\Catalog\Models\Style;
 use App\Domains\Catalog\Services\CatalogCoverage;
 use App\Domains\Identity\Models\User;
+use App\Domains\Projects\Models\DesignBrief;
 use App\Domains\Projects\Models\Project;
+use App\Domains\Projects\Services\BriefToPlacements;
 use App\Domains\Projects\Services\RoomProgrammeReader;
 use Database\Seeders\CatalogTaxonomySeeder;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -296,4 +298,105 @@ describe('the questions as a customer sees them', function (): void {
             // Every option carries its icon, because choosing by looking is the point.
             ->and($response->json('data.questions.0.options.0.icon'))->not->toBeNull();
     });
+});
+
+describe('every room in a home', function (): void {
+    /*
+     * The programmes are editorial content, and content is where the silent failures live:
+     * a question nobody can answer, a room whose wizard cannot be finished, an option that
+     * asks for a category that does not exist. None of those throw. They just quietly leave
+     * a customer stuck on step four of eleven, or leave a question with no answer at all.
+     *
+     * So every room is walked, not only the living room somebody happened to test by hand.
+     */
+    it('can be finished by pressing straight through', function (string $roomType): void {
+        $owner = User::factory()->create();
+        $project = Project::factory()->ownedBy($owner)->withRoom()->create();
+
+        $room = $project->rooms()->firstOrFail();
+        $room->forceFill(['room_type' => $roomType, 'width_mm' => 4_000, 'length_mm' => 5_000])->save();
+
+        $programme = app(RoomProgrammeReader::class)
+            ->forRoom($room->fresh(), 'modern');
+
+        expect($programme)->not->toBeNull("{$roomType} için soru seti yok");
+
+        foreach ($programme['questions'] as $question) {
+            if (! $question['is_required']) {
+                continue;
+            }
+
+            /*
+             * A question that still blocks has to offer something a customer can tap.
+             *
+             * This is the invariant, and it failed for five questions across the ten rooms
+             * when the catalogue was empty — which is what a new marketplace has. "Yatak
+             * ölçüsü" is genuinely required and offers no way past it, correctly, right up
+             * until nobody sells beds: then every option is disabled and the customer is
+             * stranded on step two of seven with nothing to press.
+             *
+             * A question nothing can answer is no longer marked required, so it stops
+             * blocking while still saying what the room wants and why we cannot help yet.
+             */
+            $available = collect($question['options'])
+                ->filter(fn (array $option): bool => $option['available']);
+
+            expect([$question['code'] => $available->isNotEmpty()])
+                ->toBe([$question['code'] => true]);
+        }
+    })->with([
+        'living_room', 'bedroom', 'kids_room', 'dining_room', 'kitchen',
+        'bathroom', 'office', 'hallway', 'balcony', 'other',
+    ]);
+
+    it('turns the answers into placements for every room', function (string $roomType): void {
+        $owner = User::factory()->create();
+        $project = Project::factory()->ownedBy($owner)->withRoom()->create();
+
+        $room = $project->rooms()->firstOrFail();
+        $room->forceFill(['room_type' => $roomType, 'width_mm' => 4_000, 'length_mm' => 5_000])->save();
+
+        $design = $room->designs()->create(['name' => 'Test', 'created_by' => $owner->getKey()]);
+        $version = $design->versions()->create(['version_number' => 1, 'created_by' => $owner->getKey()]);
+
+        $programmeId = DB::table('room_programmes')->where('room_type', $roomType)->value('id');
+
+        // Answer every question with its first non-none option, which is the most
+        // furniture any room can ask for and therefore the widest test of the mapping.
+        $answers = [];
+
+        foreach (DB::table('programme_questions')->where('programme_id', $programmeId)->get() as $question) {
+            $option = DB::table('programme_options')
+                ->where('question_id', $question->id)
+                ->where('is_none', false)
+                ->orderBy('position')
+                ->first();
+
+            if ($option !== null) {
+                $answers[$question->code] = [$option->code];
+            }
+        }
+
+        $brief = DesignBrief::query()->create([
+            'design_version_id' => $version->getKey(),
+            'programme_id' => $programmeId,
+            'style_code' => 'modern',
+            'answers' => $answers,
+        ]);
+
+        $placements = app(BriefToPlacements::class)->build($brief, $room->fresh());
+
+        expect($placements)->not->toBeEmpty("{$roomType} hiçbir yerleşim üretmedi");
+
+        foreach ($placements as $placement) {
+            // Every placement the matcher will be handed has to name a category it can
+            // search and a width it can filter on. A null category is an empty group; a
+            // missing width is a wardrobe suggested for a cupboard.
+            expect($placement['category'])->toBeString()
+                ->and($placement['max_width_mm'])->toBeInt();
+        }
+    })->with([
+        'living_room', 'bedroom', 'kids_room', 'dining_room', 'kitchen',
+        'bathroom', 'office', 'hallway', 'balcony', 'other',
+    ]);
 });

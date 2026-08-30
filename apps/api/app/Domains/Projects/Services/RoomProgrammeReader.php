@@ -96,13 +96,13 @@ final class RoomProgrammeReader
 
         $longestWall = $this->longestWall($room);
 
-        return $questions->map(fn (object $question): array => [
-            'code' => $question->code,
-            'prompt' => $question->prompt,
-            'help' => $question->help,
-            'kind' => $question->kind,
-            'is_required' => (bool) $question->is_required,
-            'options' => array_map(
+        return $questions->map(function (object $question) use (
+            $optionsByQuestion,
+            $categoriesByOption,
+            $longestWall,
+            $styleCode,
+        ): array {
+            $options = array_map(
                 fn (object $option): array => $this->option(
                     $option,
                     $categoriesByOption[(string) $option->id] ?? [],
@@ -110,8 +110,33 @@ final class RoomProgrammeReader
                     $styleCode,
                 ),
                 $optionsByQuestion[(string) $question->id] ?? [],
-            ),
-        ])->all();
+            );
+
+            $answerable = array_filter($options, static fn (array $option): bool => $option['available']);
+
+            return [
+                'code' => $question->code,
+                'prompt' => $question->prompt,
+                'help' => $question->help,
+                'kind' => $question->kind,
+                /*
+                 * A question the shop cannot serve at all stops being required.
+                 *
+                 * "Yatak ölçüsü" is genuinely required — a bedroom needs a bed, so the
+                 * programme marks it so and offers no way past it. Which is correct right
+                 * up until nobody is selling beds: then every option is disabled, there is
+                 * nothing to tap, and the customer is stranded on step two of seven with no
+                 * way forward and no explanation that makes sense to them.
+                 *
+                 * A new marketplace has an empty catalogue, so this is the normal early
+                 * state rather than an edge case. When nothing can be supplied the question
+                 * becomes informational: it still says what the room wants and why we
+                 * cannot help yet, and it no longer blocks the design.
+                 */
+                'is_required' => (bool) $question->is_required && $answerable !== [],
+                'options' => $options,
+            ];
+        })->all();
     }
 
     /**

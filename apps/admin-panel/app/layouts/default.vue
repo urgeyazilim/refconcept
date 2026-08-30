@@ -12,6 +12,7 @@ const { isAuthenticated, logout } = useAuth()
 
 const nav = [
   { label: 'Gösterge paneli', to: '/analytics', icon: 'M4 19V5m0 14h16M8 19v-6m4 6V9m4 10v-4' },
+  { label: 'Katalog kapsamı', to: '/analytics/catalogue-coverage', icon: 'M4 6h16M4 12h10M4 18h7' },
   { label: 'Başvurular', to: '/', icon: 'M8 4h8a1 1 0 0 1 1 1v15l-5-3-5 3V5a1 1 0 0 1 1-1Zm2 5h4m-4 4h4' },
   { label: 'Satıcılar', to: '/sellers', icon: 'M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20M10 11.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z' },
   { label: 'Ürünler', to: '/products', icon: 'M20.5 7.5 12 3 3.5 7.5m17 0L12 12m8.5-4.5v9L12 21m0-9L3.5 7.5m8.5 4.5v9' },

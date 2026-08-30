@@ -131,7 +131,17 @@ async function load() {
  */
 function applyDefaults() {
   for (const question of programme.value?.questions ?? []) {
+    /*
+     * The marked default first, and any available option after it.
+     *
+     * A default whose category is out of stock is no default at all, and on a thin
+     * catalogue that is the common case rather than the odd one — the question would open
+     * with nothing selected and an "İleri" that refuses. Falling through to whatever can
+     * actually be supplied keeps pressing-through working, which is how most people will
+     * use this.
+     */
     const fallback = question.options.find(option => option.is_default && option.available)
+      ?? question.options.find(option => option.available)
 
     if (fallback) {
       answers.value[question.code] = [fallback.code]

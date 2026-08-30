@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Domains\Administration\Http\Controllers;
 
 use App\Domains\Ai\Models\AiJob;
+use App\Domains\Catalog\Services\CatalogCoverage;
+use App\Domains\Catalog\Services\ProgrammeCoverageReport;
 use App\Domains\Finance\Enums\LedgerAccount;
 use App\Domains\Finance\Services\Ledger;
 use App\Domains\Identity\Models\User;
@@ -27,7 +29,32 @@ use Illuminate\Support\Facades\DB;
  */
 final class AdminAnalyticsController
 {
-    public function __construct(private readonly Ledger $ledger) {}
+    public function __construct(
+        private readonly Ledger $ledger,
+        private readonly ProgrammeCoverageReport $coverage,
+        private readonly CatalogCoverage $catalogue,
+    ) {}
+
+    /**
+     * Which of the design questions the shop can actually answer, room by room.
+     *
+     * A commercial number rather than a technical one. Every category missing here is a
+     * question a customer is shown greyed out with "bu ürün grubunda henüz satıcımız yok" —
+     * so this is a list of sentences the product is currently having to say, ordered by how
+     * often it has to say them, which is the same thing as a list of sellers worth signing.
+     */
+    public function catalogueCoverage(Request $request): JsonResponse
+    {
+        // Read fresh. Somebody opening this straight after approving a listing wants to see
+        // the listing, not a ten-minute-old count.
+        $this->catalogue->forget();
+
+        $style = $request->string('style')->toString();
+
+        return response()->json([
+            'data' => $this->coverage->all($style === '' ? null : $style),
+        ]);
+    }
 
     public function overview(Request $request): JsonResponse
     {

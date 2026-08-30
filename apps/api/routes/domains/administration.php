@@ -40,6 +40,8 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])
         Route::prefix('analytics')->as('analytics.')->group(function (): void {
             Route::get('overview', [AdminAnalyticsController::class, 'overview'])->name('overview');
             Route::get('orders', [AdminAnalyticsController::class, 'orderSeries'])->name('orders');
+            Route::get('catalogue-coverage', [AdminAnalyticsController::class, 'catalogueCoverage'])
+                ->name('catalogue-coverage');
         });
 
         Route::prefix('system')->as('system.')->group(function (): void {

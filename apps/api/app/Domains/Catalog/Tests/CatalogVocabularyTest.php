@@ -5,10 +5,12 @@ declare(strict_types=1);
 use App\Domains\Catalog\Models\Category;
 use App\Domains\Catalog\Models\Style;
 use App\Domains\Catalog\Services\CatalogCoverage;
+use App\Domains\Catalog\Services\ProgrammeCoverageReport;
 use App\Domains\Catalog\Services\StyleAffinity;
 use App\Domains\Products\Models\Product;
 use Database\Seeders\CatalogTaxonomySeeder;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Database\Seeders\RoomProgrammeSeeder;
 use Illuminate\Database\QueryException;
 
 /**
@@ -222,4 +224,67 @@ it('offers the palettes with their swatches', function (): void {
         ->and(collect($palettes)->pluck('code')->all())->toContain('warm-neutral')
         ->and($palettes[0]['swatches'])->not->toBeEmpty()
         ->and($palettes[0]['swatches'][0]['hex'])->toStartWith('#');
+});
+
+describe('the catalogue coverage report', function (): void {
+    it('says which questions the shop cannot answer, and for which room', function (): void {
+        $this->seed(RoomProgrammeSeeder::class);
+        app(CatalogCoverage::class)->forget();
+
+        $rooms = collect(app(ProgrammeCoverageReport::class)->all());
+        $livingRoom = $rooms->firstWhere('room_type', 'living_room');
+
+        /*
+         * The empty catalogue is the honest starting state of a marketplace, and the report
+         * has to be readable in it rather than only once things are going well. Every
+         * missing category is a sentence the wizard is currently having to say to a
+         * customer — "bu ürün grubunda henüz satıcımız yok" — so this list is also a ranked
+         * list of sellers worth signing.
+         */
+        expect($livingRoom['questions'])->toBe(8)
+            ->and($livingRoom['answerable'])->toBe(0)
+            ->and($livingRoom['missing_categories'])->toContain('kanepe', 'tv-unitesi', 'perde');
+    });
+
+    it('counts a question as answerable when any one of its options can be supplied', function (): void {
+        $this->seed(RoomProgrammeSeeder::class);
+
+        [$seller] = makeApprovedSeller('Kapsam A.Ş.', 'kapsam-raporu');
+
+        makeProduct($seller, Category::query()->where('slug', 'kanepe')->firstOrFail(), [
+            'name' => 'Tek kanepe',
+            'description' => 'Katalogdaki tek kanepe.',
+            'price_minor' => 2_000_000,
+            'width_mm' => 2_000,
+        ]);
+
+        app(CatalogCoverage::class)->forget();
+
+        $livingRoom = collect(app(ProgrammeCoverageReport::class)->all())
+            ->firstWhere('room_type', 'living_room');
+
+        /*
+         * "Oturma grubu nasıl olsun?" has three real options and only one of them can be
+         * served — and that is a question a customer can still answer well. Counting it as
+         * a gap would make a shop that stocks sofas look like a shop that does not.
+         */
+        expect($livingRoom['answerable'])->toBe(1)
+            // The corner-sofa option's category is still named, because it is still a
+            // seller worth finding.
+            ->and($livingRoom['missing_categories'])->toContain('oturma-grubu')
+            ->and($livingRoom['missing_categories'])->not->toContain('kanepe');
+    });
+
+    it('ignores a none-option, which needs no seller at all', function (): void {
+        $this->seed(RoomProgrammeSeeder::class);
+        app(CatalogCoverage::class)->forget();
+
+        $rooms = collect(app(ProgrammeCoverageReport::class)->all());
+
+        // "Şimdilik istemiyorum" asks the catalogue for nothing. Counting it would make
+        // every question look half-served whatever the shop stocks.
+        foreach ($rooms as $room) {
+            expect($room['missing_categories'])->not->toContain('');
+        }
+    });
 });
