@@ -32,6 +32,15 @@ enum AiTask: string
     case ImageRenderPremium = 'image_render_premium';
     case ImageEdit = 'image_edit';
 
+    /**
+     * A short film of the finished room, from the render.
+     *
+     * The camera may only move within what the customer's photograph already showed. A
+     * turn far enough to see the wall behind it would have to invent that wall, and this
+     * product spent a week removing exactly that kind of invention.
+     */
+    case VideoTour = 'video_tour';
+
     /** Find the individual pieces of furniture inside a render. */
     case ObjectExtraction = 'object_extraction';
 
@@ -60,6 +69,7 @@ enum AiTask: string
             self::ImageRenderDraft => 'Görsel üretimi (taslak)',
             self::ImageRenderPremium => 'Görsel üretimi (yüksek kalite)',
             self::ImageEdit => 'Görsel düzenleme',
+            self::VideoTour => 'Oda videosu',
             self::ObjectExtraction => 'Nesne çıkarımı',
             self::ProductTagging => 'Ürün etiketleme',
             self::TextEmbedding => 'Metin vektörü',
@@ -78,6 +88,7 @@ enum AiTask: string
             self::RoomAnalysis, self::ObjectExtraction, self::ProductTagging => AiModality::Vision,
             self::TextEmbedding => AiModality::Embedding,
             self::ImageRenderDraft, self::ImageRenderPremium, self::ImageEdit => AiModality::Image,
+            self::VideoTour => AiModality::Video,
             default => AiModality::Text,
         };
     }

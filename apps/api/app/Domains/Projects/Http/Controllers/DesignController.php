@@ -4,16 +4,19 @@ declare(strict_types=1);
 
 namespace App\Domains\Projects\Http\Controllers;
 
+use App\Domains\Credits\Exceptions\InsufficientCredits;
 use App\Domains\Projects\Enums\RenderQuality;
 use App\Domains\Projects\Exceptions\DesignVersionRefused;
 use App\Domains\Projects\Models\Design;
 use App\Domains\Projects\Models\DesignBrief;
 use App\Domains\Projects\Models\DesignVersion;
 use App\Domains\Projects\Models\DesignVersionEvent;
+use App\Domains\Projects\Models\DesignVideo;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\Room;
 use App\Domains\Projects\Services\DesignVersionLauncher;
 use App\Domains\Projects\Services\DesignVersionTree;
+use App\Domains\Projects\Services\DesignVideoLauncher;
 use App\Domains\Projects\Services\RoomPhotoStorage;
 use App\Support\Storage\PrivateLinkSigner;
 use Illuminate\Http\JsonResponse;
@@ -37,6 +40,7 @@ final class DesignController
     public function __construct(
         private readonly DesignVersionTree $tree,
         private readonly DesignVersionLauncher $launcher,
+        private readonly DesignVideoLauncher $videos,
         private readonly RoomPhotoStorage $storage,
         private readonly PrivateLinkSigner $links,
     ) {}
@@ -475,6 +479,112 @@ final class DesignController
     private function defaultName(Room $room): string
     {
         return $room->name.' tasarımı';
+    }
+
+    /**
+     * Films a finished design.
+     *
+     * Accepted and queued rather than performed. The provider answers with a long-running
+     * operation and the file exists a minute or two later, so the honest response to this
+     * request is "started", with a row the client can poll.
+     *
+     * The refusals are specific and they come before the charge: a design that is not
+     * finished has no still for the camera to move through, and a film already in flight
+     * is what two clicks on a slow page look like.
+     */
+    public function startVideo(
+        Request $request,
+        Project $project,
+        Room $room,
+        Design $design,
+        DesignVersion $version,
+    ): JsonResponse {
+        // 'update' rather than 'view': this spends the customer's credits, and somebody
+        // invited to look at a project must not be able to.
+        $this->authorizeProject($request, $project);
+        $this->assertBelongs($room, $project);
+        $this->assertDesignBelongs($design, $room);
+        abort_unless($version->design_id === $design->getKey(), 404);
+
+        $user = $request->user();
+        abort_if($user === null, 403);
+
+        try {
+            $video = $this->videos->launch($version, $user);
+        } catch (DesignVersionRefused $e) {
+            throw $e->toValidationException('video');
+        } catch (InsufficientCredits $e) {
+            /*
+             * 402 rather than 422. The request was well formed and the customer is allowed
+             * to make it; they cannot pay for it, and the client shows a top-up prompt
+             * rather than a form error.
+             */
+            return response()->json([
+                'message' => $e->getMessage(),
+                'required_credits' => $this->videos->quote(),
+            ], 402);
+        }
+
+        return response()->json(['data' => $this->videoPayload($video)], 202);
+    }
+
+    /**
+     * The state of this design's films, for a client that is polling.
+     *
+     * Its own endpoint rather than a field on the version, for the same reason progress is:
+     * this is the request a browser makes every couple of seconds for two minutes, and it
+     * returns the smallest useful thing.
+     */
+    public function videos(
+        Request $request,
+        Project $project,
+        Room $room,
+        Design $design,
+        DesignVersion $version,
+    ): JsonResponse {
+        $this->authorizeProject($request, $project, 'view');
+        $this->assertBelongs($room, $project);
+        $this->assertDesignBelongs($design, $room);
+        abort_unless($version->design_id === $design->getKey(), 404);
+
+        $version->loadMissing('videos.asset');
+
+        return response()->json([
+            'data' => $version->videos
+                ->sortByDesc('created_at')
+                ->values()
+                ->map(fn (DesignVideo $video): array => $this->videoPayload($video))
+                ->all(),
+            // What another one would cost, so the button can say so before it is pressed.
+            'credit_cost' => $this->videos->quote(),
+        ]);
+    }
+
+    /**
+     * One film, as the client sees it.
+     *
+     * The link is issued here and now because the caller has just been authorised, and it
+     * is short-lived for the same reason every other link to somebody's home is: a URL that
+     * outlives the session that earned it is a URL that can be forwarded.
+     *
+     * @return array<string, mixed>
+     */
+    private function videoPayload(DesignVideo $video): array
+    {
+        $asset = $video->asset;
+
+        return [
+            'id' => $video->id,
+            'status' => $video->status->value,
+            'status_label' => $video->status->label(),
+            'credit_cost' => $video->credit_cost,
+            'duration_seconds' => $video->duration_seconds,
+            'failure_reason' => $video->failure_reason,
+            'created_at' => $video->created_at?->toIso8601String(),
+            'completed_at' => $video->completed_at?->toIso8601String(),
+            'url' => $asset === null ? null : $this->storage->temporaryAssetUrl($asset),
+            'expires_in' => $asset === null ? null : 300,
+        ];
     }
 
     private function assertDesignBelongs(Design $design, Room $room): void

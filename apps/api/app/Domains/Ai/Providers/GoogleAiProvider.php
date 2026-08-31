@@ -40,6 +40,14 @@ final class GoogleAiProvider implements AiProvider
     private const DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 
     /**
+     * How long to wait between asking whether a video is done.
+     *
+     * Ten seconds. A shorter interval buys nothing — the job takes a minute or two whatever
+     * anybody does — and turns one film into a hundred requests against a quota.
+     */
+    private const VIDEO_POLL_SECONDS = 10;
+
+    /**
      * The vector width the catalogue column is built for.
      *
      * Kept here as well as in the migration because this provider has to be *told* — its
@@ -84,6 +92,16 @@ final class GoogleAiProvider implements AiProvider
                 return $this->embed($call);
             }
 
+            /*
+             * Video is the other exception, and a larger one: it is a long-running
+             * operation rather than a request. The call starts a job, polls it for a
+             * minute or two, and fetches the finished file — all inside this one call,
+             * because the gateway's contract is that an adapter returns an answer.
+             */
+            if ($call->modality() === AiModality::Video) {
+                return $this->generateVideo($call);
+            }
+
             $response = $this->client($call)->post(
                 sprintf('/models/%s:generateContent', $call->model->code),
                 $this->payloadFor($call),
@@ -116,6 +134,157 @@ final class GoogleAiProvider implements AiProvider
      * embedded as a document sits in a slightly different place from the same words
      * embedded as a query, and the difference is measurable in what comes back.
      */
+    /**
+     * Films the room, and waits for it.
+     *
+     * Video is a long-running operation rather than a request: the call starts a job, and
+     * the file exists a minute or two later. Polled here rather than handed back as a
+     * ticket because the gateway's contract is that an adapter returns an answer — a second
+     * contract for "answers that arrive later" would need its own retry, cost and failure
+     * handling, all of which already exist for this one.
+     *
+     * It runs on the AI queue, which is where the ten-minute renders already live, so a
+     * worker held for two minutes is the ordinary case rather than a problem.
+     */
+    private function generateVideo(AiCall $call): AiResult
+    {
+        $first = $call->imageBlobs[0] ?? null;
+
+        $instance = ['prompt' => $call->prompt];
+
+        if ($first !== null) {
+            /*
+             * The render is the first frame, so the film starts from the room the customer
+             * has already seen. Without it the model would compose its own room and the
+             * video would be of somewhere else — the same failure the still render had.
+             */
+            $instance['image'] = ['bytesBase64Encoded' => $first['data'], 'mimeType' => $first['mime']];
+        }
+
+        $started = $this->client($call)->post(
+            sprintf('/models/%s:predictLongRunning', $call->model->code),
+            [
+                'instances' => [$instance],
+                'parameters' => [
+                    'aspectRatio' => (string) ($call->options['aspect_ratio'] ?? '16:9'),
+                    'resolution' => (string) ($call->options['resolution'] ?? '1080p'),
+                ],
+            ],
+        );
+
+        if ($started->failed()) {
+            return $this->translateFailure($started);
+        }
+
+        $operation = (string) data_get($started->json() ?? [], 'name', '');
+
+        if ($operation === '') {
+            return AiResult::failure(
+                AiFailureKind::MalformedOutput,
+                'Google video işini başlatmadı.',
+                httpStatus: $started->status(),
+            );
+        }
+
+        return $this->awaitVideo($call, $operation);
+    }
+
+    /**
+     * Polls one video job until it finishes, fails, or runs out of patience.
+     *
+     * Ten seconds between asks. A shorter interval buys nothing — the job takes a minute or
+     * two whatever anybody does — and turns one render into a hundred requests.
+     */
+    private function awaitVideo(AiCall $call, string $operation): AiResult
+    {
+        /*
+         * Bounded by the call's own timeout rather than by a number chosen here, so an
+         * operator who raises the route's ceiling raises this with it. The floor keeps a
+         * misconfigured thirty-second route from giving up before the job could possibly
+         * have finished.
+         */
+        $deadline = microtime(true) + max(120, $call->timeoutSeconds);
+
+        while (microtime(true) < $deadline) {
+            sleep(self::VIDEO_POLL_SECONDS);
+
+            $poll = $this->client($call)->get('/'.ltrim($operation, '/'));
+
+            if ($poll->failed()) {
+                return $this->translateFailure($poll);
+            }
+
+            $body = $poll->json() ?? [];
+
+            if (data_get($body, 'done') !== true) {
+                continue;
+            }
+
+            if (data_get($body, 'error') !== null) {
+                return AiResult::failure(
+                    AiFailureKind::ProviderError,
+                    (string) data_get($body, 'error.message', 'Video üretilemedi.'),
+                    httpStatus: $poll->status(),
+                );
+            }
+
+            return $this->claimVideo($call, $body);
+        }
+
+        return AiResult::failure(
+            AiFailureKind::Timeout,
+            'Video beklenen sürede hazır olmadı.',
+        );
+    }
+
+    /**
+     * Fetches the finished file and stages it, exactly as a rendered image is staged.
+     *
+     * The download needs the key on it: the URI Google returns is not public, which is the
+     * correct behaviour for a film of somebody's living room and the reason it cannot be
+     * handed to the browser as-is.
+     *
+     * @param  array<string, mixed>  $body
+     */
+    private function claimVideo(AiCall $call, array $body): AiResult
+    {
+        $uri = (string) (data_get($body, 'response.generateVideoResponse.generatedSamples.0.video.uri')
+            ?? data_get($body, 'response.generatedVideos.0.video.uri')
+            ?? '');
+
+        $inline = (string) (data_get($body, 'response.generateVideoResponse.generatedSamples.0.video.bytesBase64Encoded')
+            ?? '');
+
+        if ($uri === '' && $inline === '') {
+            return AiResult::failure(
+                AiFailureKind::MalformedOutput,
+                'Google iş bitti dedi ama video dönmedi.',
+            );
+        }
+
+        $bytes = $inline !== ''
+            ? (string) base64_decode($inline, true)
+            : $this->download($call, $uri);
+
+        if ($bytes === '') {
+            return AiResult::failure(AiFailureKind::ProviderError, 'Video indirilemedi.');
+        }
+
+        return AiResult::success(
+            imageRefs: [$this->images->stash($bytes, 'video/mp4')],
+            httpStatus: 200,
+        );
+    }
+
+    private function download(AiCall $call, string $uri): string
+    {
+        $response = Http::withHeaders(['x-goog-api-key' => (string) $call->apiKey])
+            ->timeout(120)
+            ->get($uri);
+
+        return $response->successful() ? $response->body() : '';
+    }
+
     private function embed(AiCall $call): AiResult
     {
         $response = $this->client($call)->post(

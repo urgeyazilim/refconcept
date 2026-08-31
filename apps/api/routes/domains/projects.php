@@ -102,6 +102,18 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, EnsureEmailIsVerif
          * subtree, so one authorisation check on the parent covers the branch and there is
          * no match id that opens a stranger's flat.
          */
+        /*
+         * The room tour.
+         *
+         * Starting one spends credits, so it sits behind the project's `update` ability
+         * rather than `view`: somebody invited to look at a design may watch the film and
+         * may not pay for another.
+         */
+        Route::post('{project}/rooms/{room}/designs/{design}/versions/{version}/video', [DesignController::class, 'startVideo'])
+            ->name('designs.version.video.start');
+        Route::get('{project}/rooms/{room}/designs/{design}/versions/{version}/videos', [DesignController::class, 'videos'])
+            ->name('designs.version.videos');
+
         Route::get('{project}/rooms/{room}/designs/{design}/versions/{version}/matches', [DesignMatchController::class, 'index'])
             ->name('designs.version.matches');
         Route::post('{project}/rooms/{room}/designs/{design}/versions/{version}/matches/rebuild', [DesignMatchController::class, 'rebuild'])

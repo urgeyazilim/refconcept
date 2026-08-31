@@ -22,6 +22,17 @@ enum AiModality: string
     /** Produces images. */
     case Image = 'image';
 
+    /**
+     * Produces video, from a still and a description of how the camera should move.
+     *
+     * Its own modality rather than a flavour of Image, because everything about the call is
+     * different: it is answered by a long-running operation the caller polls for a minute
+     * or two, the result is tens of megabytes, and it is priced by the second rather than
+     * by the token. A model that draws pictures cannot serve it and should not be routed to
+     * it by accident.
+     */
+    case Video = 'video';
+
     case Embedding = 'embedding';
 
     public function label(): string
@@ -30,6 +41,7 @@ enum AiModality: string
             self::Text => 'Metin',
             self::Vision => 'Görsel anlama',
             self::Image => 'Görsel üretimi',
+            self::Video => 'Video üretimi',
             self::Embedding => 'Vektör',
         };
     }

@@ -299,6 +299,119 @@ onMounted(() => {
 
 onBeforeUnmount(stopPolling)
 
+
+/**
+ * The room tour.
+ *
+ * A render is read in a second and cannot show the one thing people buy furniture for:
+ * what the room feels like to walk into. Eight seconds of a camera easing forward past the
+ * sofa can, so it is offered as a deliberate, priced choice rather than something that
+ * happens to every design — it costs real money to make, and the button says how much
+ * before it is pressed.
+ *
+ * Polled on its own timer rather than folded into the progress poll: a film takes a minute
+ * and a half and only exists on the design somebody actually asked for one on, so a page
+ * with no video in flight makes no requests at all.
+ */
+interface DesignVideo {
+  id: string
+  status: 'pending' | 'generating' | 'ready' | 'failed'
+  status_label: string
+  credit_cost: number
+  duration_seconds: number
+  failure_reason: string | null
+  created_at: string | null
+  completed_at: string | null
+  url: string | null
+  expires_in: number | null
+}
+
+const videos = ref<DesignVideo[]>([])
+const videoCost = ref<number | null>(null)
+const videoBusy = ref(false)
+const videoError = ref<string | null>(null)
+let videoPoller: ReturnType<typeof setInterval> | undefined
+
+/** The newest film for the version on screen — the one worth showing. */
+const video = computed<DesignVideo | null>(() => videos.value[0] ?? null)
+
+const videoInFlight = computed(
+  () => video.value !== null && (video.value.status === 'pending' || video.value.status === 'generating'),
+)
+
+async function loadVideos() {
+  const versionId = shownVersionId.value
+
+  if (!versionId) {
+    videos.value = []
+
+    return
+  }
+
+  try {
+    const response = await api.get<{ data: DesignVideo[], credit_cost: number }>(
+      `${base}/versions/${versionId}/videos`,
+    )
+
+    videos.value = response.data
+    videoCost.value = response.credit_cost
+  } catch {
+    // A design without a film is still a design. This must never take the page down.
+    videos.value = []
+  }
+}
+
+async function createVideo() {
+  const versionId = shownVersionId.value
+
+  if (!versionId || videoBusy.value) return
+
+  videoBusy.value = true
+  videoError.value = null
+
+  try {
+    const response = await api.post<{ data: DesignVideo }>(`${base}/versions/${versionId}/video`)
+
+    videos.value = [response.data, ...videos.value]
+    startVideoPolling()
+  } catch (error) {
+    videoError.value = error instanceof ApiError
+      // 402 is "you cannot pay for this", which is a top-up, not a form error — the
+      // message the API sends already says so, and repeating it here would be worse.
+      ? error.message
+      : 'Video başlatılamadı.'
+  } finally {
+    videoBusy.value = false
+  }
+}
+
+function startVideoPolling() {
+  if (videoPoller) return
+
+  // Five seconds. The film takes ninety, so a faster poll is eighteen extra requests for
+  // no earlier answer.
+  videoPoller = setInterval(() => { void tickVideo() }, 5_000)
+}
+
+async function tickVideo() {
+  await loadVideos()
+
+  if (!videoInFlight.value) {
+    clearInterval(videoPoller)
+    videoPoller = undefined
+  }
+}
+
+watch(shownVersionId, async () => {
+  await loadVideos()
+
+  if (videoInFlight.value) startVideoPolling()
+}, { immediate: true })
+
+onBeforeUnmount(() => {
+  if (videoPoller) clearInterval(videoPoller)
+})
+
 /** Flattens the tree for rendering while keeping each node's depth. */
 function flatten(nodes: DesignTreeNode[], depth = 0): Array<{ node: DesignTreeNode, depth: number }> {
   return nodes.flatMap(node => [
@@ -631,6 +744,132 @@ const statusTone: Record<string, string> = {
           <p v-if="shownVersion?.image_url" class="mt-3 text-xs leading-relaxed text-muted">
             Aşağıdaki listedeki ürünler odanıza yerleştirildi. Görseldeki küçük dekoratif
             objeler temsilîdir, satışta değildir.
+          </p>
+        </div>
+      </section>
+
+
+      <!--
+        The room, moving.
+
+        Under the before-and-after rather than beside it, because it is the second thing
+        somebody wants: first "is this my room", then "what is it like to be in it". Only
+        shown once there is a finished design to film — offering it over a render that does
+        not exist yet would be selling something that cannot be made.
+      -->
+      <section v-if="shownVersion?.image_url" class="rc-card overflow-hidden">
+        <div class="flex flex-wrap items-end justify-between gap-4 p-6 pb-5 sm:px-8 sm:pt-8">
+          <div>
+            <h2 class="text-xl font-medium">Odanızda gezinin</h2>
+            <p class="mt-1.5 max-w-[52ch] text-sm leading-relaxed text-ink-secondary">
+              {{ video?.status === 'ready'
+                ? 'Kamera odanızın içinde ilerliyor. Durdurup yakınlaştırarak ürünlere yakından bakabilirsiniz.'
+                : 'Tasarımınızdan sekiz saniyelik bir oda turu üretelim; mekânın derinliğini fotoğrafın gösteremediği gibi görün.' }}
+            </p>
+          </div>
+
+          <!--
+            The price is on the button, not in a tooltip. This is the most expensive thing
+            a customer can ask for here, and finding out what it cost afterwards is how
+            people learn not to press things.
+          -->
+          <RcButton
+            v-if="canEdit && !videoInFlight && video?.status !== 'ready'"
+            :disabled="videoBusy"
+            class="shrink-0"
+            @click="createVideo"
+          >
+            <span class="flex items-center gap-2">
+              <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2.5" y="6" width="13" height="12" rx="2.5" />
+                <path d="m15.5 10.5 6-3v9l-6-3z" />
+              </svg>
+              Video oluştur
+              <span v-if="videoCost !== null" class="text-white/70">· {{ videoCost }} kredi</span>
+            </span>
+          </RcButton>
+
+          <RcButton
+            v-else-if="canEdit && video?.status === 'ready'"
+            variant="ghost"
+            :disabled="videoBusy"
+            class="shrink-0"
+            @click="createVideo"
+          >
+            Yeniden çek<span v-if="videoCost !== null" class="text-muted">&nbsp;· {{ videoCost }} kredi</span>
+          </RcButton>
+        </div>
+
+        <RcAlert v-if="videoError" tone="danger" class="mx-6 mb-5 sm:mx-8">{{ videoError }}</RcAlert>
+
+        <div class="px-6 pb-6 sm:px-8 sm:pb-8">
+          <RcVideoPlayer
+            v-if="video?.status === 'ready' && video.url"
+            :src="video.url"
+            :poster="shownVersion.image_url"
+            :download-name="`${design?.name ?? 'oda'}-video.mp4`"
+          />
+
+          <!--
+            Being made. The render is shown behind it, dimmed, because the film starts from
+            exactly that frame — so the wait is spent looking at the thing about to move
+            rather than at a grey box.
+          -->
+          <div
+            v-else-if="videoInFlight"
+            class="relative aspect-[16/9] w-full overflow-hidden rounded-md bg-charcoal"
+          >
+            <img :src="shownVersion.image_url" alt="" class="size-full scale-105 object-cover opacity-35 blur-[2px]">
+
+            <div class="absolute inset-0 flex flex-col items-center justify-center gap-4 px-8 text-center">
+              <span class="size-9 animate-spin rounded-full border-2 border-white/25 border-t-white/90" />
+              <p class="text-sm text-white/90">Odanız filme alınıyor…</p>
+              <p class="max-w-[42ch] text-xs leading-relaxed text-white/60">
+                Yaklaşık bir buçuk dakika sürer. Sayfadan ayrılabilirsiniz; hazır olduğunda
+                burada olacak.
+              </p>
+            </div>
+          </div>
+
+          <div
+            v-else-if="video?.status === 'failed'"
+            class="flex aspect-[16/9] w-full items-center justify-center rounded-md bg-bg-muted px-8 text-center text-sm text-muted"
+          >
+            {{ video.failure_reason ?? 'Video üretilemedi. Krediniz iade edildi.' }}
+          </div>
+
+          <!--
+            Nothing yet: the render itself, dimmed, with the invitation over it. The empty
+            state for a video is the still it would be made from.
+          -->
+          <button
+            v-else
+            type="button"
+            class="group/vid relative aspect-[16/9] w-full overflow-hidden rounded-md bg-charcoal disabled:cursor-default"
+            :disabled="!canEdit || videoBusy"
+            @click="createVideo"
+          >
+            <img
+              :src="shownVersion.image_url"
+              alt=""
+              class="size-full object-cover opacity-55 transition-all duration-500 group-hover/vid:scale-[1.03] group-hover/vid:opacity-70"
+            >
+
+            <span class="absolute inset-0 flex flex-col items-center justify-center gap-3">
+              <span class="flex size-16 items-center justify-center rounded-full border border-white/60 bg-white/15 backdrop-blur-md transition-transform duration-300 group-hover/vid:scale-105">
+                <svg class="ml-0.5 size-7 text-white" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M8 5.5v13l11-6.5z" />
+                </svg>
+              </span>
+              <span class="text-sm text-white/90">
+                {{ canEdit ? 'Bu tasarımın videosunu oluşturun' : 'Bu tasarım için henüz video yok' }}
+              </span>
+            </span>
+          </button>
+
+          <p class="mt-3 text-xs leading-relaxed text-muted">
+            Video, yukarıdaki görselden üretilir: kamera hareket eder, oda ve ürünler
+            değişmez.
           </p>
         </div>
       </section>

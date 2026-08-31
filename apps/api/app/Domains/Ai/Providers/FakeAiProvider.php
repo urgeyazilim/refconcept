@@ -153,6 +153,26 @@ final class FakeAiProvider implements AiProvider
             );
         }
 
+        if ($call->modality() === AiModality::Video) {
+            /*
+             * A real file with a real video mime type, for the same reason the fake image
+             * is a real PNG: everything downstream copies the staged file onto the private
+             * disk and files it by its extension. A fake that returned a PNG here would
+             * pass every assertion and hide the one bug this path has actually had —
+             * fifteen megabytes of MP4 stored and served as an image, which a browser
+             * downloads instead of playing.
+             *
+             * The bytes are not a decodable film. Nothing in this system decodes one.
+             */
+            return AiResult::success(
+                imageRefs: [app(GeneratedImageStore::class)->stash(
+                    'fake-video-'.$call->fingerprint(),
+                    'video/mp4',
+                )],
+                inputTokens: $this->tokensFor($call->prompt),
+            );
+        }
+
         if ($call->modality() === AiModality::Image) {
             /*
              * A real image, written to the real store.

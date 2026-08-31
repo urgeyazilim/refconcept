@@ -111,6 +111,20 @@ class DesignVersion extends Model
     }
 
     /**
+     * The films made from this design, newest last.
+     *
+     * More than one is allowed on purpose: a customer who did not like the camera move
+     * should be able to pay for another rather than lose the first. Only one may be in
+     * flight at a time, and that is a partial unique index rather than a rule here.
+     *
+     * @return HasMany<DesignVideo, $this>
+     */
+    public function videos(): HasMany
+    {
+        return $this->hasMany(DesignVideo::class, 'design_version_id');
+    }
+
+    /**
      * The layout this version was drawn from.
      *
      * @return HasOne<DesignPlan, $this>

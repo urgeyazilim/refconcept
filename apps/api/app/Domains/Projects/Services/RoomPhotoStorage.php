@@ -127,7 +127,7 @@ final class RoomPhotoStorage
             $this->extensionForMime($mimeType),
         );
 
-        $this->put($disk, $path, $sourcePath);
+        $this->put($disk, $path, $sourcePath, $mimeType);
 
         [$width, $height] = $this->dimensions($sourcePath);
 
@@ -310,7 +310,7 @@ final class RoomPhotoStorage
 
     // --- internals -----------------------------------------------------------
 
-    private function put(string $disk, string $path, string $sourcePath): void
+    private function put(string $disk, string $path, string $sourcePath, ?string $mimeType = null): void
     {
         $stream = fopen($sourcePath, 'rb');
 
@@ -319,7 +319,13 @@ final class RoomPhotoStorage
         }
 
         try {
-            Storage::disk($disk)->put($path, $stream);
+            /*
+             * The content type is stated rather than left to the driver to guess from the
+             * path. It is what the object store hands back on the signed link, and a video
+             * served as an image is one a browser downloads instead of playing — a failure
+             * with no error anywhere, just a player that never appears.
+             */
+            Storage::disk($disk)->put($path, $stream, $mimeType === null ? [] : ['ContentType' => $mimeType]);
         } finally {
             if (is_resource($stream)) {
                 fclose($stream);
@@ -385,6 +391,11 @@ final class RoomPhotoStorage
             'image/png' => 'png',
             'image/webp' => 'webp',
             'image/heic', 'image/heif' => 'heic',
+            // A design asset is not always a picture: a room tour lands on the same private
+            // disk, behind the same ownership check, and needs an extension a browser will
+            // play rather than download.
+            'video/mp4' => 'mp4',
+            'video/webm' => 'webm',
             default => 'jpg',
         };
     }

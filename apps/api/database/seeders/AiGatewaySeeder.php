@@ -120,25 +120,40 @@ final class AiGatewaySeeder extends Seeder
         $this->rate($models['gpt-image'], inputPerMillion: 8_000_000, outputPerMillion: 30_000_000);
 
         /*
-         * With no Google key on file the Gemini models exist but cannot be called, so
-         * routing to them would ship a build whose every AI feature fails on first use.
-         * The simulator takes over as primary instead: the routes are real, the shapes
-         * are real, and an operator who later adds a key repoints them from the console.
+         * With no key on file a provider's models exist but cannot be called, so routing
+         * to them would ship a build whose every AI feature fails on first use. Whatever
+         * the plan names that cannot be reached is skipped, and the simulator — which needs
+         * no key — is what a route falls back to. The routes are real and the shapes are
+         * real; an operator who later adds a key repoints them from the console.
+         *
+         * Decided per model rather than per provider, because the plan now names two real
+         * providers and "Google has no key" must not disqualify an OpenAI model.
          */
-        $googleUsable = $google->activeCredential() !== null;
+        $usable = static fn (?AiModel $model): bool => $model !== null
+            && $model->provider?->activeCredential() !== null;
 
         foreach ($this->taskPlan() as $task => $plan) {
             $version = $this->seedPrompt(AiTask::from($task), $plan);
 
-            $primaryName = $googleUsable
-                ? (string) $plan['primary']
-                : (string) ($plan['fallback'] ?? $plan['primary']);
+            /** @var list<AiModel> $preferred */
+            $preferred = array_values(array_filter(
+                [
+                    $models[(string) $plan['primary']] ?? null,
+                    isset($plan['fallback']) ? ($models[(string) $plan['fallback']] ?? null) : null,
+                ],
+                $usable,
+            ));
 
-            $fallbackName = $googleUsable && isset($plan['fallback'])
-                ? (string) $plan['fallback']
-                : null;
-
-            $primary = $models[$primaryName] ?? null;
+            /*
+             * The simulator is the last resort rather than a peer. It answers in the right
+             * shape and says nothing true, which is the correct behaviour for a database
+             * with no keys on it and the wrong behaviour for anything else — so it is
+             * reached only when neither named model can be called, and it is matched to the
+             * modality the task actually needs.
+             */
+            $primary = $preferred[0]
+                ?? $models[$this->simulatorFor($models[(string) $plan['primary']] ?? null)]
+                ?? null;
 
             if ($primary === null) {
                 continue;
@@ -147,7 +162,7 @@ final class AiGatewaySeeder extends Seeder
             $this->route(
                 AiTask::from($task),
                 $primary,
-                $fallbackName === null ? null : ($models[$fallbackName] ?? null),
+                $preferred[1] ?? null,
                 $version,
                 $plan,
             );
@@ -354,6 +369,23 @@ final class AiGatewaySeeder extends Seeder
     }
 
     /**
+     * Which simulator stands in for a model that cannot be reached.
+     *
+     * By modality, because the shape of the answer is what a caller depends on: a text
+     * simulator answering a room analysis returns something that parses as nothing, and
+     * the failure surfaces three layers away from the missing key that caused it.
+     */
+    private function simulatorFor(?AiModel $intended): string
+    {
+        return match ($intended?->modality) {
+            AiModality::Vision => 'fake-vision',
+            AiModality::Image => 'fake-image',
+            AiModality::Embedding => 'fake-embedding',
+            default => 'fake-text',
+        };
+    }
+
+    /**
      * @param  array<string, mixed>  $plan
      */
     private function route(
@@ -363,9 +395,23 @@ final class AiGatewaySeeder extends Seeder
         ?PromptVersion $version,
         array $plan,
     ): void {
-        AiTaskRoute::query()->updateOrCreate(
-            ['task' => $task->value],
+        /*
+         * Created, never updated.
+         *
+         * This seeder ships the *installation* configuration; everything after installation
+         * belongs to migrations and to the operator. `updateOrCreate` here meant that a
+         * routine `db:seed` silently undid both — a render moved onto a better model by
+         * migration went back to the old one, a prompt improved four times went back to
+         * version 1, and a route an operator had paused during an outage came back up.
+         * Nothing said so, and the only symptom was that the output quietly got worse.
+         */
+        if (AiTaskRoute::query()->where('task', $task->value)->exists()) {
+            return;
+        }
+
+        AiTaskRoute::query()->create(
             [
+                'task' => $task->value,
                 'primary_model_id' => $primary->getKey(),
                 'fallback_model_id' => $fallback?->getKey(),
                 'prompt_version_id' => $version?->getKey(),
@@ -459,32 +505,44 @@ final class AiGatewaySeeder extends Seeder
             ],
 
             AiTask::ImageRenderDraft->value => [
-                'primary' => 'gemini-image',
-                'fallback' => 'fake-image',
+                /*
+                 * OpenAI in front, Gemini behind it.
+                 *
+                 * Not a preference between two good options. Given the same photograph and
+                 * the same prompt, `gpt-image-2` returned the customer's room — same doors,
+                 * same windows, same floor, same camera — and Gemini returned a different
+                 * one. A render of somebody else's living room is not a cheaper answer, it
+                 * is the wrong answer, so the draft moves too.
+                 *
+                 * Gemini stays as the fallback: a render in the wrong room beats no render
+                 * at all while a provider is unreachable.
+                 */
+                'primary' => 'gpt-image',
+                'fallback' => 'gemini-image',
                 'credits' => 2,
                 'max_cost_micros' => 200_000,
                 'concurrency' => 3,
+                // Editing a photograph at high fidelity took ninety-six seconds in testing;
+                // the interactive default would have failed every one of them.
+                'timeout' => 180,
                 'description' => 'Hızlı, düşük maliyetli önizleme görseli.',
                 'prompt' => [
-                    'system' => 'Fotogerçekçi bir iç mekân görseli üret.',
-                    'template' => "Oda: {{ room_type }}\nStil: {{ style }}\nPlan: {{ plan }}\n"
-                        .'Mevcut pencere, kapı ve radyatör konumlarını koru.',
+                    'system' => $this->renderSystemPrompt('image_render_draft'),
+                    'template' => $this->renderUserTemplate(),
                 ],
             ],
 
             AiTask::ImageRenderPremium->value => [
-                'primary' => 'gemini-image',
-                'fallback' => 'fake-image',
+                'primary' => 'gpt-image',
+                'fallback' => 'gemini-image',
                 'credits' => 6,
                 'max_cost_micros' => 900_000,
                 'concurrency' => 2,
+                'timeout' => 180,
                 'description' => 'Yüksek kaliteli, müşteriye sunulacak görsel.',
                 'prompt' => [
-                    'system' => 'Fotogerçekçi, yüksek çözünürlüklü bir iç mekân görseli üret. '
-                        .'Doğal ışık, gerçekçi malzeme dokuları.',
-                    'template' => "Oda: {{ room_type }}\nStil: {{ style }}\nPlan: {{ plan }}\n"
-                        ."Palet: {{ palette }}\n"
-                        .'Mevcut mimari öğeleri birebir koru.',
+                    'system' => $this->renderSystemPrompt('image_render_premium'),
+                    'template' => $this->renderUserTemplate(),
                 ],
             ],
 
@@ -633,5 +691,98 @@ final class AiGatewaySeeder extends Seeder
                 ],
             ],
         ];
+    }
+
+    /**
+     * What the renderer is told, on a database that has never been seeded.
+     *
+     * Shared by the draft and premium plans, and deliberately a copy of what the prompt
+     * migrations arrived at rather than the wording this seeder shipped with. A published
+     * prompt version is immutable, so those migrations can only move an installation that
+     * already exists — a brand-new database never sees them, and without this it would
+     * start life on the first draft of a prompt that has since been rewritten four times.
+     *
+     * The order of the rules is the point. "Keep the room" and "nothing but the list" are
+     * the two failures that cost this product a week each, and they are stated first,
+     * as rules, before any of the craft.
+     */
+    private function renderSystemPrompt(string $code): string
+    {
+        $lines = [
+            'Sen bir iç mimarsın ve müşterinin gerçek odasının fotoğrafını düzenliyorsun.',
+            '',
+            'BİRİNCİ KURAL — ODA MÜŞTERİNİN ODASI KALIR.',
+            'İlk görsel müşterinin odasıdır. Onu DÜZENLE, yeni bir oda çizme. Duvarların açısı',
+            've rengi, pencerelerin sayısı, konumu ve boyutu, kapılar, zemin kaplamasının rengi',
+            've yönü, tavan yüksekliği, kartonpiyer, kamera açısı ve perspektif birebir aynı',
+            'kalsın. Müşteri sonucu gördüğünde kendi odasını tanımalı. Fotoğrafta filigran',
+            'varsa sonuçta gösterme; altındaki oda korunsun.',
+            '',
+            'İKİNCİ KURAL — YALNIZCA LİSTEDEKİLER.',
+            'Yerleştirilecek ürünler listesinde ne varsa yalnızca onları koy. Listede olmayan',
+            'hiçbir şey ekleme: kitaplık, konsol, dolap, vazo, kitap, tabak, masa lambası,',
+            'bitki, tablo, perde, kırlent, halı — hiçbiri. Oda sana boş görünse bile boş kalsın.',
+            'Müşteri bu görseldeki her şeyi satın alabilmeli; listede olmayan bir eşya çizmek,',
+            'satılmayan bir ürünü vaat etmektir. Listedeki adet ve genişliklere uy: "×2" yazan',
+            'üründen iki adet, "×1" yazandan bir adet koy.',
+            '',
+            'ÜÇÜNCÜ KURAL — ÜRÜNLER GERÇEK ÜRÜNLERDİR.',
+            'İlk görselden sonraki her görsel, odaya konacak gerçek bir üründür. Biçim, renk ve',
+            'malzeme olarak onlara sadık kal; yerlerine benzerlerini uydurma.',
+            '',
+            'DÖRDÜNCÜ KURAL — GÖRSELDE HİÇBİR YAZI VE İŞARET OLMAZ.',
+            'Sonuç bir fotoğraftır; teknik çizim, plan ya da sunum panosu değil. Ölçü oku, ölçü',
+            'çizgisi, "45 cm" gibi etiketler, rakamlar, ok işaretleri, açıklama notları, marka',
+            'adı, filigran ya da imza koyma. Aşağıdaki ölçüler yalnızca sana nereye koyacağını',
+            'söyler — onları odanın içine çizmen isteniyor değil.',
+            '',
+            'SONRA TASARIM YAP — KOLAJ DEĞİL.',
+            '- Kompozisyon kararlarındaki odak noktasına uy; her parça ona yönelsin.',
+            '- Oturma grubunu duvara yapıştırma; plandaki konumlara göre duvardan ayır.',
+            '- Yükseklik ritmi kur: yüksek, orta ve alçak kütleler bir arada bulunsun.',
+            '- Parçalar kameraya göre birbirinin önünde ve arkasında dursun; hepsi tek düzlemde',
+            '  yan yana dizilirse kolaj gibi durur.',
+            '- Her nesnenin zeminde temas gölgesi olsun. Havada duran mobilya, yapıştırılmış',
+            '  mobilyadır.',
+            '- Işık tek yönden ve odanın kendi pencerelerinden gelsin; gölgeler tutarlı olsun.',
+            '  Listede aydınlatma varsa yansın.',
+            '- Kırlentler hafifçe dağınık, minderlerde oturulmuşluk izi olsun. Kusursuz simetri',
+            '  boş bir showroom hissi verir.',
+            '',
+            'YERLEŞİM ÖLÇÜLERİ (yalnızca senin için; görselde gösterme):',
+            '- Orta sehpa koltuktan 40-45 cm uzakta.',
+            '- Oturma parçalarının en azından ön ayakları halının üzerinde.',
+            '- Tablo merkezi yerden ~150 cm; mobilya üzerindeyse ondan 15-20 cm yukarıda.',
+            '- Perde pencere üstünden 10-15 cm yukarıdan veya tavana yakın, iki yana taşarak.',
+            '- Dolaşım için 75-90 cm boşluk bırak.',
+            '',
+            $code === 'image_render_premium'
+                ? 'Yüksek kalite: gerçekçi malzeme dokuları, yumuşak geçişli gölgeler, pencereden'
+                    .' gelen ışıkla uyumlu iç aydınlatma.'
+                : 'Hızlı önizleme kalitesi yeterli, ancak ışık ve gölge tutarlı olmalı.',
+        ];
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * The render's variables, most important first.
+     *
+     * The image-order line leads because it is the single most important sentence in the
+     * prompt: everything else is meaningless if the model does not know which of the
+     * pictures it was handed is the room it must keep.
+     */
+    private function renderUserTemplate(): string
+    {
+        return implode("\n", [
+            'Görsellerin sırası ve anlamı: {{ image_roles }}',
+            'Yerleştirilecek ürünler: {{ plan }}',
+            'Kompozisyon kararları: {{ composition }}',
+            'Oda: {{ room_type }}',
+            'Stil: {{ style }}',
+            'Renk paleti: {{ palette }}',
+            'Korunacak mimari öğeler: {{ preserve }}',
+            'Müşterinin isteği: {{ instruction }}',
+        ]);
     }
 }

@@ -5,6 +5,46 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added — Room tour video
+
+- **A finished design can be filmed.** Veo 3.1 Lite turns the render into an eight-second
+  1080p walk through the room, starting from the render as its first frame so the camera
+  can only reveal what the photograph already showed. Measured at ninety to a hundred and
+  ten seconds end to end, and about sixty-four cents a film.
+- `AiModality::Video` and `AiTask::VideoTour`, routed to a long-running operation the
+  Google adapter starts, polls and downloads inside one gateway call. Its own modality
+  rather than a flavour of image: the call shape, the result size and the pricing unit are
+  all different, and an image model must never be routed to it by accident.
+- `design_videos` records the state of one film — held credits, provider job, finished
+  asset, failure reason — apart from the file it produces, with a partial unique index
+  allowing only one in flight per design so an impatient double click cannot pay twice.
+- Twenty credits, held when the button is pressed and released in full if the film fails.
+  Over HTTP an unaffordable request answers `402` with the price, so the client shows a
+  top-up prompt rather than a form error.
+- `RcVideoPlayer`: five-second skips, frame stepping while paused, zoom to four times with
+  drag to pan, playback rate, loop, fullscreen and a download, all reachable by keyboard.
+  The browser's own controls are built for hour-long video and offer no way to stop on a
+  frame and look closely at a sofa somebody is about to buy.
+
+### Fixed — Render and routing
+
+- **The renderer was drawing its own measuring tape into the room.** The placement rules
+  ("coffee table 40–45 cm from the sofa") came back as dimension arrows and `45 cm` lettered
+  across the finished photograph, and every frame of the room tour inherited them because
+  the render is the video's first frame. Prompt version 6 states the measurements as
+  instructions to the model and makes "no writing or annotation in the picture" a numbered
+  rule beside the other three.
+- **`db:seed` was quietly undoing migrations.** `AiGatewaySeeder` wrote routes with
+  `updateOrCreate`, so a routine re-seed moved the render back onto the old model and back
+  to prompt version 1 — and would have restarted a route an operator had paused during an
+  outage. Routes are now created and never updated; the seeder ships the installation
+  configuration and everything after it belongs to migrations and to the operator.
+- A staged video was filed as `image/png`, because the staging store recovers the type from
+  the extension and video was not in the list. Stored and served with that content type, a
+  browser downloads fifteen megabytes instead of playing them, with no error anywhere.
+- Content types are now stated when a design asset is written rather than left to the
+  storage driver to infer from the path.
+
 ### Added — Phase 0 (Repository Bootstrap & Design Foundation)
 
 - Monorepo layout (`apps/`, `packages/`, `infra/`, `docs/`, `scripts/`) with npm workspaces.

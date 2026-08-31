@@ -91,6 +91,55 @@ Flutter/mobile/AR work must not start before `WEB_RELEASE_APPROVED`.
 
 ## Phase Log
 
+### ROOM_TOUR_VIDEO — DONE (2026-09-01)
+
+```text
+UPDATED_AT: 2026-09-01
+COMMIT_OR_SNAPSHOT: room-tour-video
+PHASE: Post-Phase-9 — design engine follow-up
+TASK: Film a finished design; premium player; render annotation fix
+STATUS: DONE
+FILES_CHANGED:
+  apps/api/app/Domains/Ai/Enums/{AiModality,AiTask}.php,
+  apps/api/app/Domains/Ai/Providers/{GoogleAiProvider,FakeAiProvider}.php,
+  apps/api/app/Domains/Ai/Services/{AiGateway,GeneratedImageStore}.php,
+  apps/api/app/Domains/Projects/Models/{DesignVideo,DesignVersion}.php,
+  apps/api/app/Domains/Projects/Services/{DesignVideoLauncher,RoomPhotoStorage}.php,
+  apps/api/app/Domains/Projects/Jobs/GenerateDesignVideo.php,
+  apps/api/app/Domains/Projects/Http/Controllers/DesignController.php,
+  apps/api/app/Domains/Projects/Exceptions/DesignVersionRefused.php,
+  apps/api/routes/domains/projects.php,
+  apps/api/database/seeders/AiGatewaySeeder.php,
+  packages/ui/src/components/RcVideoPlayer.vue,
+  apps/storefront/app/pages/projects/[id]/rooms/[roomId]/designs/[designId].vue
+MIGRATIONS:
+  0001_01_01_000040_walk_the_customer_through_their_own_room.php
+  0001_01_01_000041_a_photograph_has_no_measuring_tape_in_it.php
+TESTS_RUN: pest (full), phpstan level 6, pint, vitest (@refconcept/ui), eslint, vue-tsc
+TEST_RESULT: 897 passed / 2946 assertions; 39 component tests; static analysis clean
+BLOCKERS: none for this work
+NEXT_ACTION: Phases 12 (iyzico) and 13 (QNB) remain the release blockers
+```
+
+**A design can now be walked through.** Veo 3.1 Lite films the render — the render is the
+first frame, so the camera can only reveal what the customer's own photograph already
+showed. Verified end to end against the live API: ninety seconds, fifteen megabytes, the
+room intact, real parallax. Twenty credits, held on the click and released in full if the
+film fails, with a partial unique index making a double click impossible to charge twice.
+
+**Video is its own modality rather than a flavour of image.** The call is answered by a
+long-running operation the caller polls for a minute or two, the result is tens of
+megabytes, and it is priced by the second rather than by the token. Routing can now refuse
+to send a room tour to a model that draws pictures.
+
+**Three bugs found by running it rather than by reading it.** The staged film was filed as
+`image/png` — the staging store recovers the type from the extension, and a fifteen-megabyte
+MP4 served as an image is one a browser downloads instead of playing, with nothing anywhere
+reporting an error. The renderer had been drawing dimension arrows and `45 cm` into the
+finished photograph, which every frame of the film then inherited. And `db:seed` was
+silently reverting the render onto the old model and the first draft of a prompt that had
+since been rewritten five times, because the seeder wrote routes with `updateOrCreate`.
+
 ### PHASE_0_REPOSITORY_BOOTSTRAP — DONE (2026-08-23)
 
 ```text

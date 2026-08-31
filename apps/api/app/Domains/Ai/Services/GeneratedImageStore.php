@@ -40,7 +40,7 @@ final class GeneratedImageStore
     public function stash(string $bytes, string $mimeType = 'image/png'): string
     {
         if ($bytes === '') {
-            throw new RuntimeException('Sağlayıcıdan boş bir görsel geldi.');
+            throw new RuntimeException('Sağlayıcıdan boş bir dosya geldi.');
         }
 
         $path = sprintf(
@@ -92,6 +92,17 @@ final class GeneratedImageStore
         return match (pathinfo($reference, PATHINFO_EXTENSION)) {
             'jpg', 'jpeg' => 'image/jpeg',
             'webp' => 'image/webp',
+            /*
+             * Video, and it has to be listed here rather than assumed from the bytes.
+             *
+             * The extension is all this class keeps — the mime type the provider gave is
+             * gone by the time anybody asks — so a film that falls through to the default
+             * is filed as a PNG. It is served with that content type, and a browser handed
+             * fifteen megabytes of MP4 labelled `image/png` downloads it instead of playing
+             * it. Nothing errors; the video simply never appears.
+             */
+            'mp4' => 'video/mp4',
+            'webm' => 'video/webm',
             default => 'image/png',
         };
     }
@@ -119,6 +130,10 @@ final class GeneratedImageStore
         return match (strtolower($mimeType)) {
             'image/jpeg', 'image/jpg' => 'jpg',
             'image/webp' => 'webp',
+            // Video lands in the same staging area for the same reasons: it cannot travel
+            // in a job row, and a film of somebody's home must not be staged publicly.
+            'video/mp4' => 'mp4',
+            'video/webm' => 'webm',
             default => 'png',
         };
     }

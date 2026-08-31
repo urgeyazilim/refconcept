@@ -67,6 +67,43 @@ final class DesignVersionRefused extends RuntimeException
         );
     }
 
+    /**
+     * There is no still for the camera to move through.
+     *
+     * Given only words a video model composes its own room, and the customer is shown a
+     * tour of somewhere that is not their home — the exact failure that moved the still
+     * render onto a different provider in the first place.
+     */
+    public static function nothingToFilm(): self
+    {
+        return new self(
+            'design_not_ready',
+            'Bu tasarım henüz hazır değil; video yalnızca tamamlanmış bir tasarımdan üretilebilir.',
+        );
+    }
+
+    public static function renderMissing(): self
+    {
+        return new self(
+            'render_missing',
+            'Bu tasarımın görseli bulunamadı, bu yüzden video üretilemiyor.',
+        );
+    }
+
+    /**
+     * A film is already being made for this design.
+     *
+     * Worth its own message rather than a silent second charge: two clicks a moment apart
+     * on a slow page are the ordinary way somebody would pay twice for one video.
+     */
+    public static function videoAlreadyRunning(): self
+    {
+        return new self(
+            'video_in_flight',
+            'Bu tasarım için zaten bir video hazırlanıyor.',
+        );
+    }
+
     public function toValidationException(string $field = 'design'): ValidationException
     {
         return ValidationException::withMessages([$field => [$this->getMessage()]]);

@@ -261,6 +261,16 @@ final class AiGateway
                 ? ($promptVersion->response_schema ?? [])
                 : null,
             temperatureBps: $promptVersion->temperature_bps ?? 7000,
+            /*
+             * Knobs that mean nothing to the gateway and everything to one adapter: the
+             * aspect ratio and resolution of a video, the fidelity of an image edit. Passed
+             * through rather than modelled, because a column per provider setting would put
+             * this class in the business of knowing what each provider supports — which is
+             * exactly the knowledge the adapters exist to hold.
+             *
+             * @var array<string, mixed>
+             */
+            options: (array) ($job->input['options'] ?? []),
             timeoutSeconds: $route->timeout_seconds,
             apiKey: $model->provider?->activeCredential()?->secret_encrypted,
         );
