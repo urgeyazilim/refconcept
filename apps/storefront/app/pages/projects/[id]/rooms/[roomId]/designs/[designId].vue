@@ -121,12 +121,27 @@ await load()
 useHead(() => ({ title: design.value?.name ?? 'Tasarım' }))
 
 /**
- * The version whose shopping list is shown.
+ * The version on screen.
  *
- * The one the customer is looking at, not the newest — going back to an earlier version
- * is the point of keeping a tree, and its list has to come back with it.
+ * The one the customer is looking at, not the newest — going back to an earlier version is
+ * the point of keeping a tree, and its shopping list has to come back with it.
+ *
+ * Except while the first one is still running, when there is no current version at all: a
+ * design only points at a version once it has finished. Without the fallback the whole
+ * before-and-after panel had nothing to follow, so the progress screen sat on "Başlıyoruz"
+ * for the entire minute while the engine worked through every stage behind it.
  */
-const shownVersionId = computed(() => design.value?.current_version?.id ?? null)
+const shownVersionId = computed(() => {
+  const current = design.value?.current_version?.id
+
+  if (current) {
+    return current
+  }
+
+  const newest = design.value ? flatten(design.value.tree).at(-1)?.node.id : null
+
+  return newest ?? null
+})
 
 async function loadShoppingList() {
   const versionId = shownVersionId.value
@@ -607,18 +622,31 @@ const statusTone: Record<string, string> = {
             </button>
 
             <!--
-              A version that is still running, or one that failed. Said in words rather than
-              left as an empty frame: a blank box next to a photograph reads as a broken
-              page, not as work in progress.
+              A version that failed. Said plainly, in the frame where the picture would
+              have been — a blank box next to a photograph reads as a broken page.
             -->
             <div
-              v-else
+              v-else-if="shownVersion?.status === 'failed'"
               class="flex aspect-[4/3] w-full items-center justify-center bg-bg-muted px-6 text-center text-sm text-muted"
             >
-              {{ shownVersion?.status === 'failed'
-                ? (shownVersion.failure_reason ?? 'Bu sürüm tamamlanamadı.')
-                : 'Tasarımınız hazırlanıyor…' }}
+              {{ shownVersion.failure_reason ?? 'Bu sürüm tamamlanamadı.' }}
             </div>
+
+            <!--
+              And one still running.
+
+              This is the most exciting minute in the product — somebody has handed over a
+              photograph of their own home and is about to see it changed — and it used to
+              be an empty grey panel and the word "hazırlanıyor". The room now draws itself
+              as the engine reads it, which is both a better minute and a true one: every
+              piece appears because a real stage reported it.
+            -->
+            <RcDesignInProgress
+              v-else
+              class="aspect-[4/3] w-full"
+              :stage="shownVersionId ? progress[shownVersionId]?.stage : null"
+              :progress-bps="shownVersionId ? (progress[shownVersionId]?.progress_bps ?? 0) : 0"
+            />
 
             <figcaption class="px-5 py-3 text-sm text-muted">
               Son hâli
