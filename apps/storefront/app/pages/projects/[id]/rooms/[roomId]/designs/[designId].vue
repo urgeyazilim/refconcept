@@ -62,6 +62,8 @@ interface PlacementGroup {
   index: number
   category: string | null
   name: string | null
+  /** The catalogue's own name for it, so a heading is not a database slug. */
+  category_label: string | null
   wall: string | null
   max_width_mm: number | null
   matches: MatchRow[]
@@ -90,8 +92,6 @@ const listMessage = ref<string | null>(null)
 const addingToCart = ref(false)
 const cartMessage = ref<{ tone: 'success' | 'danger', text: string } | null>(null)
 
-/** Before and after, side by side — the reason a photograph was uploaded at all. */
-const comparison = ref<'after' | 'before'>('after')
 
 const progress = ref<Record<string, VersionProgress>>({})
 const pollFailures = ref(0)
@@ -525,18 +525,29 @@ const statusTone: Record<string, string> = {
           ← Odaya dön
         </NuxtLink>
 
-        <div class="mt-3 flex flex-wrap items-center gap-3">
-          <h1 class="text-2xl font-medium">{{ design.name }}</h1>
+        <!--
+          The name carries the page, and the metadata gets out of its way.
+          A heading competing with a status pill and a credit count for the same line reads
+          as three equal things, and only one of them is what somebody came to look at.
+        -->
+        <div class="mt-3 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+          <div>
+            <h1 class="text-3xl font-medium tracking-[-0.01em]">{{ design.name }}</h1>
+
+            <p class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
+              <span>{{ design.version_count }} sürüm</span>
+              <span v-if="design.total_credit_cost > 0">· {{ design.total_credit_cost }} kredi</span>
+              <span v-if="shoppingList" class="text-ink-secondary">
+                · {{ shoppingList.placements.length }} parça planlandı
+              </span>
+            </p>
+          </div>
+
           <RcStatusPill
             :status="design.status === 'ready' ? 'approved' : design.status === 'failed' ? 'rejected' : 'in_review'"
             :label="design.status_label"
           />
         </div>
-
-        <p class="mt-1.5 text-sm text-ink-secondary">
-          {{ design.version_count }} sürüm
-          <span v-if="design.total_credit_cost > 0"> · toplam {{ design.total_credit_cost }} kredi</span>
-        </p>
       </header>
 
       <RcAlert v-if="actionError" tone="danger">{{ actionError }}</RcAlert>
@@ -556,120 +567,71 @@ const statusTone: Record<string, string> = {
         the customer to imagine the rest, which is the one thing the product promised to do
         for them.
       -->
+      <!--
+        The room, before and after, under one handle.
+
+        Side by side was honest and small: two pictures at half width each, compared by
+        looking back and forth. The thing worth seeing is that this is the *same* room, and
+        that arrangement makes it hardest — the eye has to hold one image while it reads the
+        other, and it cannot. Under a wipe the walls line up and dragging is the proof.
+      -->
       <section v-if="design.source_image_url" class="rc-card overflow-hidden">
-        <div class="flex flex-wrap items-center justify-between gap-3 p-6 pb-4 sm:px-8">
+        <div class="flex flex-wrap items-end justify-between gap-4 p-6 pb-5 sm:px-8 sm:pt-8">
           <div>
-            <h2 class="text-lg font-medium">Odanız</h2>
-            <p class="mt-1 text-sm text-ink-secondary">
+            <h2 class="text-xl font-medium">Odanız</h2>
+            <p class="mt-1.5 max-w-[52ch] text-sm leading-relaxed text-ink-secondary">
               {{ shownVersion?.image_url
-                ? 'Soldaki fotoğrafınız, sağdaki aynı odanın önerilen ürünlerle hâli.'
-                : 'Tasarım hazır olduğunda burada yan yana göreceksiniz.' }}
+                ? 'Ortadaki çubuğu sağa sola sürükleyin: solda odanızın ilk hâli, sağda önerilen ürünlerle hâli.'
+                : 'Tasarım hazır olduğunda odanızı burada karşılaştırabileceksiniz.' }}
             </p>
           </div>
 
-          <!-- On a phone the two do not fit side by side, so they are switched instead. -->
-          <div v-if="shownVersion?.image_url" class="flex gap-1.5 sm:hidden">
-            <button
-              v-for="option in [{ value: 'before', label: 'İlk hâli' }, { value: 'after', label: 'Son hâli' }]"
-              :key="option.value"
-              type="button"
-              class="rounded-pill border px-3 py-1 text-sm"
-              :class="comparison === option.value ? 'border-ink bg-ink text-surface' : 'border-line'"
-              @click="comparison = option.value as 'before' | 'after'"
-            >
-              {{ option.label }}
-            </button>
-          </div>
+          <p v-if="shownVersion" class="text-sm text-muted">
+            v{{ shownVersion.version_number }}
+          </p>
         </div>
 
-        <div class="grid gap-px bg-line sm:grid-cols-2">
-          <figure :class="comparison === 'before' ? '' : 'hidden sm:block'" class="bg-surface">
-            <!--
-              A button rather than an image with a click handler. It is genuinely a control
-              — it opens something — and writing it as one gives it keyboard focus, Enter and
-              Space, and a name a screen reader can read out, none of which a bare <img>
-              has however many listeners are attached to it.
-            -->
-            <button
-              type="button"
-              class="block w-full cursor-zoom-in"
-              aria-label="Odanızın ilk hâlini büyüt"
-              @click="zoomed = 'before'"
-            >
-              <img
-                :src="design.source_image_url"
-                alt="Odanızın ilk hâli"
-                class="aspect-[4/3] w-full object-cover"
-              >
-            </button>
-            <figcaption class="px-5 py-3 text-sm text-muted">İlk hâli</figcaption>
-          </figure>
+        <div class="px-6 pb-6 sm:px-8 sm:pb-8">
+          <RcBeforeAfter
+            v-if="shownVersion?.image_url"
+            :before-src="design.source_image_url"
+            :after-src="shownVersion.image_url"
+            @expand="zoomed = $event"
+          />
 
-          <figure :class="comparison === 'after' ? '' : 'hidden sm:block'" class="bg-surface">
-            <button
-              v-if="shownVersion?.image_url"
-              type="button"
-              class="block w-full cursor-zoom-in"
-              aria-label="Odanızın önerilen ürünlerle hâlini büyüt"
-              @click="zoomed = 'after'"
-            >
-              <img
-                :src="shownVersion.image_url"
-                alt="Odanızın önerilen ürünlerle hâli"
-                class="aspect-[4/3] w-full object-cover"
-                data-testid="design-render"
-              >
-            </button>
+          <!--
+            A version that failed. Said plainly, in the frame where the picture would have
+            been — a blank box under a heading reads as a broken page.
+          -->
+          <div
+            v-else-if="shownVersion?.status === 'failed'"
+            class="flex aspect-[16/10] w-full items-center justify-center rounded-md bg-bg-muted px-8 text-center text-sm text-muted"
+          >
+            {{ shownVersion.failure_reason ?? 'Bu sürüm tamamlanamadı.' }}
+          </div>
 
-            <!--
-              A version that failed. Said plainly, in the frame where the picture would
-              have been — a blank box next to a photograph reads as a broken page.
-            -->
-            <div
-              v-else-if="shownVersion?.status === 'failed'"
-              class="flex aspect-[4/3] w-full items-center justify-center bg-bg-muted px-6 text-center text-sm text-muted"
-            >
-              {{ shownVersion.failure_reason ?? 'Bu sürüm tamamlanamadı.' }}
-            </div>
+          <!--
+            And one still running. The room draws itself as the engine reads it, so the
+            most exciting minute in the product is not an empty grey panel.
+          -->
+          <RcDesignInProgress
+            v-else
+            class="aspect-[16/10] w-full overflow-hidden rounded-md"
+            :stage="shownVersionId ? progress[shownVersionId]?.stage : null"
+            :progress-bps="shownVersionId ? (progress[shownVersionId]?.progress_bps ?? 0) : 0"
+          />
 
-            <!--
-              And one still running.
+          <!--
+            The one thing the render cannot be held to.
 
-              This is the most exciting minute in the product — somebody has handed over a
-              photograph of their own home and is about to see it changed — and it used to
-              be an empty grey panel and the word "hazırlanıyor". The room now draws itself
-              as the engine reads it, which is both a better minute and a true one: every
-              piece appears because a real stage reported it.
-            -->
-            <RcDesignInProgress
-              v-else
-              class="aspect-[4/3] w-full"
-              :stage="shownVersionId ? progress[shownVersionId]?.stage : null"
-              :progress-bps="shownVersionId ? (progress[shownVersionId]?.progress_bps ?? 0) : 0"
-            />
-
-            <figcaption class="px-5 py-3 text-sm text-muted">
-              Son hâli
-              <span v-if="shownVersion" class="text-ink-secondary">· v{{ shownVersion.version_number }}</span>
-
-              <!--
-                The one thing the render cannot be held to.
-
-                The model is told to place only what is on the list and it mostly does — but
-                it still styles the scene with a plant, a vase, a stack of books. Small
-                things, and not furniture, but they are on screen and not in the basket. A
-                customer counting the picture against the list deserves to be told which is
-                which rather than left to wonder what happened to the olive tree.
-              -->
-              <span
-                v-if="shownVersion?.image_url"
-                class="mt-0.5 block text-xs leading-relaxed text-muted"
-              >
-                Aşağıdaki listedeki ürünler odanıza yerleştirildi. Görseldeki küçük
-                dekoratif objeler temsilîdir, satışta değildir.
-              </span>
-            </figcaption>
-          </figure>
+            The model is told to place only what is on the list and it mostly does — but it
+            still styles the scene with a plant, a vase, a stack of books. Small things, and
+            not furniture, but they are on screen and not in the basket.
+          -->
+          <p v-if="shownVersion?.image_url" class="mt-3 text-xs leading-relaxed text-muted">
+            Aşağıdaki listedeki ürünler odanıza yerleştirildi. Görseldeki küçük dekoratif
+            objeler temsilîdir, satışta değildir.
+          </p>
         </div>
       </section>
 
@@ -679,173 +641,208 @@ const statusTone: Record<string, string> = {
         Above the version tree, because it is what the customer came for: the picture is
         the idea and this is the part they can act on.
       -->
-      <section v-if="shoppingList && shoppingList.placements.length > 0" class="rc-card p-6 sm:p-8">
-        <div class="flex flex-wrap items-start justify-between gap-4">
+      <!--
+        The shopping list, as a list.
+
+        It was a three-column grid of cards, and almost every placement has one suggestion —
+        so nearly every row was one card and two-thirds empty air, and the page ran to three
+        and a half thousand pixels of mostly nothing. A shopping list is a list: the product
+        on the left, what it is and what it costs across the middle, the decision on the
+        right. Alternatives sit under the row that owns them rather than competing with it
+        for the same shelf.
+      -->
+      <section v-if="shoppingList && shoppingList.placements.length > 0" class="rc-card overflow-hidden">
+        <div class="flex flex-wrap items-start justify-between gap-4 p-6 pb-5 sm:px-8 sm:pt-8">
           <div>
-            <h2 class="text-lg font-medium">Alışveriş listesi</h2>
-            <p class="mt-1.5 max-w-[62ch] text-sm leading-relaxed text-ink-secondary">
+            <h2 class="text-xl font-medium">Alışveriş listesi</h2>
+            <p class="mt-1.5 max-w-[58ch] text-sm leading-relaxed text-ink-secondary">
               Plandaki her parça için satın alınabilir, ölçüsü uyan ve stokta olan ürünler.
               Beğenmediklerinizi işaretlerseniz bir dahakine önerilmez.
             </p>
           </div>
 
-          <RcButton size="sm" variant="ghost" :loading="listBusy" @click="rebuildList">
+          <button
+            type="button"
+            class="shrink-0 text-sm text-ink-secondary underline-offset-4 transition-colors hover:text-ink hover:underline disabled:opacity-40"
+            :disabled="listBusy"
+            @click="rebuildList"
+          >
             Önerileri yenile
-          </RcButton>
+          </button>
         </div>
 
-        <p v-if="listMessage" class="mt-3 text-sm text-ink-secondary">{{ listMessage }}</p>
+        <RcAlert v-if="listMessage" tone="info" class="mx-6 mb-5 sm:mx-8">{{ listMessage }}</RcAlert>
 
-        <RcAlert v-if="cartMessage" :tone="cartMessage.tone" class="mt-4">{{ cartMessage.text }}</RcAlert>
+        <ul class="divide-y divide-line border-y border-line">
+          <li
+            v-for="group in shoppingList.placements"
+            :key="group.index"
+            class="px-6 py-5 transition-colors sm:px-8"
+            :class="group.matches.some(m => m.status === 'accepted') ? 'bg-bg-muted/60' : ''"
+          >
+            <div class="flex items-start gap-5">
+              <!--
+                The picture at a size somebody can judge a sofa by. Linked when there is a
+                product page to go to, and a plain frame when the placement is empty.
+              -->
+              <component
+                :is="group.matches[0]?.product.slug ? 'a' : 'div'"
+                v-bind="group.matches[0]?.product.slug
+                  ? { href: `/catalog/${group.matches[0].product.slug}`, target: '_blank', rel: 'noopener' }
+                  : {}"
+                class="group/img size-24 shrink-0 overflow-hidden rounded-md bg-bg-muted sm:size-28"
+              >
+                <img
+                  v-if="group.matches[0]?.product.image_url"
+                  :src="group.matches[0].product.image_url"
+                  :alt="group.matches[0].product.name ?? ''"
+                  class="size-full object-cover transition-transform duration-300 group-hover/img:scale-105"
+                  loading="lazy"
+                >
+              </component>
+
+              <div class="min-w-0 flex-1">
+                <p class="flex flex-wrap items-baseline gap-x-2 text-xs uppercase tracking-wide text-muted">
+                  <span>{{ group.category_label ?? group.category }}</span>
+                  <span v-if="group.quantity > 1" class="text-ink-secondary">× {{ group.quantity }}</span>
+                  <span v-if="group.max_width_mm">· en fazla {{ Math.round(group.max_width_mm / 10) }} cm</span>
+                </p>
+
+                <template v-if="group.matches[0]">
+                  <a
+                    v-if="group.matches[0].product.slug"
+                    :href="`/catalog/${group.matches[0].product.slug}`"
+                    target="_blank"
+                    rel="noopener"
+                    class="mt-1 block text-[15px] font-medium hover:underline"
+                  >
+                    {{ group.matches[0].product.name }}
+                  </a>
+                  <p v-else class="mt-1 text-[15px] font-medium">{{ group.matches[0].product.name }}</p>
+
+                  <p v-if="group.matches[0].sku.seller" class="mt-0.5 text-sm text-muted">
+                    {{ group.matches[0].sku.seller }}
+                  </p>
+
+                  <p
+                    v-if="group.matches[0].price_has_moved && group.matches[0].current_price_minor"
+                    class="mt-1 text-xs text-warning"
+                  >
+                    Güncel fiyat: {{ money(group.matches[0].current_price_minor, group.matches[0].price.currency) }}
+                  </p>
+                </template>
+
+                <p v-else class="mt-1 text-sm text-muted">
+                  {{ group.unavailable_reason ?? 'Bu parça için uygun ürün bulunamadı.' }}
+                </p>
+              </div>
+
+              <div v-if="group.matches[0]" class="flex shrink-0 flex-col items-end gap-2">
+                <p class="text-[15px] font-medium tabular-nums">
+                  {{ money(group.matches[0].price.amount_minor, group.matches[0].price.currency) }}
+                </p>
+
+                <button
+                  v-if="group.matches[0].status !== 'accepted'"
+                  type="button"
+                  class="rounded-pill border border-line px-3.5 py-1.5 text-sm transition-colors hover:border-charcoal disabled:opacity-40"
+                  :disabled="listBusy"
+                  @click="chooseMatch(group.matches[0])"
+                >
+                  Seç
+                </button>
+                <span
+                  v-else
+                  class="rounded-pill bg-charcoal px-3.5 py-1.5 text-sm text-inverse"
+                >
+                  Seçildi
+                </span>
+              </div>
+            </div>
+
+            <!--
+              The alternatives, under the row they belong to rather than beside it.
+
+              Small, because they are a second thought: somebody who likes the first
+              suggestion should not have to read four more before moving on, and somebody
+              who does not can see all of them without leaving the line.
+            -->
+            <div v-if="group.matches.length > 1" class="mt-4 flex flex-wrap items-center gap-2 pl-[7.25rem]">
+              <span class="text-xs text-muted">Alternatifler:</span>
+
+              <button
+                v-for="match in group.matches.slice(1)"
+                :key="match.id"
+                type="button"
+                class="flex items-center gap-2 rounded-pill border py-1 pr-3 pl-1 text-xs transition-colors disabled:opacity-40"
+                :class="match.status === 'rejected'
+                  ? 'border-line/60 text-muted line-through'
+                  : 'border-line hover:border-charcoal'"
+                :disabled="listBusy"
+                @click="chooseMatch(match)"
+              >
+                <span class="size-7 overflow-hidden rounded-full bg-bg-muted">
+                  <img
+                    v-if="match.product.image_url"
+                    :src="match.product.image_url"
+                    :alt="match.product.name ?? ''"
+                    class="size-full object-cover"
+                    loading="lazy"
+                  >
+                </span>
+                <span class="tabular-nums">{{ money(match.price.amount_minor, match.price.currency) }}</span>
+              </button>
+
+              <select
+                class="rounded-pill border border-line bg-surface px-3 py-1.5 text-xs text-ink-secondary"
+                :disabled="listBusy"
+                @change="sendFeedback(group.matches[0]!, ($event.target as HTMLSelectElement).value)"
+              >
+                <option value="">Beğenmedim…</option>
+                <option v-for="verdict in shoppingList.verdicts" :key="verdict.value" :value="verdict.value">
+                  {{ verdict.label }}
+                </option>
+              </select>
+            </div>
+          </li>
+        </ul>
 
         <!--
-          What they have chosen, and the one button that turns a design into an order.
-          Without it the page ends at "here are some products" and the customer has to find
-          each one again in the catalogue — which is where a design stops being a design.
-        -->
-        <div
-          v-if="chosen.length > 0"
-          class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-line-strong bg-bg-muted p-4"
-        >
-          <p class="text-sm">
-            {{ chosen.length }} ürün seçtiniz ·
-            <span class="font-medium tabular-nums">
-              {{ money(chosenTotal, shoppingList.currency) }}
-            </span>
-          </p>
+          The total, and the one action the page exists for.
 
-          <RcButton :loading="addingToCart" data-testid="add-design-to-cart" @click="addChosenToCart">
+          At the foot of the list rather than floating above it: a customer decides
+          item by item and then commits, and a call to action that appears before there is
+          anything to commit to is noise.
+        -->
+        <div class="flex flex-wrap items-center justify-between gap-4 p-6 sm:px-8">
+          <div>
+            <p class="text-sm text-ink-secondary">
+              {{ chosen.length > 0
+                ? `${chosen.length} parça seçtiniz`
+                : 'Beğendiğiniz ürünleri seçin, tamamını tek seferde sepete ekleyin.' }}
+            </p>
+            <p v-if="chosen.length > 0" class="mt-0.5 text-xl font-medium tabular-nums">
+              {{ money(chosenTotal, shoppingList.currency) }}
+            </p>
+          </div>
+
+          <RcButton
+            :loading="addingToCart"
+            :disabled="chosen.length === 0 || addingToCart"
+            data-testid="add-design-to-cart"
+            @click="addChosenToCart"
+          >
             Seçtiklerimi sepete ekle
           </RcButton>
         </div>
 
-        <p v-else-if="shoppingList.total_minor > 0" class="mt-4 text-sm text-ink-secondary">
-          Beğendiklerinizi <span class="text-ink">Bunu seç</span> ile işaretleyin, hepsini
-          birlikte sepete ekleyin.
-        </p>
-
-        <div class="mt-6 space-y-8">
-          <div v-for="group in shoppingList.placements" :key="group.index">
-            <h3 class="text-sm font-medium">
-              {{ group.category }}
-              <!--
-                Six matching dining chairs are one decision bought six times, not six
-                suggestions. Said on the heading because it changes what the prices below
-                mean — and because the plan used to repeat the placement instead, which
-                left a six-person table with one chair and five empty groups.
-              -->
-              <span v-if="group.quantity > 1" class="font-normal text-ink-secondary">
-                × {{ group.quantity }}
-              </span>
-              <span v-if="group.max_width_mm" class="font-normal text-muted">
-                · en fazla {{ Math.round(group.max_width_mm / 10) }} cm
-              </span>
-            </h3>
-
-            <ul class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <li
-                v-for="match in group.matches"
-                :key="match.id"
-                class="rounded-md border p-3"
-                :class="match.status === 'accepted'
-                  ? 'border-charcoal bg-bg-muted'
-                  : (match.status === 'rejected' ? 'border-line opacity-50' : 'border-line')"
-              >
-                <!--
-                  The picture and the name go to the product.
-
-                  They were dead: a customer looking at a suggested sofa could accept it or
-                  reject it and had no way to read what it was — no dimensions, no other
-                  photographs, no seller — which is a strange thing to ask of somebody about
-                  to spend five thousand lira. In a new tab on purpose, because choosing is
-                  a comparison and losing the design to read about one item ends it.
-
-                  Only when there is a slug to go to. A match whose product has since been
-                  delisted still shows, and its card should not be a link to a 404.
-                -->
-                <component
-                  :is="match.product.slug ? 'a' : 'div'"
-                  v-bind="match.product.slug
-                    ? { href: `/catalog/${match.product.slug}`, target: '_blank', rel: 'noopener' }
-                    : {}"
-                  class="block"
-                  :class="match.product.slug ? 'group' : ''"
-                >
-                  <div class="aspect-[4/3] overflow-hidden rounded-sm bg-bg-muted">
-                    <img
-                      v-if="match.product.image_url"
-                      :src="match.product.image_url"
-                      :alt="match.product.name ?? ''"
-                      class="size-full object-cover transition-transform group-hover:scale-105"
-                      loading="lazy"
-                    >
-                  </div>
-
-                  <p class="mt-2.5 line-clamp-2 text-sm group-hover:underline">
-                    {{ match.product.name }}
-                  </p>
-                </component>
-                <p v-if="match.sku.seller" class="text-xs text-muted">{{ match.sku.seller }}</p>
-
-                <p class="mt-1.5 text-sm font-medium tabular-nums">
-                  {{ money(match.price.amount_minor, match.price.currency) }}
-                </p>
-
-                <!--
-                  A price that has moved since the list was built. Said out loud rather
-                  than silently repriced: the difference is the most useful thing this card
-                  can tell a customer who came back a week later.
-                -->
-                <p v-if="match.price_has_moved && match.current_price_minor" class="text-xs text-warning">
-                  Güncel fiyat: {{ money(match.current_price_minor, match.price.currency) }}
-                </p>
-
-                <p v-if="match.reason" class="mt-1.5 line-clamp-2 text-xs text-ink-secondary">
-                  {{ match.reason }}
-                </p>
-
-                <div v-if="canEdit" class="mt-3 flex flex-wrap gap-1.5">
-                  <button
-                    v-if="match.status !== 'accepted'"
-                    type="button"
-                    class="rounded-sm border border-line px-2.5 py-1 text-xs text-ink-secondary transition-colors hover:bg-bg-muted hover:text-ink disabled:opacity-40"
-                    :disabled="listBusy"
-                    @click="chooseMatch(match)"
-                  >
-                    Bunu seç
-                  </button>
-                  <span v-else class="rounded-sm bg-charcoal px-2.5 py-1 text-xs text-inverse">Seçildi</span>
-
-                  <select
-                    v-if="match.status !== 'rejected'"
-                    class="rounded-sm border border-line bg-surface px-2 py-1 text-xs text-ink-secondary"
-                    :disabled="listBusy"
-                    @change="sendFeedback(match, ($event.target as HTMLSelectElement).value)"
-                  >
-                    <option value="">Geri bildirim…</option>
-                    <option v-for="verdict in shoppingList.verdicts" :key="verdict.value" :value="verdict.value">
-                      {{ verdict.label }}
-                    </option>
-                  </select>
-                </div>
-              </li>
-            </ul>
-
-            <!--
-              Why there is nothing here, in terms somebody can act on.
-
-              These groups did not appear at all until now — the list was built from the
-              matches, so a planned item nothing was found for simply vanished, while the
-              render drew it anyway. Four products in the list, nine pieces of furniture in
-              the picture, and nothing on the page joining the two. "We stock none of these"
-              and "we stock one and it is 90cm where you have room for 80" are different
-              answers and only one of them is worth coming back for.
-            -->
-            <p v-if="group.matches.length === 0" class="mt-3 text-sm text-muted">
-              {{ group.unavailable_reason ?? 'Bu parça için uygun ürün bulunamadı.' }}
-            </p>
-          </div>
-        </div>
+        <RcAlert
+          v-if="cartMessage"
+          :tone="cartMessage.tone"
+          class="mx-6 mb-6 sm:mx-8"
+        >
+          {{ cartMessage.text }}
+        </RcAlert>
       </section>
 
       <!-- The tree -->

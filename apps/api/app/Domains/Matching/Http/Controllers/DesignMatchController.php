@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domains\Matching\Http\Controllers;
 
+use App\Domains\Catalog\Models\Category;
 use App\Domains\Matching\Enums\FeedbackVerdict;
 use App\Domains\Matching\Enums\MatchStatus;
 use App\Domains\Matching\Models\DesignMatch;
@@ -190,6 +191,21 @@ final class DesignMatchController
         $byIndex = $matches->groupBy('placement_index');
 
         /*
+         * The catalogue names its own categories; the plan only knows their slugs.
+         *
+         * Headings read "tv-unitesi" and "tavan-aydinlatma" — a database talking to a
+         * customer. One query for the whole list rather than one per group, because a
+         * living room has ten of them.
+         */
+        $labels = Category::query()
+            ->whereIn('slug', collect($placements)
+                ->filter(static fn (mixed $placement): bool => is_array($placement))
+                ->pluck('category')
+                ->filter()
+                ->all())
+            ->pluck('name', 'slug');
+
+        /*
          * Built from the plan, not from the matches.
          *
          * Grouping the matches meant a placement nothing was found for simply did not
@@ -215,6 +231,11 @@ final class DesignMatchController
                 // The plan's own category, since the group is now built from the plan. The
                 // match's copy is the fallback for rows written before plans carried one.
                 'category' => $placement['category'] ?? $group->first()?->placement_category,
+                // What to put on the heading. Falls back to the slug rather than to
+                // nothing: an unnamed category is a heading, not an empty space.
+                'category_label' => $labels[$placement['category'] ?? '']
+                    ?? $placement['category']
+                    ?? $group->first()?->placement_category,
                 'name' => $placement['name'] ?? null,
                 'wall' => $placement['wall'] ?? null,
                 'max_width_mm' => $placement['max_width_mm'] ?? null,

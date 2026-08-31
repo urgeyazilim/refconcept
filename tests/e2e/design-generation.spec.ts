@@ -179,25 +179,29 @@ test.describe('design generation', () => {
       await expect(page.getByText('Hazır', { exact: true }).first()).toBeVisible({ timeout: 120_000 })
 
       /*
-       * The picture, and a way to look at it properly.
+       * The picture, and two ways to study it.
        *
-       * The render is the thing the customer uploaded a photograph to get, and it arrives
-       * on the page at card size. Whether that sofa suits the light from that window is not
-       * a question anybody answers at four hundred pixels wide, and for a while there was
-       * no way to make it bigger — the image was inert. Asserted through the keyboard as
-       * well as the mouse, because it is written as a real dialog and Escape is how most
-       * people close one.
+       * The render is what the customer uploaded a photograph to get. Side by side it was
+       * two pictures compared by looking back and forth, which makes the one thing worth
+       * seeing — that this is the same room — the hardest thing to see. It is now a wipe:
+       * both images in one frame with a slider between them.
+       *
+       * Asserted as a slider because that is what it is, and through the keyboard as well
+       * as the mouse, because a comparison only a mouse can perform is one half the
+       * visitors cannot make.
        */
-      const render = page.getByTestId('design-render')
-      await expect(render).toBeVisible()
+      const wipe = page.getByRole('slider', { name: 'Öncesi ve sonrası arasında geçiş' })
+      await expect(wipe).toBeVisible()
 
-      await render.click()
+      await wipe.press('ArrowLeft')
+
+      // And each side opens full size, because judging a sofa against the light from that
+      // window is not a question anybody answers at page width.
+      await page.getByRole('button', { name: 'Son hâli' }).click()
 
       const lightbox = page.getByRole('dialog', { name: 'Son hâli' })
       await expect(lightbox).toBeVisible()
 
-      // Both halves of the comparison are reachable from inside it: flipping between them
-      // in place is how the difference actually reads.
       await lightbox.getByRole('button', { name: 'İlk hâline bak' }).click()
       await expect(page.getByRole('dialog', { name: 'İlk hâli' })).toBeVisible()
 
