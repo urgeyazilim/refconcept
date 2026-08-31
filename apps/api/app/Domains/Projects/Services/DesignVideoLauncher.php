@@ -37,12 +37,20 @@ final class DesignVideoLauncher
      * offering a customer a choice of moves later must not require a new prompt version —
      * and a published version cannot be edited, by database trigger.
      *
-     * A dolly with a slight arc, because it is the move that produces parallax: the coffee
-     * table passes in front of the rug and the far wall stays put, which is the whole
-     * difference between a video of a room and a picture that drifts.
+     * **Forward, and then a turn.** The first version asked for a slow dolly with a slight
+     * arc and produced a zoom: pulled apart frame by frame, the room at seven seconds was
+     * the room at nought seconds and simply larger. Forward travel alone reads as a zoom
+     * because the frame changes size without changing angle; the yaw partway through reveals
+     * the wall the camera was facing, and that is the moment it stops being a picture and
+     * becomes a space somebody is standing in.
+     *
+     * A lateral orbit travels further still and was rejected for it: tested on the same
+     * render, it deleted both armchairs and the rug by the fifth second. Everything in this
+     * film is meant to be something the customer can buy.
      */
-    private const CAMERA_MOVE = 'The camera slowly dollies forward with a gentle arc to the'
-        .' right, revealing depth and parallax between the furniture and the far wall.';
+    private const CAMERA_MOVE = 'The camera glides forward into the room past the nearest'
+        .' seat, then turns to the right, panning across the seating group to reveal the wall'
+        .' it was facing.';
 
     public function __construct(
         private readonly CreditLedger $ledger,

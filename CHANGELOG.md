@@ -26,6 +26,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   The browser's own controls are built for hour-long video and offer no way to stop on a
   frame and look closely at a sofa somebody is about to buy.
 
+### Fixed — The room tour zoomed instead of travelling
+
+- **The camera now walks into the room and turns.** The first prompt asked for "a slow,
+  smooth cinematic move" and "a gentle dolly forward"; pulled apart frame by frame, the room
+  at seven seconds was the room at nought seconds and simply larger. Prompt version 2 names
+  the shot in cinematography terms and adds a yaw partway through, which is the moment the
+  film stops being a picture that grows and becomes a space somebody is standing in.
+- Verified against the live API rather than by reading: `negativePrompt` — the documented
+  place for "do not zoom" — is rejected outright by `veo-3.1-lite` with a 400, so the
+  prohibitions live in the prompt itself. Video extension is likewise refused by this model,
+  so a longer tour would have to be chained clip by clip or bought on the full Veo 3.1 at
+  five times the price.
+- A lateral orbit was tried and rejected. It travelled further and looked better for two
+  seconds, then deleted both armchairs and the rug by the fifth. Everything in the film is
+  meant to be something the customer can buy.
+
 ### Fixed — Render and routing
 
 - **The renderer was drawing its own measuring tape into the room.** The placement rules
