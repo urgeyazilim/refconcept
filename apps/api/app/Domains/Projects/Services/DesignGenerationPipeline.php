@@ -667,7 +667,25 @@ final class DesignGenerationPipeline
                 continue;
             }
 
-            $kept[] = [...$placement, 'product' => $match->product?->name];
+            /*
+             * Trimmed to what the renderer can act on, and no more.
+             *
+             * A plan entry carrying eight keys invites a model to interpret the ones it was
+             * not asked about — and `gpt-image-2`, handed the fuller shape, faithfully kept
+             * the room and then added a bookcase, a sideboard and two vases that appeared
+             * nowhere in it. Quantity and width are stated because a model told "one sofa,
+             * at most 300cm" has far less room to improvise a second one than one told
+             * "kanepe".
+             */
+            $kept[] = [
+                'product' => $match->product?->name,
+                'category' => $placement['category'],
+                'quantity' => max(1, (int) ($placement['quantity'] ?? 1)),
+                'max_width_cm' => is_int($placement['max_width_mm'] ?? null)
+                    ? (int) round($placement['max_width_mm'] / 10)
+                    : null,
+                'position' => $placement['position'] ?? null,
+            ];
         }
 
         return $kept;

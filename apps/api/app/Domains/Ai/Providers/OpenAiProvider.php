@@ -194,14 +194,27 @@ final class OpenAiProvider implements AiProvider
         );
     }
 
+    /**
+     * Draws a picture, or edits the one it was given.
+     *
+     * Two endpoints, and which one is used is decided by whether there are images to work
+     * from rather than by configuration. Generating a room from a sentence and editing the
+     * customer's own photograph are different requests to the same model, and the second is
+     * the one this product is actually for.
+     *
+     * `/images/edits` is multipart, so the images go as files rather than as base64 in a
+     * JSON body — which also keeps a five-megabyte request out of the log.
+     */
     private function generateImage(AiCall $call): AiResult
     {
-        $response = $this->client($call)->post('/images/generations', [
-            'model' => $call->model->code,
-            'prompt' => $call->prompt,
-            'n' => 1,
-            'size' => (string) ($call->options['size'] ?? '1024x1024'),
-        ]);
+        $response = $call->imageBlobs === []
+            ? $this->client($call)->post('/images/generations', [
+                'model' => $call->model->code,
+                'prompt' => $call->prompt,
+                'n' => 1,
+                'size' => (string) ($call->options['size'] ?? '1024x1024'),
+            ])
+            : $this->editImage($call);
 
         if ($response->failed()) {
             return $this->translateFailure($response);
@@ -288,6 +301,59 @@ final class OpenAiProvider implements AiProvider
         }
 
         return false;
+    }
+
+    /**
+     * Edits the images the call carries, first one first.
+     *
+     * The order matters and is the caller's: the customer's room is image one and every
+     * product follows it, which is what the prompt refers to when it says "the first image
+     * is the room you are editing".
+     *
+     * `input_fidelity` asks the model to hold the input close, which is the whole point of
+     * this call — but only some models take it, and sending it to one that does not is a
+     * 400 rather than a polite ignore. Offered by the caller so a new model is a routing
+     * change rather than an edit here.
+     */
+    private function editImage(AiCall $call): Response
+    {
+        $request = $this->client($call)->asMultipart();
+
+        foreach ($call->imageBlobs as $index => $blob) {
+            $bytes = base64_decode($blob['data'], true);
+
+            if ($bytes === false || $bytes === '') {
+                continue;
+            }
+
+            $request = $request->attach(
+                'image[]',
+                $bytes,
+                sprintf('%d.%s', $index, str_contains($blob['mime'], 'jpeg') ? 'jpg' : 'png'),
+                ['Content-Type' => $blob['mime']],
+            );
+        }
+
+        $fields = [
+            'model' => $call->model->code,
+            'prompt' => $call->prompt,
+            'n' => '1',
+            /*
+             * Let the model match the frame to the photograph it was given.
+             *
+             * A fixed landscape size recomposes a squarer room to fill it, and the whole
+             * promise here is that the customer recognises their own space. `auto` is the
+             * only size that does not quietly crop or stretch it.
+             */
+            'size' => (string) ($call->options['size'] ?? 'auto'),
+            'quality' => (string) ($call->options['quality'] ?? 'high'),
+        ];
+
+        if (($call->options['input_fidelity'] ?? null) === 'high') {
+            $fields['input_fidelity'] = 'high';
+        }
+
+        return $request->post('/images/edits', $fields);
     }
 
     private function client(AiCall $call): PendingRequest

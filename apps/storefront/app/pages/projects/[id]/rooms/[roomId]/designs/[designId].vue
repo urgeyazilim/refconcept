@@ -651,6 +651,23 @@ const statusTone: Record<string, string> = {
             <figcaption class="px-5 py-3 text-sm text-muted">
               Son hâli
               <span v-if="shownVersion" class="text-ink-secondary">· v{{ shownVersion.version_number }}</span>
+
+              <!--
+                The one thing the render cannot be held to.
+
+                The model is told to place only what is on the list and it mostly does — but
+                it still styles the scene with a plant, a vase, a stack of books. Small
+                things, and not furniture, but they are on screen and not in the basket. A
+                customer counting the picture against the list deserves to be told which is
+                which rather than left to wonder what happened to the olive tree.
+              -->
+              <span
+                v-if="shownVersion?.image_url"
+                class="mt-0.5 block text-xs leading-relaxed text-muted"
+              >
+                Aşağıdaki listedeki ürünler odanıza yerleştirildi. Görseldeki küçük
+                dekoratif objeler temsilîdir, satışta değildir.
+              </span>
             </figcaption>
           </figure>
         </div>

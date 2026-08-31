@@ -38,6 +38,7 @@ final class AiGatewaySeeder extends Seeder
     {
         $fake = $this->seedFakeProvider();
         $google = $this->seedGoogleProvider();
+        $openai = $this->seedOpenAiProvider();
 
         $models = [
             'fake-text' => $this->model($fake, 'fake-text-1', 'Fake Metin', AiModality::Text, structured: true),
@@ -95,6 +96,30 @@ final class AiGatewaySeeder extends Seeder
         $this->rate($models['gemini-image'], inputPerMillion: 1_250_000, outputPerMillion: 0, perImage: 30_000);
 
         /*
+         * The model that edits the customer's photograph, and what it costs.
+         *
+         * Eight dollars per million image input tokens, five per million text, thirty per
+         * million image output. A real edit measured 6,021 image and 1,198 text tokens in,
+         * 5,488 image tokens out — about twenty-two cents, roughly seven times a Gemini
+         * render.
+         *
+         * Recorded rather than absorbed. The platform prices credits off these rows, and a
+         * render that costs seven times what the pricing assumes is a business losing money
+         * on every design without anything on a screen saying so.
+         */
+        $models['gpt-image'] = $this->model(
+            $openai,
+            'gpt-image-2',
+            'GPT Image 2',
+            AiModality::Image,
+            imageInput: true,
+            // Rejected by this model rather than ignored, so it is never sent.
+            maxOutputTokens: null,
+        );
+
+        $this->rate($models['gpt-image'], inputPerMillion: 8_000_000, outputPerMillion: 30_000_000);
+
+        /*
          * With no Google key on file the Gemini models exist but cannot be called, so
          * routing to them would ship a build whose every AI feature fails on first use.
          * The simulator takes over as primary instead: the routes are real, the shapes
@@ -141,6 +166,53 @@ final class AiGatewaySeeder extends Seeder
                 'is_active' => true,
             ],
         );
+    }
+
+    /**
+     * OpenAI, for the one job it is measurably better at.
+     *
+     * The render edits a photograph of a customer's home, and the whole product rests on
+     * the result still being their home. Tested on a room with French doors, tall windows
+     * down one side and a warm wooden floor: `gpt-image-2` returned the same room; the
+     * alternative returned a different one. That is not a matter of taste — a preview of a
+     * stranger's flat is worth nothing however handsome it is.
+     *
+     * Seeded the same way as Google and just as tolerant of a missing key: no key is an
+     * ordinary state on a fresh clone, and the routes fall back on their own.
+     */
+    private function seedOpenAiProvider(): AiProvider
+    {
+        $provider = AiProvider::query()->updateOrCreate(
+            ['code' => 'openai'],
+            [
+                'name' => 'OpenAI',
+                'driver' => 'openai',
+                'is_active' => true,
+            ],
+        );
+
+        $key = (string) config('services.openai.key', '');
+
+        if ($key === '') {
+            $this->command?->warn('OPENAI_API_KEY tanımlı değil; görsel üretimi Google tarafında kalıyor.');
+
+            return $provider;
+        }
+
+        DB::transaction(function () use ($provider, $key): void {
+            $provider->credentials()->update(['is_active' => false]);
+
+            $provider->credentials()->updateOrCreate(
+                ['label' => 'environment'],
+                [
+                    'secret_encrypted' => $key,
+                    'secret_hint' => mb_substr($key, -4),
+                    'is_active' => true,
+                ],
+            );
+        });
+
+        return $provider;
     }
 
     /**
