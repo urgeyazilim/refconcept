@@ -76,6 +76,14 @@ x-api-env: &api-env
   AWS_BUCKET: ${AWS_BUCKET:-refconcept}
   AWS_PUBLIC_BUCKET: ${AWS_PUBLIC_BUCKET:-refconcept-public}
   AWS_ENDPOINT: ${AWS_ENDPOINT:?depolama uç noktası zorunlu}
+
+  # The base the public bucket hangs off, *without* the bucket name in it — the application
+  # appends `AWS_PUBLIC_BUCKET` itself. Writing the bucket here as well produces
+  # `…/bucket/bucket/product-media/…` and every product photograph comes back as NoSuchKey
+  # while the file sits there under the correct name.
+  #
+  # On a provider that serves each bucket from its own hostname, point this at the parent
+  # that still has the bucket as its first path segment, or the two will not agree.
   AWS_URL: ${AWS_URL:-}
   AWS_USE_PATH_STYLE_ENDPOINT: ${AWS_USE_PATH_STYLE_ENDPOINT:-true}
 

@@ -77,7 +77,14 @@ x-api-env: &api-env
   # comes back as a link to `http://minio:9000/...` and simply fails to load, with nothing
   # in any log to say why.
   AWS_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_URL:?MinIO dış adresi zorunlu}
-  AWS_URL: ${MINIO_PUBLIC_URL:?MinIO dış adresi zorunlu}/refconcept-public
+
+  # The base the public bucket hangs off, *without* the bucket in it.
+  #
+  # `config/filesystems.php` appends `AWS_PUBLIC_BUCKET` itself, so writing the bucket here
+  # too produced `…/refconcept-public/refconcept-public/product-media/…` and every product
+  # photograph came back as NoSuchKey. The file was there the whole time, under the name
+  # with one bucket in it.
+  AWS_URL: ${MINIO_PUBLIC_URL:?MinIO dış adresi zorunlu}
   AWS_USE_PATH_STYLE_ENDPOINT: "true"
 
   # Mailpit accepts anything on 1025 and delivers none of it. No credentials, no TLS,
