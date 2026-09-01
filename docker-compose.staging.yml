@@ -109,6 +109,13 @@ services:
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      # Installs vector, pg_trgm and citext on a brand-new data directory.
+      #
+      # A convenience for a plain `docker compose up`, and nothing to rely on: Coolify
+      # creates an *empty directory* for a bind mount rather than mapping repository content
+      # into it, so under Coolify this mounts nothing at all. The extensions are created by
+      # the API container's entrypoint before it migrates, which is the path that works
+      # everywhere — including on a database restored from a dump, where initdb never runs.
       - ./infra/docker/postgres/init-production:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-refconcept} -d ${POSTGRES_DB:-refconcept}"]
@@ -193,7 +200,7 @@ services:
       minio:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "php -r '$s=@fsockopen(\"127.0.0.1\",9000,$e,$m,2); exit($s?0:1);'"]
+      test: ["CMD-SHELL", "php -r '$$s=@fsockopen(\"127.0.0.1\",9000,$$e,$$m,2); exit($$s?0:1);'"]
       interval: 30s
       timeout: 5s
       retries: 3

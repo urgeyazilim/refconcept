@@ -115,9 +115,76 @@ services:
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      # Runs once, on an empty data directory, and installs vector, pg_trgm and citext.
-      # Without it every migration that touches an embedding column fails, and the health
-      # endpoint says so rather than the application failing later and less clearly.
+      # Installs vector, pg_trgm and citext on a brand-new data directory.
+      #
+      # A convenience for a plain Usage:  docker compose [OPTIONS] COMMAND
+
+Define and run multi-container applications with Docker
+
+Options:
+      --all-resources              Include all resources, even those not
+                                   used by services
+      --ansi string                Control when to print ANSI control
+                                   characters ("never"|"always"|"auto")
+                                   (default "auto")
+      --compatibility              Run compose in backward compatibility mode
+      --dry-run                    Execute command in dry run mode
+      --env-file stringArray       Specify an alternate environment file
+  -f, --file stringArray           Compose configuration files
+      --parallel int               Control max parallelism, -1 for
+                                   unlimited (default -1)
+      --profile stringArray        Specify a profile to enable
+      --progress string            Set type of progress output (auto,
+                                   tty, plain, json, quiet)
+      --project-directory string   Specify an alternate working directory
+                                   (default: the path of the, first
+                                   specified, Compose file)
+  -p, --project-name string        Project name
+
+Management Commands:
+  bridge      Convert compose files into another model
+
+Commands:
+  attach      Attach local standard input, output, and error streams to a service's running container
+  build       Build or rebuild services
+  commit      Create a new image from a service container's changes
+  config      Parse, resolve and render compose file in canonical format
+  cp          Copy files/folders between a service container and the local filesystem
+  create      Creates containers for a service
+  down        Stop and remove containers, networks
+  events      Receive real time events from containers
+  exec        Execute a command in a running container
+  export      Export a service container's filesystem as a tar archive
+  images      List images used by the created containers
+  kill        Force stop service containers
+  logs        View output from containers
+  ls          List running compose projects
+  pause       Pause services
+  port        Print the public port for a port binding
+  ps          List containers
+  publish     Publish compose application
+  pull        Pull service images
+  push        Push service images
+  restart     Restart service containers
+  rm          Removes stopped service containers
+  run         Run a one-off command on a service
+  scale       Scale services 
+  start       Start services
+  stats       Display a live stream of container(s) resource usage statistics
+  stop        Stop services
+  top         Display the running processes
+  unpause     Unpause services
+  up          Create and start containers
+  version     Show the Docker Compose version information
+  volumes     List volumes
+  wait        Block until containers of all (or specified) services stop.
+  watch       Watch build context for service and rebuild/refresh containers when files are updated
+
+Run 'docker compose COMMAND --help' for more information on a command., and nothing to rely on: Coolify
+      # creates an *empty directory* for a bind mount rather than mapping repository content
+      # into it, so under Coolify this mounts nothing at all. The extensions are created by
+      # the API container's entrypoint before it migrates, which is the path that works
+      # everywhere — including on a database restored from a dump, where initdb never runs.
       - ./infra/docker/postgres/init-production:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-refconcept} -d ${POSTGRES_DB:-refconcept}"]
@@ -171,7 +238,7 @@ services:
       # — database, pgvector, cache, queue, storage, migrations — is /api/health, and it is
       # deliberately not the container probe: a failing dependency would restart-loop a
       # process that is doing nothing wrong.
-      test: ["CMD-SHELL", "php -r '$s=@fsockopen(\"127.0.0.1\",9000,$e,$m,2); exit($s?0:1);'"]
+      test: ["CMD-SHELL", "php -r '$$s=@fsockopen(\"127.0.0.1\",9000,$$e,$$m,2); exit($$s?0:1);'"]
       interval: 30s
       timeout: 5s
       retries: 3

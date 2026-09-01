@@ -88,6 +88,31 @@ php_artisan event:cache
 # The seeders are idempotent and the migrator skips what it has already applied, so a
 # container that restarts at three in the morning does this and changes nothing.
 if [ "${REFCONCEPT_MIGRATE_ON_BOOT:-0}" = "1" ]; then
+    # The extensions, before the first migration that needs one.
+    #
+    # PostgreSQL runs `/docker-entrypoint-initdb.d` once, on an empty data directory, and
+    # that is where these used to be created. It does not survive contact with a platform:
+    # Coolify creates an *empty directory* for a bind mount rather than mapping repository
+    # content into it, so the script was never there and the very first migration failed on
+    # `type "citext" does not exist`. Nothing said the mount was empty; the symptom appeared
+    # four layers away, in a schema change.
+    #
+    # Done here instead because this is the one place that runs on every boot, in every
+    # environment, and always before the migrator. `IF NOT EXISTS` makes it a no-op the
+    # other ninety-nine times, and it repairs a database restored from a plain dump into a
+    # fresh volume — which initdb would also have skipped.
+    PGPASSWORD="$DB_PASSWORD" psql \
+        --host="$DB_HOST" \
+        --port="${DB_PORT:-5432}" \
+        --username="$DB_USERNAME" \
+        --dbname="$DB_DATABASE" \
+        --set ON_ERROR_STOP=1 \
+        --quiet <<'SQL'
+CREATE EXTENSION IF NOT EXISTS "vector";
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+CREATE EXTENSION IF NOT EXISTS "citext";
+SQL
+
     php_artisan migrate --force --isolated
 
     for seeder in RolesAndPermissionsSeeder PlatformSettingsSeeder CommissionSeeder; do
