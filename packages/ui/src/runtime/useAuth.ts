@@ -5,7 +5,7 @@ import type { AuthUser, LoginResponse } from './types'
  *
  * Held in a cookie rather than localStorage so server-side rendering can read it and
  * render the signed-in shell on the first paint instead of flashing a logged-out
- * header. Marked sameSite=lax and, outside development, secure.
+ * header.
  *
  * Note: this cookie is readable by JavaScript by design — the token is attached as a
  * bearer header, not sent automatically — so XSS hardening (CSP, escaping) is what
@@ -16,9 +16,36 @@ export function useAuthToken() {
     default: () => null,
     maxAge: 60 * 60 * 24 * 30,
     sameSite: 'lax',
-    secure: !import.meta.dev,
+    /*
+     * Secure whenever the page is actually served over TLS — which is not the same
+     * question as "is this a production build".
+     *
+     * It used to be `!import.meta.dev`, and that assumption broke the first time the
+     * application was deployed to a server without a certificate on it: a `Secure`
+     * cookie on an `http://` origin is not stored at all, so signing in succeeded, the
+     * token came back, the browser silently dropped it, and the next request bounced
+     * straight back to the login form. Nothing failed anywhere and the password looked
+     * wrong.
+     *
+     * Read from the real scheme instead. On HTTPS this is exactly what it was; on plain
+     * HTTP it is the difference between a working deployment and one nobody can sign
+     * into. `undefined` on the server, where the flag is decided by the response the
+     * browser will receive rather than by this call.
+     */
+    secure: isSecureOrigin(),
     path: '/',
   })
+}
+
+/**
+ * Whether the page was served over TLS.
+ *
+ * Only answerable in the browser. During server-side rendering there is no location to
+ * read, so the flag is left off and the browser's own set-cookie decides — a cookie
+ * written client-side moments later carries the right value either way.
+ */
+function isSecureOrigin(): boolean {
+  return import.meta.client && window.location.protocol === 'https:'
 }
 
 export function useAuth() {
