@@ -516,19 +516,159 @@ final class AiGatewaySeeder extends Seeder
                 'temperature_bps' => 6000,
                 'description' => 'Görsel üretilmeden önce ne nereye gidecek kararını verir.',
                 'prompt' => [
-                    'system' => 'Sen bir iç mimarsın. Verilen oda analizine ve kısıtlara uyan, uygulanabilir '
-                        .'bir yerleşim planı üret. Sabit öğeleri asla kaldırma. Yalnızca JSON döndür.',
-                    'template' => "Oda analizi: {{ analysis }}\n"
-                        ."Kısıtlar: {{ constraints }}\n"
-                        ."Bütçe (kuruş): {{ budget_minor }}\n"
-                        ."İstenen stil: {{ style }}\n",
+                'system' => implode("\n", [
+                        'Sen deneyimli bir iç mimarsın. Görevin mobilyaları odaya dizmek değil, odayı',
+                        'tasarlamak. Bir yerleşim planı, hangi eşyanın hangi duvara yaslanacağı listesi',
+                        'değildir; nereye bakıldığı, nerede oturulduğu, gözün nasıl gezdiğidir.',
+                        '',
+                        'ÖNCE ŞU ÜÇ KARARI VER:',
+                        '',
+                        '1. ODAK NOKTASI. Her odanın bir odak noktası vardır: manzaralı bir pencere,',
+                        '   şömine, televizyon duvarı, yatağın başucu. Analizdeki sabit öğelere bakarak',
+                        '   birini seç ve her şeyi ona göre yönlendir. Odak noktası olmayan oda,',
+                        '   mobilyası ne kadar iyi olursa olsun tamamlanmamış görünür.',
+                        '',
+                        '2. BÖLGE. Oturma grubunu duvara yapıştırma. Parçaları birbirine bakacak şekilde',
+                        '   2,5-3 metrelik bir çember içinde topla ve duvardan 30-45 cm ayır. Duvara',
+                        '   dayalı sıralanmış koltuklar bir bekleme salonudur, oturma odası değil.',
+                        '   Çevresinde 75-90 cm dolaşım payı bırak.',
+                        '',
+                        '3. GİRİŞ HATTI. Kapıdan girildiğinde ilk ne görülüyor? Oraya en iyi parçayı',
+                        '   koy; dolabın arkasını veya bir koltuğun sırtını koyma.',
+                        '',
+                        'SONRA KOMPOZİSYONU KUR:',
+                        '',
+                        '- YÜKSEKLİK RİTMİ. Yüksek (kitaplık, uzun bitki, tavana yakın perde), orta',
+                        '  (kanepe sırtı, konsol), alçak (sehpa, halı). Hepsi aynı yükseklikte olan bir',
+                        '  oda düzdür. Gözün tırmanacağı ve ineceği bir yol olsun.',
+                        '- ASİMETRİK DENGE. Her şeyi ortalama. Görsel ağırlığı dengele: bir yanda ağır',
+                        '  bir dolap varsa karşısına yüksek bir bitki ve bir lambader koy, aynısını',
+                        '  değil.',
+                        '- ÜÇLÜ GRUPLAR. Dekoratif öğeleri tek sayılarla, tercihen üçlü ve farklı',
+                        '  yüksekliklerde grupla.',
+                        '- BOŞLUK. Her duvarı doldurma. En az bir duvar veya köşe bilinçli olarak boş',
+                        '  kalsın; boşluk da bir tasarım kararıdır.',
+                        '',
+                        'ÖLÇÜ KURALLARI (bunlara uy):',
+                        '- Orta sehpa, koltuk önünden 40-45 cm uzakta; yüksekliği oturma yüksekliğinde',
+                        '  veya biraz altında.',
+                        '- Halı, tüm oturma parçalarının en azından ön ayakları üzerinde duracak kadar',
+                        '  büyük olmalı. Ortada yüzen küçük halı hatadır.',
+                        '- Aydınlatma üç katman: genel (tavan), işlevsel (lambader, masa lambası),',
+                        '  vurgu (duvar apliği, obje aydınlatması). Tek tavan armatürü yeterli değildir.',
+                        '  Işık kaynaklarını planda üçgen oluşturacak şekilde dağıt.',
+                        '- Tablo merkezi yerden 145-155 cm; bir mobilyanın üzerindeyse mobilyadan',
+                        '  15-20 cm yukarıda.',
+                        '- Perde, pencere üstünden 10-15 cm yukarıdan veya tavana yakın asılır; her iki',
+                        '  yana 15-25 cm taşar ki pencere olduğundan geniş görünsün.',
+                        '',
+                        'MÜŞTERİNİN SEÇTİĞİ PARÇALAR VERİLDİYSE:',
+                        'Listedeki her parça için bir yerleşim döndür. Listeye parça ekleme, listeden',
+                        'parça çıkarma. category ve max_width_mm değerlerini verildiği gibi aynen koru.',
+                        'Senin işin position, wall ve notes alanlarını doldurmak.',
+                        '',
+                        'LİSTE BOŞSA: odaya uygun parçaları kendin öner; category ve max_width_mm zorunlu.',
+                        '',
+                        'position alanı en önemli alandır. Pusula yönü değil, İLİŞKİ yaz:',
+                        '  kötü:  "güney duvarı"',
+                        '  iyi:   "pencereye bakacak şekilde, duvardan 40 cm ayrık, ön ayakları halının',
+                        '          üzerinde, sehpayla arasında 45 cm"',
+                        '',
+                        'category yalnızca şu listeden olmalı: kanepe, koltuk, oturma-grubu, puf, sehpa,',
+                        'masa-sandalye, yemek-masasi, sandalye, bar-taburesi, tv-unitesi, konsol, kitaplik,',
+                        'depolama, gardirop, komodin, yatak, yatak-odasi-mobilya, hali, perde, kirlent,',
+                        'tekstil, nevresim, aydinlatma, tavan-aydinlatma, duvar-aydinlatma, lambader,',
+                        'masa-lambasi, ayna, tablo, vazo, bitki, dekorasyon.',
+                        '',
+                        'wall değeri north, south, east veya west olmalı.',
+                        'Yalnızca JSON döndür, başka hiçbir metin yazma.',
+                    ]),
+                    'template' => implode("\n", [
+                        'Oda analizi: {{ analysis }}',
+                        'Kısıtlar: {{ constraints }}',
+                        'Bütçe (kuruş): {{ budget_minor }}',
+                        'İstenen stil: {{ style }}',
+                        'Renk paleti: {{ palette }}',
+                        'Müşterinin seçtiği parçalar: {{ required_placements }}',
+                        'Müşteri notu: {{ prompt }}',
+                    ]),
                     'schema' => [
-                        'required' => ['style', 'placements'],
+                        'required' => [
+                            'style',
+                            'placements',
+                            'composition',
+                        ],
                         'properties' => [
-                            'style' => ['type' => 'string'],
-                            'palette' => ['type' => 'array', 'items' => ['type' => 'string']],
-                            'placements' => ['type' => 'array'],
-                            'notes' => ['type' => 'string'],
+                            'notes' => [
+                                'type' => 'string',
+                            ],
+                            'style' => [
+                                'type' => 'string',
+                            ],
+                            'palette' => [
+                                'type' => 'array',
+                                'items' => [
+                                    'type' => 'string',
+                                ],
+                            ],
+                            'placements' => [
+                                'type' => 'array',
+                                'items' => [
+                                    'type' => 'object',
+                                    'required' => [
+                                        'category',
+                                        'max_width_mm',
+                                        'position',
+                                    ],
+                                    'properties' => [
+                                        'name' => [
+                                            'type' => 'string',
+                                        ],
+                                        'wall' => [
+                                            'type' => 'string',
+                                        ],
+                                        'notes' => [
+                                            'type' => 'string',
+                                        ],
+                                        'category' => [
+                                            'type' => 'string',
+                                        ],
+                                        'position' => [
+                                            'type' => 'string',
+                                        ],
+                                        'max_width_mm' => [
+                                            'type' => 'integer',
+                                        ],
+                                    ],
+                                ],
+                            ],
+                            'composition' => [
+                                'type' => 'object',
+                                'required' => [
+                                    'focal_point',
+                                    'entry_view',
+                                ],
+                                'properties' => [
+                                    'zone' => [
+                                        'type' => 'string',
+                                    ],
+                                    'entry_view' => [
+                                        'type' => 'string',
+                                    ],
+                                    'circulation' => [
+                                        'type' => 'string',
+                                    ],
+                                    'focal_point' => [
+                                        'type' => 'string',
+                                    ],
+                                    'height_rhythm' => [
+                                        'type' => 'string',
+                                    ],
+                                    'breathing_space' => [
+                                        'type' => 'string',
+                                    ],
+                                ],
+                            ],
                         ],
                     ],
                 ],
