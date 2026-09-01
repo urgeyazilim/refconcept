@@ -92,6 +92,10 @@ services:
     build:
       context: .
       dockerfile: infra/docker/php/Dockerfile
+      # Named explicitly, because this Dockerfile also carries the production and nginx
+      # stages and an untargeted build takes the last one — which would quietly hand local
+      # development an nginx image where it expected PHP.
+      target: base
     container_name: refconcept-api
     restart: unless-stopped
     working_dir: /var/www/html
@@ -147,6 +151,10 @@ services:
     build:
       context: .
       dockerfile: infra/docker/php/Dockerfile
+      # Named explicitly, because this Dockerfile also carries the production and nginx
+      # stages and an untargeted build takes the last one — which would quietly hand local
+      # development an nginx image where it expected PHP.
+      target: base
     container_name: refconcept-queue
     restart: unless-stopped
     working_dir: /var/www/html
@@ -177,6 +185,10 @@ services:
     build:
       context: .
       dockerfile: infra/docker/php/Dockerfile
+      # Named explicitly, because this Dockerfile also carries the production and nginx
+      # stages and an untargeted build takes the last one — which would quietly hand local
+      # development an nginx image where it expected PHP.
+      target: base
     container_name: refconcept-queue-ai
     restart: unless-stopped
     working_dir: /var/www/html
@@ -197,6 +209,10 @@ services:
     build:
       context: .
       dockerfile: infra/docker/php/Dockerfile
+      # Named explicitly, because this Dockerfile also carries the production and nginx
+      # stages and an untargeted build takes the last one — which would quietly hand local
+      # development an nginx image where it expected PHP.
+      target: base
     container_name: refconcept-scheduler
     restart: unless-stopped
     working_dir: /var/www/html

@@ -1,0 +1,287 @@
+# RefConcept — production stack, deployed by Coolify.
+#
+# Read this next to docker-compose.yml, which is the development stack. They describe the
+# same system and differ in three ways that matter:
+#
+#  1. **Nothing is bind-mounted from the host.** The application is inside its image. A
+#     deploy is a new image and a rollback is an older one, rather than a re-sync of files
+#     that may or may not match the code anybody has.
+#  2. **No host ports.** Coolify's proxy reaches these containers on a private network and
+#     holds the certificates. A `ports:` entry here would publish a database to the internet
+#     with the firewall none the wiser.
+#  3. **The Nuxt applications are in here too.** In development they run on the host; in
+#     production they are three more containers and three more domains.
+#
+# Every value comes from the environment Coolify injects. Nothing secret is in this file,
+# and the file is committed — those two facts have to stay true together.
+#
+# Domains: the `SERVICE_FQDN_*` variables are Coolify's, not ours. Declaring one makes
+# Coolify offer a domain field for that service and generate the proxy routing for it. The
+# number suffix is the container port.
+
+name: refconcept
+
+x-api-image: &api-image
+  build:
+    context: .
+    dockerfile: infra/docker/php/Dockerfile
+    target: production
+
+# Every PHP container gets the identical environment. They are the same application; a queue
+# worker that could not reach the same database or read the same encrypted credentials as
+# the web process would be a second, subtly different deployment of it.
+x-api-env: &api-env
+  APP_NAME: RefConcept
+  APP_ENV: production
+  APP_DEBUG: "false"
+  APP_KEY: ${APP_KEY:?APP_KEY zorunlu}
+  APP_URL: ${APP_URL:?API adresi zorunlu}
+  APP_TIMEZONE: UTC
+  APP_LOCALE: tr
+
+  # These three are the CORS allow-list as well as the links inside outgoing e-mail. A
+  # missing one is not a cosmetic problem: the browser refuses every request from that
+  # application and the customer sees a site that loads and then does nothing.
+  REFCONCEPT_STOREFRONT_URL: ${REFCONCEPT_STOREFRONT_URL:?mağaza adresi zorunlu}
+  REFCONCEPT_SELLER_PORTAL_URL: ${REFCONCEPT_SELLER_PORTAL_URL:?satıcı paneli adresi zorunlu}
+  REFCONCEPT_ADMIN_PANEL_URL: ${REFCONCEPT_ADMIN_PANEL_URL:?yönetim paneli adresi zorunlu}
+
+  LOG_CHANNEL: stack
+  LOG_STACK: stderr
+  LOG_LEVEL: ${LOG_LEVEL:-warning}
+
+  DB_CONNECTION: pgsql
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_DATABASE: ${POSTGRES_DB:-refconcept}
+  DB_USERNAME: ${POSTGRES_USER:-refconcept}
+  DB_PASSWORD: ${POSTGRES_PASSWORD:?veritabanı parolası zorunlu}
+
+  REDIS_CLIENT: phpredis
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+
+  CACHE_STORE: redis
+  SESSION_DRIVER: redis
+  QUEUE_CONNECTION: redis
+
+  # Room photographs, renders and films. Private bucket, random keys, signed links only —
+  # see RoomPhotoStorage. `AWS_URL` is the *public* bucket's read domain and is used for
+  # product imagery alone.
+  FILESYSTEM_DISK: s3
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?depolama anahtarı zorunlu}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?depolama parolası zorunlu}
+  AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-auto}
+  AWS_BUCKET: ${AWS_BUCKET:-refconcept}
+  AWS_PUBLIC_BUCKET: ${AWS_PUBLIC_BUCKET:-refconcept-public}
+  AWS_ENDPOINT: ${AWS_ENDPOINT:?depolama uç noktası zorunlu}
+  AWS_URL: ${AWS_URL:-}
+  AWS_USE_PATH_STYLE_ENDPOINT: ${AWS_USE_PATH_STYLE_ENDPOINT:-true}
+
+  MAIL_MAILER: smtp
+  MAIL_HOST: ${MAIL_HOST:?SMTP sunucusu zorunlu}
+  MAIL_PORT: ${MAIL_PORT:-587}
+  MAIL_USERNAME: ${MAIL_USERNAME:-}
+  MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+  MAIL_ENCRYPTION: ${MAIL_ENCRYPTION:-tls}
+  MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:?gönderen adresi zorunlu}
+  MAIL_FROM_NAME: ${MAIL_FROM_NAME:-RefConcept}
+
+  # Never echoed, never logged, never committed. They reach the provider through the
+  # encrypted-credential path and nowhere else.
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  GOOGLE_AI_API_KEY: ${GOOGLE_AI_API_KEY:-}
+
+  # Card gateways are off until their integrations land. Bank transfer is the live method,
+  # and turning one of these on before its phase is finished would offer a customer a
+  # payment route that cannot complete.
+  IYZICO_ENABLED: ${IYZICO_ENABLED:-false}
+  QNB_ENABLED: ${QNB_ENABLED:-false}
+  BANK_TRANSFER_ENABLED: ${BANK_TRANSFER_ENABLED:-true}
+  PAYMENT_DEFAULT_GATEWAY: ${PAYMENT_DEFAULT_GATEWAY:-bank_transfer}
+
+services:
+
+  # --- data -----------------------------------------------------------------
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-refconcept}
+      POSTGRES_USER: ${POSTGRES_USER:-refconcept}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?veritabanı parolası zorunlu}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Runs once, on an empty data directory, and installs vector, pg_trgm and citext.
+      # Without it every migration that touches an embedding column fails, and the health
+      # endpoint says so rather than the application failing later and less clearly.
+      - ./infra/docker/postgres/init-production:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-refconcept} -d ${POSTGRES_DB:-refconcept}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # `noeviction`, because this Redis holds the queue as well as the cache. Under memory
+    # pressure an `allkeys-lru` policy would silently drop queued jobs — a payment
+    # confirmation deleted to make room for a cached product listing.
+    command: >
+      sh -c 'redis-server --appendonly yes --maxmemory-policy noeviction
+      ${REDIS_PASSWORD:+--requirepass "$$REDIS_PASSWORD"}'
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
+  # --- application ----------------------------------------------------------
+
+  # The web container, and the only one that touches the schema.
+  #
+  # Migrations and reference seeding happen in its entrypoint, before PHP-FPM accepts a
+  # single request, under a lock the framework provides. The workers below wait for it to
+  # report healthy, so none of them can pick up a job against a schema that is half applied.
+  #
+  # A one-shot migration service would be the more obvious shape and needs a Coolify-specific
+  # key that plain `docker compose` refuses — and a production file that cannot be run
+  # locally is a production file nobody can test before it matters.
+  api:
+    <<: *api-image
+    restart: unless-stopped
+    environment:
+      <<: *api-env
+      REFCONCEPT_MIGRATE_ON_BOOT: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # FPM is listening, which is all this can honestly claim. Whether the *system* is well
+      # — database, pgvector, cache, queue, storage, migrations — is /api/health, and it is
+      # deliberately not the container probe: a failing dependency would restart-loop a
+      # process that is doing nothing wrong.
+      test: ["CMD-SHELL", "php -r '$s=@fsockopen(\"127.0.0.1\",9000,$e,$m,2); exit($s?0:1);'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+
+  nginx:
+    build:
+      context: .
+      dockerfile: infra/docker/php/Dockerfile
+      target: web
+    restart: unless-stopped
+    environment:
+      # Coolify offers a domain field for this and terminates TLS in front of it.
+      SERVICE_FQDN_API_80: ${SERVICE_FQDN_API_80:-}
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/up-nginx >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Short work: payment webhooks, notifications, everything somebody is waiting on.
+  queue:
+    <<: *api-image
+    restart: unless-stopped
+    environment:
+      <<: *api-env
+    command: ["php", "artisan", "queue:work", "--queue=payments,default", "--tries=3", "--max-time=3600", "--sleep=1"]
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # Long work, on its own worker.
+  #
+  # A render holds a process for two or three minutes and a room tour for ninety seconds. A
+  # payment confirmation queued behind one is a customer watching a spinner for reasons that
+  # have nothing to do with their payment, so the two never share a worker.
+  #
+  # `--tries=1`: the AI gateway already retries each model call with a policy that knows a
+  # timeout from a refusal. A queue retry on top would spend a second sixty-four cents on a
+  # failure the gateway had already decided was final.
+  queue-ai:
+    <<: *api-image
+    restart: unless-stopped
+    environment:
+      <<: *api-env
+    command: ["php", "artisan", "queue:work", "--queue=ai", "--tries=1", "--timeout=900", "--max-time=3600", "--sleep=2"]
+    depends_on:
+      api:
+        condition: service_healthy
+
+  scheduler:
+    <<: *api-image
+    restart: unless-stopped
+    environment:
+      <<: *api-env
+    command: ["php", "artisan", "schedule:work"]
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # --- the three front ends -------------------------------------------------
+
+  # One image, three builds, three domains. They hold no database credentials and no
+  # provider keys; they talk to the API over HTTP like any other client, with a bearer
+  # token, which is why three subdomains need no shared cookie domain to work.
+
+  storefront:
+    build:
+      context: .
+      dockerfile: infra/docker/nuxt/Dockerfile
+      args:
+        APP: storefront
+    restart: unless-stopped
+    environment:
+      SERVICE_FQDN_STOREFRONT_3000: ${SERVICE_FQDN_STOREFRONT_3000:-}
+      NUXT_PUBLIC_API_BASE: ${APP_URL:?API adresi zorunlu}
+      NUXT_PUBLIC_SITE_URL: ${REFCONCEPT_STOREFRONT_URL:?mağaza adresi zorunlu}
+    depends_on:
+      - nginx
+
+  seller-portal:
+    build:
+      context: .
+      dockerfile: infra/docker/nuxt/Dockerfile
+      args:
+        APP: seller-portal
+    restart: unless-stopped
+    environment:
+      SERVICE_FQDN_SELLER_3000: ${SERVICE_FQDN_SELLER_3000:-}
+      NUXT_PUBLIC_API_BASE: ${APP_URL:?API adresi zorunlu}
+      NUXT_PUBLIC_SITE_URL: ${REFCONCEPT_SELLER_PORTAL_URL:?satıcı paneli adresi zorunlu}
+    depends_on:
+      - nginx
+
+  admin-panel:
+    build:
+      context: .
+      dockerfile: infra/docker/nuxt/Dockerfile
+      args:
+        APP: admin-panel
+    restart: unless-stopped
+    environment:
+      SERVICE_FQDN_ADMIN_3000: ${SERVICE_FQDN_ADMIN_3000:-}
+      NUXT_PUBLIC_API_BASE: ${APP_URL:?API adresi zorunlu}
+      NUXT_PUBLIC_SITE_URL: ${REFCONCEPT_ADMIN_PANEL_URL:?yönetim paneli adresi zorunlu}
+    depends_on:
+      - nginx
+
+volumes:
+  postgres-data:
+  redis-data:
