@@ -310,6 +310,36 @@ the file is good and how long it takes.
 
 ---
 
+## Four traps, all found the hard way
+
+Every one of these presented as a problem somewhere other than where it was. Read them
+before the second server, not after.
+
+**A bind mount does not carry repository content.** Coolify creates an *empty directory* for
+one. The PostgreSQL extensions were installed by a script mounted into
+`/docker-entrypoint-initdb.d`; the directory was there, the script was not, PostgreSQL said
+nothing, and the failure surfaced as `type "citext" does not exist` in the first migration
+that used one. The extensions are now created by the API entrypoint before it migrates,
+which is the only place that runs in every environment. Anything you mount expecting a file
+from the repository will be an empty directory instead.
+
+**`SERVICE_FQDN_<NAME>` binds to the service named `<NAME>`,** not to the service the
+variable is declared in. `SERVICE_FQDN_API` was written inside the nginx service and Coolify
+attached the public address to the container called `api` — which was PHP-FPM, speaks
+FastCGI on 9000, and answered every browser request with 502 while `/api/health` returned
+`ok` from inside the network the entire time. Hence `php` and `api`: the container that
+serves HTTP is the one named for the domain.
+
+**Compose interpolates `$` inside healthcheck strings.** A PHP one-liner containing `$s`,
+`$e` and `$m` reached Docker with all three replaced by empty strings. The only trace was
+three `variable is not set` warnings in a deploy log that scrolls past in seconds. Escape as
+`$$`.
+
+**Read the deploy log for what is missing, not for what is red.** In each of these the
+application was healthy and every error pointed at it. `docker exec` into the container and
+ask it directly — `/api/health` names which dependency is unhappy — before believing
+anything the proxy says.
+
 ## Known gaps at first launch
 
 State them out loud rather than discovering them under pressure:
