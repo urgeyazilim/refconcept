@@ -120,6 +120,32 @@ final class AiGatewaySeeder extends Seeder
         $this->rate($models['gpt-image'], inputPerMillion: 8_000_000, outputPerMillion: 30_000_000);
 
         /*
+         * The model that films a finished design.
+         *
+         * The lite variant, chosen against the live API rather than from a price list: it
+         * produced an eight-second 1080p film from a render in a hundred and ten seconds,
+         * with the room intact and real parallax. Full Veo 3.1 is five times the price for a
+         * difference nobody watching eight seconds of their own living room could name.
+         */
+        $models['veo'] = $this->model(
+            $google,
+            'veo-3.1-lite-generate-preview',
+            'Veo 3.1 Lite',
+            AiModality::Video,
+            imageInput: true,
+            // Rejected by this model rather than ignored, so it is never sent.
+            maxOutputTokens: null,
+        );
+
+        /*
+         * Eight cents a second at 1080p, recorded per request because that is how it is sold.
+         *
+         * Video is the one thing here not priced by the token. Forcing it into the token
+         * columns would make every cost report about it wrong in a way nobody would catch.
+         */
+        $this->rate($models['veo'], inputPerMillion: 0, outputPerMillion: 0, perRequest: 640_000);
+
+        /*
          * With no key on file a provider's models exist but cannot be called, so routing
          * to them would ship a build whose every AI feature fails on first use. Whatever
          * the plan names that cannot be reached is skipped, and the simulator — which needs
@@ -304,6 +330,10 @@ final class AiGatewaySeeder extends Seeder
         int $inputPerMillion,
         int $outputPerMillion,
         int $perImage = 0,
+        // Video is the one thing here not priced by the token, and one request means one
+        // eight-second film. Folding it into the token columns would make every cost report
+        // about it wrong in a way nobody would notice.
+        int $perRequest = 0,
     ): void {
         // Only if there is no open rate already: re-seeding must not close a rate an
         // operator recorded and replace it with the list price shipped in this file.
@@ -316,7 +346,7 @@ final class AiGatewaySeeder extends Seeder
             'input_micros_per_million_tokens' => $inputPerMillion,
             'output_micros_per_million_tokens' => $outputPerMillion,
             'micros_per_image' => $perImage,
-            'micros_per_request' => 0,
+            'micros_per_request' => $perRequest,
             'effective_from' => now()->startOfDay(),
         ]);
     }
@@ -556,6 +586,67 @@ final class AiGatewaySeeder extends Seeder
                 'prompt' => [
                     'system' => 'Verilen görselde yalnızca istenen değişikliği yap; geri kalan her şeyi koru.',
                     'template' => "İstenen değişiklik: {{ instruction }}\n",
+                ],
+            ],
+
+            /*
+             * The room tour.
+             *
+             * Here rather than only in the migration that introduced it, because a migration
+             * that configures a route runs before this seeder has created any providers to
+             * point one at — so on a brand-new database it finds nothing, does nothing, and
+             * the feature is simply absent with no error anywhere. That has now happened
+             * twice; a task the seeder does not know about is a task a fresh install does not
+             * have.
+             *
+             * No fallback: nothing else on this platform can film a room, and routing this at
+             * an image model would answer a request for a video with a picture — a failure
+             * that looks like success all the way to the customer's screen.
+             */
+            AiTask::VideoTour->value => [
+                'primary' => 'veo',
+                'credits' => 20,
+                // Sixty-four cents is the expected bill; the cap leaves room for a retry and
+                // stops a mispriced model from quietly costing ten times that.
+                'max_cost_micros' => 1_400_000,
+                // Two at a time across the platform. Each holds a worker for two minutes on
+                // the same queue that carries every render.
+                'concurrency' => 2,
+                // Measured: a 1080p eight-second film took a hundred and ten seconds end to
+                // end, including the download.
+                'timeout' => 600,
+                'attempts' => 2,
+                'temperature_bps' => 2_000,
+                'description' => 'Bitmiş tasarımdan sekiz saniyelik oda turu üretir.',
+                'prompt' => [
+                    /*
+                     * Empty, and it has to be: the video endpoint takes a single prompt
+                     * string and has nowhere to put a system message, so anything written
+                     * here would silently never reach the model.
+                     */
+                    'system' => '',
+                    /*
+                     * In English, alone among the prompts here. This is the wording that was
+                     * tested against the live model and produced a film of the right room;
+                     * video models are trained overwhelmingly on English shot descriptions
+                     * and the terms that carry meaning to them — steadicam, parallax — have
+                     * no equally precise Turkish equivalent they have ever been taught. The
+                     * customer never reads it.
+                     */
+                    'template' => implode(' ', [
+                        'Smooth steadicam walking shot through this exact interior.',
+                        '{{ camera_move }}',
+                        'Handheld-smooth continuous motion, eye level, wide lens, one continuous take,',
+                        'strong parallax between the foreground furniture and the back wall.',
+                        'The room, its walls, windows, doors, floor and every piece of furniture stay',
+                        'exactly as they are, and the camera never leaves the space the still image',
+                        'shows.',
+                        'Do not zoom. Do not hold the camera still. Do not change, add or remove any',
+                        'furniture, and do not open any door.',
+                        'Natural daylight from the room own windows, consistent shadows, no cuts.',
+                        'No people, no text, no captions, no measurements, no arrows, no music.',
+                        'Style reference: {{ style }}. Room: {{ room_type }}.',
+                    ]),
                 ],
             ],
 
