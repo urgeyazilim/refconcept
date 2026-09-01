@@ -1,0 +1,293 @@
+# RefConcept — self-contained deployment, for a server with no accounts attached to it.
+#
+# The same application as docker-compose.production.yml, with the two external dependencies
+# replaced by containers:
+#
+#   - **MinIO** instead of an S3 provider. Room photographs, renders and room tours land on
+#     a disk on this machine rather than in somebody's bucket.
+#   - **Mailpit** instead of an SMTP server. It accepts every message the application sends
+#     and shows them in a web inbox. Nothing is delivered to anybody.
+#
+# That makes this file deployable in one step, with no Cloudflare account, no mail provider
+# and no DNS: point it at `<anything>.<server-ip>.sslip.io` and it works.
+#
+# **It is not the production file, and the difference is not cosmetic.** Mailpit delivers no
+# mail, so nobody outside can receive a verification link or an order confirmation. MinIO
+# holds customer data on the same disk as the database, with no off-site copy. Both are the
+# right answer for proving the system runs and the wrong answer for customers.
+#
+# When this is real: switch to docker-compose.production.yml, set the AWS_* variables to the
+# object-storage provider and the MAIL_* variables to a mail provider, and put a domain in
+# front. Nothing else changes — the application reads all of it from the environment.
+
+name: refconcept
+
+x-api-image: &api-image
+  build:
+    context: .
+    dockerfile: infra/docker/php/Dockerfile
+    target: production
+
+x-api-env: &api-env
+  APP_NAME: RefConcept
+  APP_ENV: production
+  APP_DEBUG: "false"
+  APP_KEY: ${APP_KEY:?APP_KEY zorunlu}
+  APP_URL: ${APP_URL:?API adresi zorunlu}
+  APP_TIMEZONE: UTC
+  APP_LOCALE: tr
+
+  REFCONCEPT_STOREFRONT_URL: ${REFCONCEPT_STOREFRONT_URL:?mağaza adresi zorunlu}
+  REFCONCEPT_SELLER_PORTAL_URL: ${REFCONCEPT_SELLER_PORTAL_URL:?satıcı paneli adresi zorunlu}
+  REFCONCEPT_ADMIN_PANEL_URL: ${REFCONCEPT_ADMIN_PANEL_URL:?yönetim paneli adresi zorunlu}
+
+  LOG_CHANNEL: stack
+  LOG_STACK: stderr
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+
+  DB_CONNECTION: pgsql
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_DATABASE: ${POSTGRES_DB:-refconcept}
+  DB_USERNAME: ${POSTGRES_USER:-refconcept}
+  DB_PASSWORD: ${POSTGRES_PASSWORD:?veritabanı parolası zorunlu}
+
+  REDIS_CLIENT: phpredis
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+
+  CACHE_STORE: redis
+  SESSION_DRIVER: redis
+  QUEUE_CONNECTION: redis
+
+  FILESYSTEM_DISK: s3
+  AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-refconcept}
+  AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?MinIO parolası zorunlu}
+  AWS_DEFAULT_REGION: us-east-1
+  AWS_BUCKET: refconcept-private
+  AWS_PUBLIC_BUCKET: refconcept-public
+
+  # Reached over the private network by the application itself.
+  AWS_ENDPOINT: http://minio:9000
+
+  # And by the *browser* under this one, which is a different address for the same store.
+  #
+  # A signed link is signed for a hostname, and the hostname the container uses to talk to
+  # MinIO does not resolve in anybody's browser. Without this the customer's room photograph
+  # comes back as a link to `http://minio:9000/...` and simply fails to load, with nothing
+  # in any log to say why.
+  AWS_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_URL:?MinIO dış adresi zorunlu}
+  AWS_URL: ${MINIO_PUBLIC_URL:?MinIO dış adresi zorunlu}/refconcept-public
+  AWS_USE_PATH_STYLE_ENDPOINT: "true"
+
+  # Mailpit accepts anything on 1025 and delivers none of it. No credentials, no TLS,
+  # nothing to configure — which is the entire point of it being here.
+  MAIL_MAILER: smtp
+  MAIL_HOST: mailpit
+  MAIL_PORT: "1025"
+  MAIL_ENCRYPTION: "null"
+  MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-noreply@refconcept.local}
+  MAIL_FROM_NAME: RefConcept
+
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  GOOGLE_AI_API_KEY: ${GOOGLE_AI_API_KEY:-}
+
+  IYZICO_ENABLED: "false"
+  QNB_ENABLED: "false"
+  BANK_TRANSFER_ENABLED: "true"
+  PAYMENT_DEFAULT_GATEWAY: bank_transfer
+
+services:
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-refconcept}
+      POSTGRES_USER: ${POSTGRES_USER:-refconcept}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?veritabanı parolası zorunlu}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/docker/postgres/init-production:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-refconcept} -d ${POSTGRES_DB:-refconcept}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      SERVICE_FQDN_MINIO_9000: ${SERVICE_FQDN_MINIO_9000:-}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-refconcept}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MinIO parolası zorunlu}
+      # Signed links are handed to the browser, so MinIO has to expect requests arriving
+      # under the outside address rather than the container name it answers to internally.
+      MINIO_BROWSER_REDIRECT_URL: ${MINIO_PUBLIC_URL:?MinIO dış adresi zorunlu}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  # Creates the two buckets and makes exactly one of them readable without a signature.
+  #
+  # The private bucket holds photographs of the inside of people's homes. It stays private
+  # here for the same reason it does in production — this is a test deployment, not a
+  # different set of rules about somebody's living room.
+  minio-init:
+    image: minio/mc:latest
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-refconcept} ${MINIO_ROOT_PASSWORD} &&
+      mc mb --ignore-existing local/refconcept-private &&
+      mc mb --ignore-existing local/refconcept-public &&
+      mc anonymous set download local/refconcept-public &&
+      echo 'buckets ready'
+      "
+
+  # Every message the application sends, in a web inbox, delivered to nobody.
+  #
+  # Here because e-mail verification is a required step: without something answering on an
+  # SMTP port, a customer registers, waits for a link that was never sent, and cannot open
+  # their own project. This is how you click that link.
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    environment:
+      SERVICE_FQDN_MAILPIT_8025: ${SERVICE_FQDN_MAILPIT_8025:-}
+      MP_MAX_MESSAGES: "500"
+
+  api:
+    <<: *api-image
+    restart: unless-stopped
+    environment:
+      <<: *api-env
+      REFCONCEPT_MIGRATE_ON_BOOT: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "php -r '$s=@fsockopen(\"127.0.0.1\",9000,$e,$m,2); exit($s?0:1);'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+
+  nginx:
+    build:
+      context: .
+      dockerfile: infra/docker/php/Dockerfile
+      target: web
+    restart: unless-stopped
+    environment:
+      SERVICE_FQDN_API_80: ${SERVICE_FQDN_API_80:-}
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/up-nginx >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  queue:
+    <<: *api-image
+    restart: unless-stopped
+    environment:
+      <<: *api-env
+    command: ["php", "artisan", "queue:work", "--queue=payments,default", "--tries=3", "--max-time=3600", "--sleep=1"]
+    depends_on:
+      api:
+        condition: service_healthy
+
+  queue-ai:
+    <<: *api-image
+    restart: unless-stopped
+    environment:
+      <<: *api-env
+    command: ["php", "artisan", "queue:work", "--queue=ai", "--tries=1", "--timeout=900", "--max-time=3600", "--sleep=2"]
+    depends_on:
+      api:
+        condition: service_healthy
+
+  scheduler:
+    <<: *api-image
+    restart: unless-stopped
+    environment:
+      <<: *api-env
+    command: ["php", "artisan", "schedule:work"]
+    depends_on:
+      api:
+        condition: service_healthy
+
+  storefront:
+    build:
+      context: .
+      dockerfile: infra/docker/nuxt/Dockerfile
+      args:
+        APP: storefront
+    restart: unless-stopped
+    environment:
+      SERVICE_FQDN_STOREFRONT_3000: ${SERVICE_FQDN_STOREFRONT_3000:-}
+      NUXT_PUBLIC_API_BASE: ${APP_URL:?API adresi zorunlu}
+      NUXT_PUBLIC_SITE_URL: ${REFCONCEPT_STOREFRONT_URL:?mağaza adresi zorunlu}
+    depends_on:
+      - nginx
+
+  seller-portal:
+    build:
+      context: .
+      dockerfile: infra/docker/nuxt/Dockerfile
+      args:
+        APP: seller-portal
+    restart: unless-stopped
+    environment:
+      SERVICE_FQDN_SELLER_3000: ${SERVICE_FQDN_SELLER_3000:-}
+      NUXT_PUBLIC_API_BASE: ${APP_URL:?API adresi zorunlu}
+      NUXT_PUBLIC_SITE_URL: ${REFCONCEPT_SELLER_PORTAL_URL:?satıcı paneli adresi zorunlu}
+    depends_on:
+      - nginx
+
+  admin-panel:
+    build:
+      context: .
+      dockerfile: infra/docker/nuxt/Dockerfile
+      args:
+        APP: admin-panel
+    restart: unless-stopped
+    environment:
+      SERVICE_FQDN_ADMIN_3000: ${SERVICE_FQDN_ADMIN_3000:-}
+      NUXT_PUBLIC_API_BASE: ${APP_URL:?API adresi zorunlu}
+      NUXT_PUBLIC_SITE_URL: ${REFCONCEPT_ADMIN_PANEL_URL:?yönetim paneli adresi zorunlu}
+    depends_on:
+      - nginx
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
