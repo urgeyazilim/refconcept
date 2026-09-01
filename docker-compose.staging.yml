@@ -213,7 +213,7 @@ services:
       target: web
     restart: unless-stopped
     environment:
-      SERVICE_FQDN_API_80: ${SERVICE_FQDN_API_80:-}
+      SERVICE_FQDN_API: ${SERVICE_FQDN_API:-}
     depends_on:
       - api
     healthcheck:

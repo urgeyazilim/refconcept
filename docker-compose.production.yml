@@ -251,8 +251,11 @@ Run 'docker compose COMMAND --help' for more information on a command., and noth
       target: web
     restart: unless-stopped
     environment:
-      # Coolify offers a domain field for this and terminates TLS in front of it.
-      SERVICE_FQDN_API_80: ${SERVICE_FQDN_API_80:-}
+      # No port suffix, unlike the others. Coolify takes a bare name for a service on port
+      # 80 and a name plus port for anything else — and given `:80` it generates no routing
+      # labels at all, silently: the container is healthy, the proxy can reach it, and every
+      # request from outside answers 502 with nothing logged anywhere.
+      SERVICE_FQDN_API: ${SERVICE_FQDN_API:-}
     depends_on:
       - api
     healthcheck:
