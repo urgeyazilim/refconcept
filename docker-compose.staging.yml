@@ -186,7 +186,7 @@ services:
       SERVICE_FQDN_MAILPIT_8025: ${SERVICE_FQDN_MAILPIT_8025:-}
       MP_MAX_MESSAGES: "500"
 
-  api:
+  php:
     <<: *api-image
     restart: unless-stopped
     environment:
@@ -206,7 +206,7 @@ services:
       retries: 3
       start_period: 90s
 
-  nginx:
+  api:
     build:
       context: .
       dockerfile: infra/docker/php/Dockerfile
@@ -215,7 +215,7 @@ services:
     environment:
       SERVICE_FQDN_API: ${SERVICE_FQDN_API:-}
     depends_on:
-      - api
+      - php
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/up-nginx >/dev/null || exit 1"]
       interval: 30s
@@ -229,7 +229,7 @@ services:
       <<: *api-env
     command: ["php", "artisan", "queue:work", "--queue=payments,default", "--tries=3", "--max-time=3600", "--sleep=1"]
     depends_on:
-      api:
+      php:
         condition: service_healthy
 
   queue-ai:
@@ -239,7 +239,7 @@ services:
       <<: *api-env
     command: ["php", "artisan", "queue:work", "--queue=ai", "--tries=1", "--timeout=900", "--max-time=3600", "--sleep=2"]
     depends_on:
-      api:
+      php:
         condition: service_healthy
 
   scheduler:
@@ -249,7 +249,7 @@ services:
       <<: *api-env
     command: ["php", "artisan", "schedule:work"]
     depends_on:
-      api:
+      php:
         condition: service_healthy
 
   storefront:
@@ -264,7 +264,7 @@ services:
       NUXT_PUBLIC_API_BASE: ${APP_URL:?API adresi zorunlu}
       NUXT_PUBLIC_SITE_URL: ${REFCONCEPT_STOREFRONT_URL:?mağaza adresi zorunlu}
     depends_on:
-      - nginx
+      - api
 
   seller-portal:
     build:
@@ -278,7 +278,7 @@ services:
       NUXT_PUBLIC_API_BASE: ${APP_URL:?API adresi zorunlu}
       NUXT_PUBLIC_SITE_URL: ${REFCONCEPT_SELLER_PORTAL_URL:?satıcı paneli adresi zorunlu}
     depends_on:
-      - nginx
+      - api
 
   admin-panel:
     build:
@@ -292,7 +292,7 @@ services:
       NUXT_PUBLIC_API_BASE: ${APP_URL:?API adresi zorunlu}
       NUXT_PUBLIC_SITE_URL: ${REFCONCEPT_ADMIN_PANEL_URL:?yönetim paneli adresi zorunlu}
     depends_on:
-      - nginx
+      - api
 
 volumes:
   postgres-data:

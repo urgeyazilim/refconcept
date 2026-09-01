@@ -213,7 +213,12 @@ Run 'docker compose COMMAND --help' for more information on a command., and noth
 
   # --- application ----------------------------------------------------------
 
-  # The web container, and the only one that touches the schema.
+  # PHP-FPM: the application itself, and the only container that touches the schema.
+  #
+  # Named `php` rather than `api` because Coolify binds a SERVICE_FQDN_<NAME> variable to the
+  # service literally called <NAME>, wherever that variable is declared. While this was the
+  # `api` service it collected the public address and answered every request with 502 — it
+  # speaks FastCGI on 9000, not HTTP, and Traefik was handing it browser traffic.
   #
   # Migrations and reference seeding happen in its entrypoint, before PHP-FPM accepts a
   # single request, under a lock the framework provides. The workers below wait for it to
@@ -222,7 +227,7 @@ Run 'docker compose COMMAND --help' for more information on a command., and noth
   # A one-shot migration service would be the more obvious shape and needs a Coolify-specific
   # key that plain `docker compose` refuses — and a production file that cannot be run
   # locally is a production file nobody can test before it matters.
-  api:
+  php:
     <<: *api-image
     restart: unless-stopped
     environment:
@@ -244,7 +249,7 @@ Run 'docker compose COMMAND --help' for more information on a command., and noth
       retries: 3
       start_period: 90s
 
-  nginx:
+  api:
     build:
       context: .
       dockerfile: infra/docker/php/Dockerfile
@@ -257,7 +262,7 @@ Run 'docker compose COMMAND --help' for more information on a command., and noth
       # request from outside answers 502 with nothing logged anywhere.
       SERVICE_FQDN_API: ${SERVICE_FQDN_API:-}
     depends_on:
-      - api
+      - php
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/up-nginx >/dev/null || exit 1"]
       interval: 30s
@@ -272,7 +277,7 @@ Run 'docker compose COMMAND --help' for more information on a command., and noth
       <<: *api-env
     command: ["php", "artisan", "queue:work", "--queue=payments,default", "--tries=3", "--max-time=3600", "--sleep=1"]
     depends_on:
-      api:
+      php:
         condition: service_healthy
 
   # Long work, on its own worker.
@@ -291,7 +296,7 @@ Run 'docker compose COMMAND --help' for more information on a command., and noth
       <<: *api-env
     command: ["php", "artisan", "queue:work", "--queue=ai", "--tries=1", "--timeout=900", "--max-time=3600", "--sleep=2"]
     depends_on:
-      api:
+      php:
         condition: service_healthy
 
   scheduler:
@@ -301,7 +306,7 @@ Run 'docker compose COMMAND --help' for more information on a command., and noth
       <<: *api-env
     command: ["php", "artisan", "schedule:work"]
     depends_on:
-      api:
+      php:
         condition: service_healthy
 
   # --- the three front ends -------------------------------------------------
@@ -322,7 +327,7 @@ Run 'docker compose COMMAND --help' for more information on a command., and noth
       NUXT_PUBLIC_API_BASE: ${APP_URL:?API adresi zorunlu}
       NUXT_PUBLIC_SITE_URL: ${REFCONCEPT_STOREFRONT_URL:?mağaza adresi zorunlu}
     depends_on:
-      - nginx
+      - api
 
   seller-portal:
     build:
@@ -336,7 +341,7 @@ Run 'docker compose COMMAND --help' for more information on a command., and noth
       NUXT_PUBLIC_API_BASE: ${APP_URL:?API adresi zorunlu}
       NUXT_PUBLIC_SITE_URL: ${REFCONCEPT_SELLER_PORTAL_URL:?satıcı paneli adresi zorunlu}
     depends_on:
-      - nginx
+      - api
 
   admin-panel:
     build:
@@ -350,7 +355,7 @@ Run 'docker compose COMMAND --help' for more information on a command., and noth
       NUXT_PUBLIC_API_BASE: ${APP_URL:?API adresi zorunlu}
       NUXT_PUBLIC_SITE_URL: ${REFCONCEPT_ADMIN_PANEL_URL:?yönetim paneli adresi zorunlu}
     depends_on:
-      - nginx
+      - api
 
 volumes:
   postgres-data:
