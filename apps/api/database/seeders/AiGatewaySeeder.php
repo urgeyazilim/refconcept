@@ -516,7 +516,7 @@ final class AiGatewaySeeder extends Seeder
                 'temperature_bps' => 6000,
                 'description' => 'Görsel üretilmeden önce ne nereye gidecek kararını verir.',
                 'prompt' => [
-                'system' => implode("\n", [
+                    'system' => implode("\n", [
                         'Sen deneyimli bir iç mimarsın. Görevin mobilyaları odaya dizmek değil, odayı',
                         'tasarlamak. Bir yerleşim planı, hangi eşyanın hangi duvara yaslanacağı listesi',
                         'değildir; nereye bakıldığı, nerede oturulduğu, gözün nasıl gezdiğidir.',

@@ -113,6 +113,14 @@ CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 CREATE EXTENSION IF NOT EXISTS "citext";
 SQL
 
+    # The buckets, before anything can be asked to write to one.
+    #
+    # This was a one-shot minio-init container until it cost the whole deployment: Coolify
+    # judges a compose application by whether every container is running, saw one that had
+    # exited on purpose, decided the application had stopped, and pruned it. A container that
+    # exits by design is a container a platform will eventually misread.
+    php_artisan refconcept:ensure-buckets
+
     php_artisan migrate --force --isolated
 
     for seeder in RolesAndPermissionsSeeder PlatformSettingsSeeder CommissionSeeder; do

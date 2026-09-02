@@ -161,26 +161,6 @@ services:
       timeout: 5s
       retries: 20
 
-  # Creates the two buckets and makes exactly one of them readable without a signature.
-  #
-  # The private bucket holds photographs of the inside of people's homes. It stays private
-  # here for the same reason it does in production — this is a test deployment, not a
-  # different set of rules about somebody's living room.
-  minio-init:
-    image: minio/mc:latest
-    restart: "no"
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-refconcept} ${MINIO_ROOT_PASSWORD} &&
-      mc mb --ignore-existing local/refconcept-private &&
-      mc mb --ignore-existing local/refconcept-public &&
-      mc anonymous set download local/refconcept-public &&
-      echo 'buckets ready'
-      "
-
   # Every message the application sends, in a web inbox, delivered to nobody.
   #
   # Here because e-mail verification is a required step: without something answering on an
