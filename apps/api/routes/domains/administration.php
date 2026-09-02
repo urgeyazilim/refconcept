@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Domains\Administration\Http\Controllers\AdminAnalyticsController;
 use App\Domains\Administration\Http\Controllers\AdminAuditController;
+use App\Domains\Administration\Http\Controllers\AdminCustomerController;
 use App\Domains\Administration\Http\Controllers\AdminOrderController;
 use App\Domains\Administration\Http\Controllers\AdminSystemController;
 use App\Domains\Identity\Http\Middleware\EnsureUserIsActive;
@@ -30,6 +31,20 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])
         Route::prefix('orders')->as('orders.')->group(function (): void {
             Route::get('/', [AdminOrderController::class, 'index'])->name('index');
             Route::get('{orderNumber}', [AdminOrderController::class, 'show'])->name('show');
+        });
+
+        /*
+         * Customers, for support.
+         *
+         * Read-only throughout. `media` is the one endpoint that hands back anything of the
+         * customer's own — a room photograph or a render — and it is a POST rather than a
+         * GET on purpose: it writes an audit entry naming the operator and requires a
+         * written reason, neither of which belongs in a URL somebody can bookmark or share.
+         */
+        Route::prefix('customers')->as('customers.')->group(function (): void {
+            Route::get('/', [AdminCustomerController::class, 'index'])->name('index');
+            Route::get('{customer}', [AdminCustomerController::class, 'show'])->name('show');
+            Route::post('{customer}/media/{media}', [AdminCustomerController::class, 'media'])->name('media');
         });
 
         Route::prefix('audit')->as('audit.')->group(function (): void {

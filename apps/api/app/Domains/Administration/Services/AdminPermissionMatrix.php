@@ -53,6 +53,18 @@ final class AdminPermissionMatrix
         // --- orders --------------------------------------------------------------
         'v1.admin.orders.' => Permission::OrdersView,
 
+        /*
+         * Customers. Reading an account is a support job and sits under the same permission
+         * as any other look at a user record.
+         *
+         * Opening one of their photographs is listed separately even though it needs the
+         * same permission, because the matrix is what somebody reads to answer "who can see
+         * the inside of a customer's house". Folding it into the prefix above would make
+         * that answer something you have to work out rather than something you can read.
+         */
+        'v1.admin.customers.' => Permission::UsersView,
+        'v1.admin.customers.media' => Permission::UsersView,
+
         // --- payments and finance -------------------------------------------------
         'v1.admin.payments.' => Permission::PaymentsView,
         'v1.admin.payments.transfers.confirm' => Permission::PaymentsSettle,
