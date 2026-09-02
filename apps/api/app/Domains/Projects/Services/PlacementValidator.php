@@ -35,6 +35,40 @@ final class PlacementValidator
     private const BLOCKING_CLEARANCE_MM = 300;
 
     /**
+     * The categories whose width is genuinely limited by the wall they are placed against.
+     *
+     * This list exists because the check was previously applied to everything, and it threw
+     * out three of one customer's eight choices on arithmetic that did not apply to any of
+     * them: a rug lies on the floor, a curtain's fabric is two to two and a half times the
+     * window because it gathers, and the sofa in question was placed — by the planner's own
+     * words — "in the middle of the room, at least 40 cm clear of the wall".
+     *
+     * What followed was worse than three missing items. The renderer was handed a living
+     * room with a television, a coffee table and nowhere to sit, and a photorealistic model
+     * completes a scene like that whatever it has been told not to: it drew a corner sofa
+     * nobody could buy and moved the walls to fit it in.
+     *
+     * So the test now applies only where it means something. Anything not named here is
+     * still checked for a category and a price, and simply is not measured against a wall
+     * it does not touch.
+     */
+    private const WALL_MOUNTED_CATEGORIES = [
+        'tv-unitesi',
+        'konsol',
+        'kitaplik',
+        'dolap',
+        'gardirop',
+        'vitrin',
+        'komodin',
+        'sifonyer',
+        'yemek-masasi',
+        'calisma-masasi',
+        'yatak',
+        'ayakkabilik',
+        'portmanto',
+    ];
+
+    /**
      * Splits a planner's placements into what the room can take and what it cannot.
      *
      * @param  array<int, mixed>  $placements
@@ -85,8 +119,22 @@ final class PlacementValidator
          * Rejected rather than dropped, so it lands in the plan's `rejected` column where
          * somebody can see the model wandered off, instead of vanishing.
          */
-        if ($this->stringOrNull($placement['category'] ?? null) === null) {
+        $category = $this->stringOrNull($placement['category'] ?? null);
+
+        if ($category === null) {
             return 'Kategorisi belirtilmediği için bu öğe için ürün aranamaz.';
+        }
+
+        /*
+         * Only things that stand against a wall are measured against one.
+         *
+         * The plan names a wall for almost everything, because a rug "belongs to" the
+         * seating group and a curtain "belongs to" the window wall — but naming a wall is
+         * not the same as leaning on it, and treating the two as one threw out a customer's
+         * sofa, rug and curtains in a single pass.
+         */
+        if (! in_array($category, self::WALL_MOUNTED_CATEGORIES, true)) {
+            return null;
         }
 
         $width = $this->millimetres($placement['max_width_mm'] ?? null);

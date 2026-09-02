@@ -78,8 +78,22 @@ interface PlacementGroup {
   unavailable_reason: string | null
 }
 
+/**
+ * Something the customer chose that the room would not take.
+ *
+ * These never reached the matcher, so they are in no placement group and appeared on no
+ * screen at all. A customer who picked a corner sofa, sees one in the picture and cannot
+ * find it in the list will reasonably conclude it is for sale.
+ */
+interface OmittedPiece {
+  category: string | null
+  name: string | null
+  reason: string
+}
+
 interface ShoppingList {
   placements: PlacementGroup[]
+  omitted: OmittedPiece[]
   total_minor: number
   currency: string
   verdicts: Array<{ value: string, label: string }>
@@ -745,6 +759,33 @@ const statusTone: Record<string, string> = {
             Aşağıdaki listedeki ürünler odanıza yerleştirildi. Görseldeki küçük dekoratif
             objeler temsilîdir, satışta değildir.
           </p>
+
+          <!--
+            What the room would not take.
+
+            Under the picture rather than at the foot of the shopping list, because it
+            explains something about *the picture*: a piece the customer asked for is not in
+            it. Left unsaid, the omission reads as an oversight — or worse, the customer
+            assumes the sofa the model drew anyway is one they can buy.
+          -->
+          <RcAlert
+            v-if="shoppingList && shoppingList.omitted.length > 0"
+            tone="warning"
+            class="mt-4"
+          >
+            <p class="font-medium">Seçtiğiniz bazı parçalar bu odaya sığmadı</p>
+            <ul class="mt-2 space-y-1 text-sm">
+              <li v-for="piece in shoppingList.omitted" :key="piece.category ?? piece.name ?? ''">
+                <span class="font-medium">{{ piece.name || piece.category }}</span> —
+                {{ piece.reason }}
+              </li>
+            </ul>
+            <p class="mt-2 text-xs leading-relaxed">
+              Bu parçalar görselde de yer almaz ve alışveriş listesinde bulunmaz. Odanın
+              ölçülerini güncellemek ya da daha küçük bir seçenek denemek isterseniz yeni bir
+              sürüm oluşturabilirsiniz.
+            </p>
+          </RcAlert>
         </div>
       </section>
 

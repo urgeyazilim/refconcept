@@ -394,6 +394,12 @@ final class DesignGenerationPipeline
                  */
                 'plan' => $purchasable,
                 /*
+                 * Stated rather than omitted. A living room with no seating is a
+                 * contradiction a model will resolve by inventing furniture; a living room
+                 * whose emptiness is described is merely a sparse room, which it can draw.
+                 */
+                'absent' => $this->absentPlacements($plan, $matches),
+                /*
                  * The design decisions, not just the furniture.
                  *
                  * A renderer given a list and a wall name produces a collage: everything
@@ -689,6 +695,58 @@ final class DesignGenerationPipeline
         }
 
         return $kept;
+    }
+
+    /**
+     * What this room is *not* getting, named out loud.
+     *
+     * The renderer used to be handed only what survived, and the omissions were silent. A
+     * customer asked for a corner sofa, a rug and curtains; the validator rejected all three
+     * on arithmetic that did not apply to them, and `gpt-image-2` was given a living room
+     * containing a television, a coffee table and nowhere at all to sit. It completed the
+     * scene the only way a photorealistic model can — it drew a corner sofa nobody could
+     * buy, added a rug, and moved the walls to make room.
+     *
+     * A general prohibition does not survive that. "Do not add anything not on the list" is
+     * a rule; an empty seating area in a living room is a contradiction, and the model
+     * resolves contradictions in favour of the picture looking right.
+     *
+     * So the absence is stated as a fact about the room rather than left as a gap: *there is
+     * no sofa in this design, leave the seating area empty*. That is something a model can
+     * follow, because it is no longer being asked to render something impossible — only
+     * something sparse.
+     *
+     * @param  Collection<int, DesignMatch>  $matches
+     * @return list<string>
+     */
+    private function absentPlacements(DesignPlan $plan, Collection $matches): array
+    {
+        $chosen = $matches->groupBy('placement_index');
+
+        $absent = [];
+
+        foreach ($plan->placements as $index => $placement) {
+            if (! is_array($placement) || $chosen->has($index)) {
+                continue;
+            }
+
+            $category = $this->stringOrNull($placement['category'] ?? null);
+
+            if ($category !== null) {
+                $absent[] = $category;
+            }
+        }
+
+        // The validator's own refusals, which never reached the matcher at all.
+        foreach ((array) ($plan->rejected ?? []) as $rejected) {
+            $category = is_array($rejected) ? $this->stringOrNull($rejected['category'] ?? null) : null;
+
+            if ($category !== null) {
+                $absent[] = $category;
+            }
+        }
+
+        return array_values(array_unique($absent));
     }
 
     /**

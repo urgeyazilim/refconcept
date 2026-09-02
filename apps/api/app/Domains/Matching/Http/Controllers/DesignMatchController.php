@@ -64,6 +64,17 @@ final class DesignMatchController
                 'total_minor' => $this->chosenTotal($matches, $version),
                 'currency' => $matches->first()->currency ?? 'TRY',
                 'verdicts' => FeedbackVerdict::options(),
+
+                /*
+                 * What the customer asked for and is not getting.
+                 *
+                 * These never reached the matcher — the validator refused them against the
+                 * room — so they appear in no placement group and, until now, on no screen
+                 * at all. A customer who chose a corner sofa and sees a picture with a sofa
+                 * in it and a shopping list without one is owed the sentence explaining why,
+                 * and it is worse than owed: they will otherwise assume the sofa is for sale.
+                 */
+                'omitted' => $this->omitted($version),
             ],
         ]);
     }
@@ -377,6 +388,42 @@ final class DesignMatchController
         }
 
         return $quantities;
+    }
+
+    /** @param  Collection<int, DesignMatch>  $matches */
+    /**
+     * The pieces the room would not take, in words a customer can act on.
+     *
+     * The stored reason is written for whoever is debugging the layout — "requested width
+     * (3850 mm) does not fit this wall (3500 mm)" — and is exactly the wrong sentence to put
+     * in front of somebody who picked a corner sofa from a list of pictures. It is kept for
+     * the record and paraphrased here.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function omitted(DesignVersion $version): array
+    {
+        $rejected = (array) ($version->plan->rejected ?? []);
+
+        $out = [];
+
+        foreach ($rejected as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $category = $item['category'] ?? null;
+
+            $out[] = [
+                'category' => $category,
+                'name' => $item['name'] ?? $category,
+                // Kept verbatim for support; the customer reads the sentence below it.
+                'technical_reason' => $item['reason'] ?? null,
+                'reason' => 'Bu parça odanın ölçülerine sığmadığı için yerleştirilemedi.',
+            ];
+        }
+
+        return $out;
     }
 
     /** @param  Collection<int, DesignMatch>  $matches */
