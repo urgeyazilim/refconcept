@@ -66,7 +66,7 @@ export class FurnitureBuilder {
 
   private readonly edgeMaterial = new LineBasicMaterial({ color: 0x3d3733 })
 
-  private readonly selectedEdgeMaterial = new LineBasicMaterial({ color: 0x1f6feb, linewidth: 2 })
+  private readonly selectedEdgeMaterial = new LineBasicMaterial({ color: 0xb08f52, linewidth: 2 })
 
   /**
    * One piece, at its position, ready to add to the scene.

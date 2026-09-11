@@ -19,7 +19,7 @@
  */
 import { formatDistance } from '~/room3d/MeasurementEngine'
 import { type EditorState, type OverlayLabel, RoomEditor } from '~/room3d/RoomEditor'
-import type { LayoutItem, RoomGeometry, RoomOpening, ViewMode } from '~/room3d/types'
+import type { DisplayMode, LayoutItem, RoomGeometry, RoomOpening, ViewMode } from '~/room3d/types'
 
 const props = withDefaults(defineProps<{
   geometry: RoomGeometry
@@ -36,6 +36,14 @@ const emit = defineEmits<{ save: [items: LayoutItem[]] }>()
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 const view = ref<ViewMode>('perspective')
+
+/**
+ * Whether the room is being looked at or measured.
+ *
+ * Two different questions, and the plan answers the second one properly: no perspective, so
+ * two gaps that measure the same look the same, and labels that are text rather than pixels.
+ */
+const display = ref<DisplayMode>('3d')
 
 /**
  * Shallow rather than a plain `let`: the template has to see it change, and shallow
@@ -187,15 +195,29 @@ defineExpose({ snapshot: () => editor.value?.snapshot() ?? null })
       <!--
         `block` because a canvas is inline by default, which leaves a few pixels of line-height
         underneath it and a scrollbar that appears at some window sizes and not others.
+
+        `v-show` rather than `v-if`: removing the canvas destroys its WebGL context, and
+        getting one back costs a visible pause and, after a few switches, a browser that
+        refuses — there is a hard limit on live contexts per page.
       -->
-      <canvas ref="canvas" class="block size-full touch-none" />
+      <canvas v-show="display === '3d'" ref="canvas" class="block size-full touch-none" />
+
+      <RoomPlanSvg
+        v-if="display === 'plan'"
+        :geometry="geometry"
+        :openings="openings"
+        :items="state.items"
+        :states="state.states"
+        :selected-id="state.selectedId"
+        @select="editor?.select($event)"
+      />
 
       <!--
         Measurements as HTML over the canvas rather than text drawn into it. Text in WebGL is
         either a texture that blurs the moment somebody zooms or a font atlas nobody wants to
         maintain for the sake of "185 cm".
       -->
-      <div class="pointer-events-none absolute inset-0">
+      <div v-if="display === '3d'" class="pointer-events-none absolute inset-0">
         <span
           v-for="label in labels"
           :key="label.id"
@@ -206,10 +228,22 @@ defineExpose({ snapshot: () => editor.value?.snapshot() ?? null })
 
       <div class="absolute top-4 right-4 flex gap-1 rounded-pill bg-surface/90 p-1 backdrop-blur-sm">
         <button
-          v-for="option in views"
-          :key="option.value"
           type="button"
           class="rounded-pill px-3 py-1.5 text-xs transition-colors"
+          :class="display === 'plan' ? 'bg-charcoal text-white' : 'text-ink-secondary hover:bg-bg-muted'"
+          @click="display = display === 'plan' ? '3d' : 'plan'"
+        >
+          Plan
+        </button>
+
+        <span class="my-1 w-px bg-line" />
+
+        <button
+          v-for="option in views"
+          :key="option.value"
+          :disabled="display === 'plan'"
+          type="button"
+          class="rounded-pill px-3 py-1.5 text-xs transition-colors disabled:opacity-40"
           :class="view === option.value ? 'bg-charcoal text-white' : 'text-ink-secondary hover:bg-bg-muted'"
           @click="view = option.value"
         >
@@ -244,7 +278,7 @@ defineExpose({ snapshot: () => editor.value?.snapshot() ?? null })
 
     <div v-if="editable" class="grid gap-3 md:grid-cols-2">
       <!-- What is selected, and everything that can be done to it. -->
-      <div class="rounded-md border border-border bg-surface p-4">
+      <div class="rounded-md border border-line bg-surface p-4">
         <template v-if="selected === null">
           <p class="text-sm text-muted">
             Taşımak istediğiniz ürüne tıklayın. Yön tuşlarıyla santimetre santimetre
@@ -270,8 +304,8 @@ defineExpose({ snapshot: () => editor.value?.snapshot() ?? null })
               class="rounded-pill px-2 py-0.5 text-[11px]"
               :class="{
                 'bg-bg-muted text-ink-secondary': state.states.get(selected.id) === 'ok',
-                'bg-amber-100 text-amber-900': state.states.get(selected.id) === 'warning',
-                'bg-red-100 text-red-900': state.states.get(selected.id) === 'blocked',
+                'bg-warning-subtle text-warning-strong': state.states.get(selected.id) === 'warning',
+                'bg-danger-subtle text-danger-strong': state.states.get(selected.id) === 'blocked',
               }"
             >
               {{ state.states.get(selected.id) === 'blocked'
@@ -281,20 +315,20 @@ defineExpose({ snapshot: () => editor.value?.snapshot() ?? null })
           </div>
 
           <div class="mt-3 flex flex-wrap gap-2">
-            <button type="button" class="rounded-pill border border-border px-3 py-1.5 text-xs hover:bg-bg-muted" @click="editor?.rotate(selected.id, -90)">
+            <button type="button" class="rounded-pill border border-line px-3 py-1.5 text-xs hover:bg-bg-muted" @click="editor?.rotate(selected.id, -90)">
               ⟲ 90°
             </button>
-            <button type="button" class="rounded-pill border border-border px-3 py-1.5 text-xs hover:bg-bg-muted" @click="editor?.rotate(selected.id, 90)">
+            <button type="button" class="rounded-pill border border-line px-3 py-1.5 text-xs hover:bg-bg-muted" @click="editor?.rotate(selected.id, 90)">
               ⟳ 90°
             </button>
             <button
               type="button"
-              class="rounded-pill border border-border px-3 py-1.5 text-xs hover:bg-bg-muted"
+              class="rounded-pill border border-line px-3 py-1.5 text-xs hover:bg-bg-muted"
               @click="editor?.toggleLock(selected.id)"
             >
               {{ selected.locked ? 'Kilidi aç' : 'Yerini kilitle' }}
             </button>
-            <button type="button" class="rounded-pill border border-border px-3 py-1.5 text-xs text-red-700 hover:bg-red-50" @click="editor?.remove(selected.id)">
+            <button type="button" class="rounded-pill border border-line px-3 py-1.5 text-xs text-danger-strong hover:bg-danger-subtle" @click="editor?.remove(selected.id)">
               Kaldır
             </button>
           </div>
@@ -303,7 +337,7 @@ defineExpose({ snapshot: () => editor.value?.snapshot() ?? null })
             The gaps around the selected piece, written out. 60 cm is a person sideways and
             90 cm is a person carrying something; neither is visible on a screen at any zoom.
           -->
-          <dl v-if="state.measurements.length > 0" class="mt-3 space-y-1 border-t border-border pt-3 text-xs">
+          <dl v-if="state.measurements.length > 0" class="mt-3 space-y-1 border-t border-line pt-3 text-xs">
             <div v-for="measurement in state.measurements" :key="`${measurement.towards}-${measurement.mm}`" class="flex justify-between gap-3">
               <dt class="text-muted">
                 {{ measurement.towards }} arası
@@ -317,7 +351,7 @@ defineExpose({ snapshot: () => editor.value?.snapshot() ?? null })
       </div>
 
       <!-- Everything in the room, and anything wrong with it. -->
-      <div class="rounded-md border border-border bg-surface p-4">
+      <div class="rounded-md border border-line bg-surface p-4">
         <div class="flex items-center justify-between">
           <p class="text-sm font-medium text-ink">
             Odadaki ürünler ({{ state.items.length }})
@@ -343,7 +377,7 @@ defineExpose({ snapshot: () => editor.value?.snapshot() ?? null })
           </li>
         </ul>
 
-        <p v-if="problems.length > 0" class="mt-3 border-t border-border pt-3 text-xs text-muted">
+        <p v-if="problems.length > 0" class="mt-3 border-t border-line pt-3 text-xs text-muted">
           {{ problems.length }} ürün için uyarı var. Kırmızı olanlar bu odaya bu şekilde
           yerleşmiyor; sipariş vermeden önce düzeltilmesi gerekir.
         </p>

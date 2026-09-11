@@ -62,7 +62,7 @@ export class SceneManager {
   /** The alignment lines a snap draws, cleared and rebuilt whenever they change. */
   private readonly guides = new Group()
 
-  private readonly guideMaterial = new LineBasicMaterial({ color: 0x1f6feb, transparent: true, opacity: 0.7 })
+  private readonly guideMaterial = new LineBasicMaterial({ color: 0xb08f52, transparent: true, opacity: 0.8 })
 
   private room: Group | null = null
 

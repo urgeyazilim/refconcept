@@ -224,7 +224,7 @@ onMounted(load)
       </NuxtLink>
     </header>
 
-    <p v-if="loadError" class="rounded-sm bg-red-50 p-3 text-sm text-red-800">
+    <p v-if="loadError" class="rounded-sm bg-danger-subtle p-3 text-sm text-danger-strong">
       {{ loadError }}
     </p>
 
@@ -236,7 +236,7 @@ onMounted(load)
       The question, before anything is drawn against the answer. A measurement nobody agreed
       to is a guess with a decimal point on it.
     -->
-    <section v-else-if="geometry === null" class="rounded-md border border-border bg-surface p-6">
+    <section v-else-if="geometry === null" class="rounded-md border border-line bg-surface p-6">
       <template v-if="proposal !== null && !correcting">
         <h2 class="text-base font-medium">
           Bu ölçüler doğru mu?
@@ -286,7 +286,7 @@ onMounted(load)
           </button>
           <button
             type="button"
-            class="rounded-pill border border-border px-4 py-2 text-sm"
+            class="rounded-pill border border-line px-4 py-2 text-sm"
             @click="correcting = true"
           >
             Düzelt
@@ -329,7 +329,7 @@ onMounted(load)
           <button
             v-if="proposal !== null"
             type="button"
-            class="rounded-pill border border-border px-4 py-2 text-sm"
+            class="rounded-pill border border-line px-4 py-2 text-sm"
             @click="correcting = false"
           >
             Vazgeç
@@ -337,7 +337,7 @@ onMounted(load)
         </div>
       </template>
 
-      <p v-if="saveError" class="mt-3 text-sm text-red-700">
+      <p v-if="saveError" class="mt-3 text-sm text-danger-strong">
         {{ saveError }}
       </p>
     </section>
@@ -345,7 +345,7 @@ onMounted(load)
     <template v-else>
       <Room3DScene :geometry="geometry" :openings="openings" :items="items" editable @save="save" />
 
-      <p v-if="saveError" class="rounded-sm bg-red-50 p-3 text-sm text-red-800">
+      <p v-if="saveError" class="rounded-sm bg-danger-subtle p-3 text-sm text-danger-strong">
         {{ saveError }}
       </p>
 
