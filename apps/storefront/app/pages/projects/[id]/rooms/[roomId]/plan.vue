@@ -54,6 +54,9 @@ const loadError = ref<string | null>(null)
 const saveError = ref<string | null>(null)
 const confirming = ref(false)
 
+/** The 3D scene, for the picture the renderer works from. */
+const scene = ref<{ snapshot: () => string | null } | null>(null)
+
 const composing = ref(false)
 const composeNotice = ref<string | null>(null)
 
@@ -180,11 +183,52 @@ async function saveCorrection(): Promise<void> {
 }
 
 /**
+ * Sends a picture of the plan, for the renderer to follow.
+ *
+ * This is what the 3D view is ultimately for. A photorealistic model handed a photograph and
+ * a list of furniture rearranges the room to make a better picture — it has narrowed a
+ * doorway and invented a sofa — and the fix is not a sterner prompt but a scene that is no
+ * longer underdetermined. The room the customer has already agreed to, drawn, goes with the
+ * next render as the structure to follow.
+ *
+ * Throttled rather than sent on every save: a drag is sixty saves and each picture is a few
+ * hundred kilobytes, and the renderer only ever reads the most recent one.
+ */
+let snapshotTimer: ReturnType<typeof setTimeout> | null = null
+
+function scheduleSnapshot(): void {
+  if (snapshotTimer !== null) {
+    clearTimeout(snapshotTimer)
+  }
+
+  snapshotTimer = setTimeout(async () => {
+    const image = scene.value?.snapshot()
+
+    if (typeof image !== 'string' || image === '') {
+      return
+    }
+
+    try {
+      await api.post(`${base}/layout/snapshot`, { image })
+    }
+    catch {
+      /*
+       * Deliberately silent.
+       *
+       * The layout itself is saved, and the snapshot is an optimisation for a render that
+       * has not been asked for yet. Telling somebody their furniture might not have saved,
+       * when it has, would be worse than the missing reference.
+       */
+    }
+  }, 4_000)
+}
+
+/**
  * Writes the arrangement the editor has settled on.
  *
- * The response is deliberately not fed back into `items`: the server recomputes the
- * collision states and returns them, and replacing the list mid-session would clear the
- * editor's undo history and drop the selection under whoever is working.
+ * The response is deliberately not fed back into `items`: the server recomputes the collision
+ * states and returns them, and replacing the list mid-session would clear the editor's undo
+ * history and drop the selection under whoever is working.
  */
 async function save(next: LayoutItem[]): Promise<void> {
   saveError.value = null
@@ -202,6 +246,8 @@ async function save(next: LayoutItem[]): Promise<void> {
         locked: item.locked,
       })),
     })
+
+    scheduleSnapshot()
   }
   catch (error) {
     // Said out loud rather than retried silently. A plan the customer believes is saved and
@@ -434,7 +480,7 @@ onMounted(load)
         {{ composeNotice }}
       </p>
 
-      <Room3DScene :geometry="geometry" :openings="openings" :items="items" editable @save="save" />
+      <Room3DScene ref="scene" :geometry="geometry" :openings="openings" :items="items" editable @save="save" />
 
       <p v-if="saveError" class="rounded-sm bg-danger-subtle p-3 text-sm text-danger-strong">
         {{ saveError }}

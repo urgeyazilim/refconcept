@@ -18,6 +18,7 @@ use App\Domains\Projects\Services\ComposableProducts;
 use App\Domains\Projects\Services\LayoutComposer;
 use App\Domains\Projects\Services\LayoutWriter;
 use App\Domains\Projects\Services\RoomGeometryProposer;
+use App\Domains\Projects\Services\RoomPhotoStorage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -43,6 +44,7 @@ final class RoomLayoutController
         private readonly RoomGeometryProposer $proposer,
         private readonly LayoutComposer $composer,
         private readonly ComposableProducts $products,
+        private readonly RoomPhotoStorage $photos,
     ) {}
 
     /**
@@ -217,7 +219,10 @@ final class RoomLayoutController
 
         $version = $this->latestVersion($room, $request->string('design_version_id')->toString());
 
-        abort_if($version === null, 422, 'Bu oda için tamamlanmış bir tasarım yok.');
+        // "Hazır", because that is the word the design screens use for a version that has
+        // finished. A customer who has just watched one finish should recognise the state
+        // they are being told they do not have.
+        abort_if($version === null, 422, 'Bu oda için hazır bir tasarım yok. Önce bir tasarım oluşturun.');
 
         $layout = $this->layouts->draftFor($room, $geometry, $request->user()?->getKey());
 
@@ -254,6 +259,67 @@ final class RoomLayoutController
                 'unmeasured' => $catalogue['unmeasured'],
             ],
         ]);
+    }
+
+    /**
+     * Keeps a picture of the 3D plan, for the renderer to work from.
+     *
+     * The whole reason the 3D module exists. A photorealistic model handed a photograph and a
+     * list of furniture will rearrange the room to make a better picture — it narrowed a
+     * doorway, moved a window wall and added a sofa nobody sells, and the customer saw their
+     * own flat with furniture in it that does not exist. Prompt rules helped and did not fix
+     * it, because the model is not disobeying: it is resolving an underdetermined scene, and
+     * the only real answer is to stop leaving it underdetermined.
+     *
+     * So the browser renders the room it has already agreed with the customer — the walls at
+     * the confirmed measurements, the openings where the openings are, every piece at its
+     * real size in its chosen place — and that picture goes to the renderer alongside the
+     * photograph, as the structure to follow rather than a suggestion.
+     *
+     * It is the customer's home either way, so it lands on the private disk under the same
+     * rules as their photographs, and no URL for it appears in any response.
+     */
+    public function storeSnapshot(Request $request, Project $project, Room $room): JsonResponse
+    {
+        $this->authorizeProject($request, $project);
+        $this->assertBelongs($room, $project);
+
+        $geometry = $this->currentGeometry($room);
+
+        abort_if($geometry === null, 422, 'Önce oda ölçülerinin onaylanması gerekiyor.');
+
+        $validated = $request->validate([
+            // A canvas gives us a data URL. Capped at roughly six megabytes of base64, which
+            // is a generous 2000-pixel PNG and far short of anything worth worrying about.
+            'image' => ['required', 'string', 'max:8000000'],
+        ]);
+
+        $bytes = $this->decodePng((string) $validated['image']);
+
+        $layout = $this->layouts->draftFor($room, $geometry, $request->user()?->getKey());
+
+        $temporary = tempnam(sys_get_temp_dir(), 'layout');
+
+        abort_if($temporary === false, 500, 'Geçici dosya oluşturulamadı.');
+
+        try {
+            file_put_contents($temporary, $bytes);
+
+            $stored = $this->photos->storeLayoutSnapshot((string) $layout->getKey(), $temporary);
+        } finally {
+            // Scratch space nobody empties becomes an archive of every room ever planned.
+            @unlink($temporary);
+        }
+
+        $layout->forceFill([
+            'snapshot_disk' => $stored['disk'],
+            'snapshot_path' => $stored['path'],
+            'snapshot_taken_at' => now(),
+        ])->save();
+
+        // Deliberately no path and no URL. The client knows it succeeded; it has no business
+        // knowing where a picture of somebody's home is stored.
+        return response()->json(['data' => ['stored' => true]]);
     }
 
     public function save(Request $request, Project $project, Room $room): JsonResponse
@@ -341,6 +407,31 @@ final class RoomLayoutController
         }
 
         return $query->latest('created_at')->first();
+    }
+
+    /**
+     * The bytes out of a canvas data URL.
+     *
+     * Only PNG, and only after the bytes have been looked at rather than the header trusted:
+     * the prefix is whatever the caller typed, and this ends up on the disk where the room
+     * photographs live. `getimagesizefromstring` reads the actual image header, so a file
+     * claiming to be a PNG and containing something else is refused here rather than stored.
+     */
+    private function decodePng(string $dataUrl): string
+    {
+        $comma = strpos($dataUrl, ',');
+
+        $encoded = $comma === false ? $dataUrl : substr($dataUrl, $comma + 1);
+
+        $bytes = base64_decode($encoded, true);
+
+        abort_if($bytes === false || $bytes === '', 422, 'Görüntü çözümlenemedi.');
+
+        $info = @getimagesizefromstring($bytes);
+
+        abort_if($info === false || $info[2] !== IMAGETYPE_PNG, 422, 'Görüntü PNG olmalı.');
+
+        return $bytes;
     }
 
     private function currentGeometry(Room $room): ?RoomGeometryVersion

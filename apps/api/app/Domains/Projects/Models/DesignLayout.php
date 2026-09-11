@@ -32,6 +32,9 @@ use Illuminate\Support\Carbon;
  * @property int $version
  * @property string $source
  * @property string $status
+ * @property string|null $snapshot_disk
+ * @property string|null $snapshot_path
+ * @property Carbon|null $snapshot_taken_at
  * @property string|null $created_by
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -66,6 +69,9 @@ class DesignLayout extends Model
     {
         return [
             'version' => 'integer',
+            // So a snapshot older than the layout it claims to show can be spotted, rather
+            // than quietly sent to a renderer as the truth.
+            'snapshot_taken_at' => 'datetime',
         ];
     }
 

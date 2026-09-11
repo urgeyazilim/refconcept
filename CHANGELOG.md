@@ -5,6 +5,38 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added — The 3D room editor
+
+- **A room the customer measures, furnishes and walks around.** Three.js scene at the
+  confirmed measurements, with real holes cut for doors and windows, three views in the
+  storyboard's own words — Üstten, Perspektif, İçeriden — and a 2D plan drawn in SVG so
+  its labels are text at any zoom rather than pixels.
+- **Measurements are proposed and then agreed to.** The analysis now estimates a room's
+  width, length and height in millimetres and reports its doors and windows as a wall, an
+  offset and a width (`room_analysis` prompt v2). Those arrive as an unconfirmed
+  `room_geometry_versions` row and the screen asks "Bu ölçüler doğru mu?" with
+  `[Evet, devam et]` and `[Düzelt]`. Confirming writes them onto the room and adopts the
+  detected openings — but only into a room that has none of its own.
+- **Furniture at its real size, from the SKU.** Drag with snapping to walls, edges and
+  centre lines; live distances in centimetres to whatever is next to a piece; rotation,
+  locking, undo and redo; autosave a second after the last change.
+- **Collision rules in two places that have to agree.** The browser answers while somebody
+  drags; the server decides, because nothing arriving over HTTP can be trusted — least of
+  all the collision flags the client computed. `CollisionEngine.spec.ts` is deliberately
+  the same cases as `LayoutGeometryTest.php`, in the same order, with the same numbers.
+- **`LayoutComposer` arranges what a design settled on.** Words like "a sofa on the north
+  wall" become millimetres here rather than in a language model, which produces coordinates
+  that look like coordinates and put a wardrobe through a doorway. Wall pieces fill a wall
+  from one end, skipping what a door is owed; seating floats 350 mm off its wall when the
+  room can spare it and hugs it when it cannot; rugs go down first, tables in front of
+  seating, pictures 1.5 m up. What did not fit comes back by name.
+- **The plan goes to the renderer as structure.** The browser sends a picture of the room
+  it has already agreed with the customer, and the render carries it as a second image with
+  its role stated. This is the answer to the render that narrowed a doorway, moved a wall
+  and invented a sofa: the model was not disobeying, it was resolving a scene left
+  underdetermined. It lands on the private disk under the same rules as a room photograph,
+  and no response ever carries a path to it.
+
 ### Added — Room tour video
 
 - **A finished design can be filmed.** Veo 3.1 Lite turns the render into an eight-second

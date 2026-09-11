@@ -17,11 +17,13 @@ use App\Domains\Matching\Services\ShoppingListBuilder;
 use App\Domains\Projects\Enums\GenerationStage;
 use App\Domains\Projects\Enums\RenderQuality;
 use App\Domains\Projects\Exceptions\DesignGenerationFailed;
+use App\Domains\Projects\Models\DesignLayout;
 use App\Domains\Projects\Models\DesignPlan;
 use App\Domains\Projects\Models\DesignVersion;
 use App\Domains\Projects\Models\DesignVersionEvent;
 use App\Domains\Projects\Models\Room;
 use App\Domains\Projects\Models\RoomAnalysis;
+use App\Domains\Projects\Models\RoomGeometryVersion;
 use App\Domains\Projects\Models\RoomMedia;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -362,6 +364,24 @@ final class DesignGenerationPipeline
 
         $images = [['disk' => $photograph->disk, 'path' => $photograph->storage_path]];
 
+        /*
+         * Then the 3D plan, when the customer has made one.
+         *
+         * This is the answer to the worst bug this pipeline has had. Given a photograph and a
+         * list of furniture, a photorealistic model rearranges the room to make a better
+         * picture: it narrowed a doorway, moved the window wall and added a sofa nobody
+         * sells, and the customer saw their own flat containing furniture that does not
+         * exist. Prompt rules helped and did not fix it, because the model is not disobeying
+         * — it is resolving a scene we left underdetermined, and the fix is to stop leaving
+         * it underdetermined. A picture of the room at its confirmed measurements, with every
+         * piece at its real size in its chosen place, is structure rather than instruction.
+         */
+        $layout = $this->layoutReference($room);
+
+        if ($layout !== null) {
+            $images[] = $layout;
+        }
+
         // Then the products the customer will actually be offered, so the sofa in the
         // picture is the sofa in the shopping list underneath it.
         $images = array_merge($images, $this->productImages($matches));
@@ -418,7 +438,7 @@ final class DesignGenerationPipeline
                 'instruction' => $version->user_prompt,
                 // What each supplied image is. Unlabelled, a model has no way to tell the
                 // room it must preserve from the furniture it must place into it.
-                'image_roles' => $this->imageRoles($matches),
+                'image_roles' => $this->imageRoles($matches, $layout !== null),
                 'image_sources' => $images,
             ],
             subject: $version,
@@ -750,6 +770,47 @@ final class DesignGenerationPipeline
     }
 
     /**
+     * The picture of the room's 3D plan, if there is one worth sending.
+     *
+     * Three conditions, and each one is a way this could otherwise make a render worse.
+     *
+     * Measurements somebody agreed to, because a plan drawn against a guess is a guess drawn
+     * to scale. A layout with furniture in it, because an empty room sent as "the structure
+     * to follow" is an instruction to empty the room. And a file that is still on the disk,
+     * because a missing image is a failed job in the middle of something the customer paid
+     * for — for the sake of a reference the render is perfectly capable of doing without.
+     *
+     * @return array{disk: string, path: string}|null
+     */
+    private function layoutReference(Room $room): ?array
+    {
+        $geometry = RoomGeometryVersion::query()
+            ->where('room_id', $room->getKey())
+            ->where('is_confirmed', true)
+            ->first();
+
+        if ($geometry === null) {
+            return null;
+        }
+
+        $layout = DesignLayout::query()
+            ->where('room_id', $room->getKey())
+            ->where('geometry_version_id', $geometry->getKey())
+            ->whereHas('items')
+            ->latest('version')
+            ->first();
+
+        $disk = $layout?->snapshot_disk;
+        $path = $layout?->snapshot_path;
+
+        if ($disk === null || $path === null || ! $this->storage->exists($disk, $path)) {
+            return null;
+        }
+
+        return ['disk' => $disk, 'path' => $path];
+    }
+
+    /**
      * What each image is, in the order they are sent.
      *
      * A model handed four pictures and no explanation has to guess which one is the room.
@@ -759,9 +820,22 @@ final class DesignGenerationPipeline
      * @param  Collection<int, DesignMatch>  $matches
      * @return list<string>
      */
-    private function imageRoles(Collection $matches): array
+    private function imageRoles(Collection $matches, bool $hasLayout = false): array
     {
         $roles = ['Müşterinin odasının fotoğrafı — düzenlenecek mekân budur.'];
+
+        /*
+         * Said only when the picture is actually there.
+         *
+         * A rule in the system prompt about "the second image" would be a rule that lies
+         * whenever a customer has not made a plan, and a model told to follow an image that
+         * is not there resolves the contradiction by inventing one.
+         */
+        if ($hasLayout) {
+            $roles[] = 'Müşterinin onayladığı 3B yerleşim şeması. Duvarlar, kapı ve pencereler '
+                .'bu şemadaki yerlerinde; şemadaki kutular ürünlerin gerçek ölçüleridir ve her '
+                .'ürün şemada durduğu yerde duracak. Şemayı çizme, yalnızca yerleşim için kullan.';
+        }
 
         foreach ($matches->sortBy('placement_index')->take(self::MAX_PRODUCT_REFERENCES) as $match) {
             $media = $match->product?->media?->first();

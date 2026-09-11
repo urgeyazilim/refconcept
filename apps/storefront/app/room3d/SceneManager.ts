@@ -321,9 +321,17 @@ export class SceneManager {
 
   /** The canvas as a PNG data URL, for the render pipeline and for thumbnails. */
   snapshot(): string {
-    // Drawn synchronously first: the loop may not have run since the last change, and a
-    // screenshot of a stale frame is a screenshot of the wrong layout.
-    this.render()
+    /*
+     * Drawn synchronously first, unless the canvas is hidden.
+     *
+     * The loop may not have run since the last change, and a screenshot of a stale frame is
+     * a screenshot of the wrong layout. But a hidden canvas — the plan view is showing — has
+     * no size, and rendering into a zero-sized buffer replaces a good frame with nothing.
+     * The buffer is preserved, so what is already in it is the last real view of the room.
+     */
+    if (this.canvas.clientWidth > 0 && this.canvas.clientHeight > 0) {
+      this.render()
+    }
 
     return this.canvas.toDataURL('image/png')
   }

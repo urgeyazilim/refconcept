@@ -81,6 +81,15 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, EnsureEmailIsVerif
         // and this is arithmetic against the room, not another trip to a provider.
         Route::post('{project}/rooms/{room}/layout/compose', [RoomLayoutController::class, 'compose'])
             ->name('rooms.layout.compose');
+        /*
+         * A picture of the plan, for the renderer to follow.
+         *
+         * It is a picture of the inside of somebody's home — their walls, their windows,
+         * their furniture — so it lands on the private disk under the same rules as their
+         * photographs, and no response ever carries a path to it.
+         */
+        Route::post('{project}/rooms/{room}/layout/snapshot', [RoomLayoutController::class, 'storeSnapshot'])
+            ->name('rooms.layout.snapshot');
         Route::post('{project}/rooms/{room}/geometry', [RoomLayoutController::class, 'storeGeometry'])
             ->name('rooms.geometry.store');
         Route::post('{project}/rooms/{room}/geometry/{version}/confirm', [RoomLayoutController::class, 'confirmGeometry'])

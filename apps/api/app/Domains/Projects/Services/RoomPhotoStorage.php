@@ -106,6 +106,32 @@ final class RoomPhotoStorage
     }
 
     /**
+     * Stores a picture of the 3D plan, to hand to the renderer as a reference.
+     *
+     * On the private disk with the room's photographs and under the same rules, because it
+     * is a picture of the inside of somebody's home: the walls are theirs, the windows are
+     * where their windows are, and the furniture is what they are about to buy. That it was
+     * drawn rather than photographed changes nothing about who may see it.
+     *
+     * No table row and no model. One layout has one current snapshot, the layout knows where
+     * it is, and a snapshot with no layout pointing at it is rubbish rather than a record —
+     * which is exactly what it should be, because it is regenerated every time the furniture
+     * moves.
+     *
+     * @return array{disk: string, path: string}
+     */
+    public function storeLayoutSnapshot(string $layoutId, string $sourcePath): array
+    {
+        $disk = $this->disk();
+
+        $path = sprintf('layout-snapshots/%s/%s.png', $layoutId, Str::uuid7()->toString());
+
+        $this->put($disk, $path, $sourcePath, 'image/png');
+
+        return ['disk' => $disk, 'path' => $path];
+    }
+
+    /**
      * Stores an image a design version produced.
      *
      * Deliberately a different method writing to a different table. From Phase 8 the AI

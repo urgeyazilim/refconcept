@@ -17,10 +17,13 @@ use App\Domains\Projects\Enums\GenerationStage;
 use App\Domains\Projects\Enums\RenderQuality;
 use App\Domains\Projects\Jobs\GenerateDesignVersion;
 use App\Domains\Projects\Models\DesignBrief;
+use App\Domains\Projects\Models\DesignLayout;
+use App\Domains\Projects\Models\DesignLayoutItem;
 use App\Domains\Projects\Models\DesignPlan;
 use App\Domains\Projects\Models\DesignVersionEvent;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\RoomAnalysis;
+use App\Domains\Projects\Models\RoomGeometryVersion;
 use App\Domains\Projects\Models\RoomMedia;
 use App\Domains\Projects\Services\BriefToPlacements;
 use App\Domains\Projects\Services\DesignGenerationPipeline;
@@ -131,6 +134,12 @@ beforeEach(function (): void {
 afterEach(function (): void {
     FakeAiProvider::reset();
 });
+
+/** A one-pixel PNG, for fixtures that need bytes behind a path. */
+function pixel(): string
+{
+    return (string) base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', true);
+}
 
 it('takes a room from a photograph to a finished render', function (): void {
     $version = $this->launcher->launch($this->design, null, $this->owner);
@@ -844,4 +853,86 @@ it('hands the render the composition as well as the products', function (): void
 
     expect($render->input['composition']['focal_point'] ?? null)->toBe('Pencere duvarı')
         ->and($render->input['plan'][0]['position'] ?? null)->toContain('halının üzerinde');
+});
+
+it('hands the renderer the 3D plan when the customer has made one', function (): void {
+    /*
+     * The answer to the worst bug this pipeline has had.
+     *
+     * Given a photograph and a list of furniture, the renderer rearranged the room to make a
+     * better picture: it narrowed the doorway, moved the window wall and added a sofa nobody
+     * sells. Prompt rules helped and did not fix it, because the model was not disobeying —
+     * it was resolving a scene left underdetermined. A picture of the room at its confirmed
+     * measurements, with every piece at its real size in its chosen place, is structure
+     * rather than instruction.
+     */
+    $geometry = RoomGeometryVersion::query()->create([
+        'room_id' => $this->room->getKey(),
+        'version' => 1,
+        'source' => 'user',
+        'width_mm' => 4_000,
+        'length_mm' => 5_000,
+        'height_mm' => 2_700,
+    ]);
+
+    $geometry->forceFill(['is_confirmed' => true, 'confirmed_at' => now()])->save();
+
+    $layout = DesignLayout::query()->create([
+        'room_id' => $this->room->getKey(),
+        'geometry_version_id' => $geometry->getKey(),
+        'version' => 1,
+        'source' => 'user',
+    ]);
+
+    DesignLayoutItem::query()->create([
+        'layout_id' => $layout->getKey(),
+        'product_id' => $this->sofa->getKey(),
+        'sku_id' => $this->sofa->skus->firstOrFail()->getKey(),
+        'position_x_mm' => 2_000,
+        'position_z_mm' => 800,
+    ]);
+
+    $path = 'layout-snapshots/'.$layout->getKey().'/'.Str::uuid7().'.png';
+
+    Storage::disk('s3')->put($path, pixel());
+
+    $layout->forceFill([
+        'snapshot_disk' => 's3',
+        'snapshot_path' => $path,
+        'snapshot_taken_at' => now(),
+    ])->save();
+
+    // The room's own photograph, so the count below is about the plan rather than about
+    // which fixtures happen to have bytes behind them.
+    Storage::disk('s3')->put((string) $this->room->primaryMedia?->storage_path, pixel());
+
+    $version = $this->launcher->launch($this->design, null, $this->owner);
+
+    expect($version->fresh()?->status)->toBe(DesignVersionStatus::Ready);
+
+    $render = AiJob::query()->where('task', AiTask::ImageRenderDraft->value)->firstOrFail();
+
+    /*
+     * Named as well as sent. A model handed several pictures and no explanation has to guess
+     * which one is the room it must not change — and the roles are asserted on the job's own
+     * input rather than the rendered prompt, because the prompt template a test route carries
+     * is a fixture rather than the shipped one.
+     */
+    expect(implode(' ', (array) $render->input['image_roles']))->toContain('3B yerleşim şeması')
+        ->and($render->input['image_sources'])->toHaveCount(2)
+        ->and(collect($render->input['image_sources'])->pluck('path')->all())->toContain($path);
+});
+
+it('says nothing about a plan when there is no plan', function (): void {
+    $this->launcher->launch($this->design, null, $this->owner);
+
+    $render = AiJob::query()->where('task', AiTask::ImageRenderDraft->value)->firstOrFail();
+
+    /*
+     * A rule about "the second image" would be a rule that lies whenever a customer has not
+     * made a plan, and a model told to follow an image that is not there resolves the
+     * contradiction by inventing one.
+     */
+    expect(implode(' ', (array) $render->input['image_roles']))->not->toContain('3B yerleşim şeması')
+        ->and($render->input['image_sources'])->toHaveCount(1);
 });
