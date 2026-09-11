@@ -22,7 +22,7 @@ use Illuminate\Support\Carbon;
  * @property ConstraintType $type
  * @property string|null $label
  * @property string|null $wall
- * @property int|null $offset_mm distance from the left edge of that wall, seen from inside
+ * @property int|null $offset_mm distance along the wall axis from the origin: x=0 for north and south, z=0 for east and west
  * @property int|null $width_mm
  * @property int|null $height_mm
  * @property int|null $sill_height_mm

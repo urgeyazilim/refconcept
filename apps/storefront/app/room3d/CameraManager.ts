@@ -1,0 +1,217 @@
+import { OrthographicCamera, PerspectiveCamera, Vector3 } from 'three'
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+
+import { type RoomGeometry, type ViewMode, toUnits } from './types'
+
+/**
+ * The three ways of looking at a room, and the controls that move between them.
+ *
+ * Perspective for judging how a room feels, orthographic from above for judging where things
+ * are. They are genuinely different questions: a perspective view makes a sofa near the
+ * camera look larger than a wardrobe at the back, which is honest about the experience and
+ * useless for deciding whether the walkway is wide enough. The plan view has no perspective
+ * at all, so two gaps that measure the same look the same.
+ *
+ * "Inside" is the perspective camera moved to eye height in a corner — the view somebody
+ * actually has walking in, which is the one that tells you a room is cramped before any
+ * measurement does.
+ */
+export class CameraManager {
+  private readonly perspective: PerspectiveCamera
+
+  private readonly orthographic: OrthographicCamera
+
+  private readonly controls: OrbitControls
+
+  /** Read by the scene to decide which walls are in the way. */
+  mode: ViewMode = 'perspective'
+
+  /** The room's middle, which every view looks at and orbits around. */
+  private target = new Vector3(0, 0, 0)
+
+  private geometry: RoomGeometry | null = null
+
+  constructor(canvas: HTMLCanvasElement) {
+    const aspect = canvas.clientWidth === 0 ? 1 : canvas.clientWidth / canvas.clientHeight
+
+    /*
+     * Fifty degrees, not the seventy-five Three.js defaults to.
+     *
+     * A wide lens inside a small room exaggerates its depth enormously — the far wall races
+     * away and a 4-metre living room reads as a hall. Fifty is close to what a phone camera
+     * sees, which is what the customer's own photograph was taken with, so the 3D room and
+     * the photograph beside it feel like the same place.
+     */
+    this.perspective = new PerspectiveCamera(50, aspect, 0.05, 200)
+
+    // Extents are set properly the moment a room arrives; these only have to be non-zero.
+    this.orthographic = new OrthographicCamera(-5, 5, 5, -5, 0.05, 200)
+
+    this.controls = new OrbitControls(this.perspective, canvas)
+    this.controls.enableDamping = true
+    this.controls.dampingFactor = 0.08
+
+    // Stopped just above the floor. Orbiting under the room shows its underside and there is
+    // nothing down there anybody wants to see.
+    this.controls.maxPolarAngle = Math.PI / 2 - 0.05
+
+    this.controls.minDistance = 0.6
+    this.controls.maxDistance = 40
+  }
+
+  get active(): PerspectiveCamera | OrthographicCamera {
+    return this.mode === 'top' ? this.orthographic : this.perspective
+  }
+
+  /**
+   * Advances the controls' damping.
+   *
+   * Returns whether anything moved, so the render loop can stay idle when nothing has. A
+   * planner sits still most of the time it is open.
+   */
+  update(): boolean {
+    return this.controls.update()
+  }
+
+  setMode(mode: ViewMode): void {
+    this.mode = mode
+
+    if (this.geometry !== null) {
+      this.frame(this.geometry)
+    }
+  }
+
+  /**
+   * Points whichever camera is active at the whole room.
+   *
+   * Called when a room arrives and whenever the view changes, because a camera framed for a
+   * 3-metre bedroom shows a corner of a 6-metre living room and reads as a broken scene
+   * rather than a camera that needs moving.
+   */
+  frame(geometry: RoomGeometry): void {
+    this.geometry = geometry
+
+    const width = toUnits(geometry.width_mm)
+    const length = toUnits(geometry.length_mm)
+    const height = toUnits(geometry.height_mm)
+
+    this.target.set(width / 2, height / 3, length / 2)
+
+    switch (this.mode) {
+      case 'top':
+        this.frameTop(width, length, height)
+        break
+
+      case 'inside':
+        this.frameInside(width, length, height)
+        break
+
+      default:
+        this.framePerspective(width, length, height)
+    }
+
+    this.controls.target.copy(this.target)
+    this.controls.update()
+  }
+
+  setAspect(aspect: number): void {
+    this.perspective.aspect = aspect
+    this.perspective.updateProjectionMatrix()
+
+    if (this.geometry !== null && this.mode === 'top') {
+      this.frameTop(
+        toUnits(this.geometry.width_mm),
+        toUnits(this.geometry.length_mm),
+        toUnits(this.geometry.height_mm),
+      )
+    }
+  }
+
+  dispose(): void {
+    this.controls.dispose()
+  }
+
+  // --- framings --------------------------------------------------------------
+
+  private framePerspective(width: number, length: number, height: number): void {
+    /*
+     * Outside one corner, above head height, looking down into the room.
+     *
+     * The distance is derived from the room rather than fixed, so a studio and a salon are
+     * both filled rather than one being a speck and the other cropped.
+     */
+    const reach = Math.max(width, length) * 1.5
+
+    this.perspective.position.set(width / 2 + reach * 0.7, height * 1.6, length / 2 + reach * 0.8)
+
+    this.controls.object = this.perspective
+    this.controls.enableRotate = true
+    this.controls.maxPolarAngle = Math.PI / 2 - 0.05
+  }
+
+  private frameTop(width: number, length: number, height: number): void {
+    const aspect = this.perspective.aspect
+
+    // A tenth of margin so the walls are not flush against the edge of the canvas, where
+    // they are hard to distinguish from its border.
+    const halfWidth = (width / 2) * 1.1
+    const halfLength = (length / 2) * 1.1
+
+    // Whichever dimension the canvas is tighter in decides the zoom; the other gets slack.
+    const halfHeight = Math.max(halfLength, halfWidth / aspect)
+
+    this.orthographic.left = -halfHeight * aspect
+    this.orthographic.right = halfHeight * aspect
+    this.orthographic.top = halfHeight
+    this.orthographic.bottom = -halfHeight
+    this.orthographic.updateProjectionMatrix()
+
+    this.orthographic.position.set(width / 2, height * 4, length / 2)
+
+    // Straight down. Without an explicit up vector pointing along -z the camera has no
+    // defined orientation looking down the y axis and the plan arrives at a random rotation.
+    this.orthographic.up.set(0, 0, -1)
+    this.orthographic.lookAt(width / 2, 0, length / 2)
+
+    this.target.set(width / 2, 0, length / 2)
+
+    this.controls.object = this.orthographic
+
+    /*
+     * No orbiting from above, and no polar limit.
+     *
+     * OrbitControls keeps the camera on a sphere whose axis is the camera's own up vector,
+     * and looking straight down needs that vector pointing along -z. In that frame the camera
+     * sits at ninety degrees from the pole, which the usual limit clamps — so every update
+     * quietly shoved the plan off to one side of the canvas, and it looked like the
+     * framing arithmetic was wrong rather than the controls.
+     *
+     * A plan view has nothing to orbit to anyway: there is exactly one useful angle. Panning
+     * and zooming stay.
+     */
+    this.controls.enableRotate = false
+    this.controls.maxPolarAngle = Math.PI
+  }
+
+  private frameInside(width: number, length: number, height: number): void {
+    /*
+     * Standing just inside the room at eye height, looking across it.
+     *
+     * 1.6 m rather than the middle of the wall: the whole value of this view is that it is
+     * the height a person's eyes are at, and a camera at 1.35 m makes every room look
+     * taller and more generous than it will be.
+     */
+    const eye = Math.min(1.6, height * 0.7)
+
+    this.perspective.position.set(width * 0.12, eye, length * 0.12)
+
+    this.target.set(width * 0.8, eye * 0.9, length * 0.8)
+
+    this.controls.object = this.perspective
+    this.controls.enableRotate = true
+
+    // Looking about, not orbiting: from inside, an orbit swings the camera through the wall
+    // behind you and the room turns inside out.
+    this.controls.maxPolarAngle = Math.PI - 0.05
+  }
+}
