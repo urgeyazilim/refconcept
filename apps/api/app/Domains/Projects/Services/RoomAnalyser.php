@@ -28,6 +28,7 @@ final class RoomAnalyser
 {
     public function __construct(
         private readonly AiJobDispatcher $dispatcher,
+        private readonly RoomGeometryProposer $proposer,
     ) {}
 
     /**
@@ -111,7 +112,7 @@ final class RoomAnalyser
                 ->where('is_current', true)
                 ->update(['is_current' => false]);
 
-            return RoomAnalysis::query()->create([
+            $analysis = RoomAnalysis::query()->create([
                 'room_id' => $room->getKey(),
                 'media_id' => $mediaId,
                 'ai_job_id' => $jobId,
@@ -126,6 +127,17 @@ final class RoomAnalyser
                 'warnings' => $this->arrayOrNull($structured['warnings'] ?? null),
                 'is_current' => true,
             ]);
+
+            /*
+             * The measurements the photograph suggested, written down as something to agree
+             * to rather than something to use. Inside the same transaction, because an
+             * analysis stored without its proposal is a room the plan screen opens on a
+             * blank form and a customer who is asked to measure a room we just measured.
+             */
+            $analysis->setRelation('room', $room);
+            $this->proposer->propose($analysis);
+
+            return $analysis;
         });
     }
 

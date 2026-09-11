@@ -13,6 +13,7 @@ use App\Domains\Projects\Models\Room;
 use App\Domains\Projects\Models\RoomConstraint;
 use App\Domains\Projects\Models\RoomGeometryVersion;
 use App\Domains\Projects\Services\LayoutWriter;
+use App\Domains\Projects\Services\RoomGeometryProposer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -33,7 +34,10 @@ use Illuminate\Validation\Rule;
  */
 final class RoomLayoutController
 {
-    public function __construct(private readonly LayoutWriter $layouts) {}
+    public function __construct(
+        private readonly LayoutWriter $layouts,
+        private readonly RoomGeometryProposer $proposer,
+    ) {}
 
     /**
      * Everything the editor needs to open: the room, its openings and its furniture.
@@ -158,6 +162,18 @@ final class RoomLayoutController
                     ? MeasurementQuality::Estimated
                     : MeasurementQuality::Manual,
             ])->save();
+
+            /*
+             * The doors and windows the photograph suggested, adopted with the measurements
+             * they were measured against.
+             *
+             * One decision rather than two: a door added to somebody's list of fixed elements
+             * the moment a photograph was read is a door they did not put there and will not
+             * think to check. It goes in only if the room has none of its own — there is no
+             * way to tell from here which of two windows a metre apart is the real one.
+             */
+            $version->setRelation('room', $room);
+            $this->proposer->adoptOpenings($version);
         });
 
         return response()->json(['data' => $this->geometry($version->fresh())]);

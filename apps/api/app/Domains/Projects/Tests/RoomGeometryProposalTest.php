@@ -1,0 +1,183 @@
+<?php
+
+declare(strict_types=1);
+
+use App\Domains\Projects\Models\Project;
+use App\Domains\Projects\Models\RoomAnalysis;
+use App\Domains\Projects\Models\RoomConstraint;
+use App\Domains\Projects\Models\RoomGeometryVersion;
+use App\Domains\Projects\Services\RoomGeometryProposer;
+use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Support\Str;
+
+/**
+ * What the photograph said about the size of the room, and what is done with it.
+ *
+ * The estimate is made the way a person would make it — from a doorway, a floor tile, the
+ * height of a socket — and is right to within a hand's width most of the time and wrong by
+ * half a metre occasionally. So it is written down as something to agree to. Everything here
+ * is about the difference between those two things.
+ */
+beforeEach(function (): void {
+    $this->seed(RolesAndPermissionsSeeder::class);
+
+    $this->proposer = app(RoomGeometryProposer::class);
+
+    $project = Project::factory()->withRoom()->create();
+    $this->room = $project->rooms()->firstOrFail();
+});
+
+/**
+ * An analysis with whatever the model is being said to have reported.
+ *
+ * @param  array<string, mixed>  $payload
+ */
+function analysed(array $payload): RoomAnalysis
+{
+    $media = test()->room->media()->create([
+        'disk' => 'room-photos',
+        'storage_path' => 'test/'.Str::uuid7().'.jpg',
+        'original_name' => 'oda.jpg',
+        'mime_type' => 'image/jpeg',
+        'size_bytes' => 1_024,
+        'checksum_sha256' => hash('sha256', 'oda'),
+        'type' => 'photo',
+    ]);
+
+    $analysis = RoomAnalysis::query()->create([
+        'room_id' => test()->room->getKey(),
+        'media_id' => $media->getKey(),
+        'payload' => $payload,
+        'is_current' => true,
+    ]);
+
+    $analysis->setRelation('room', test()->room);
+
+    return $analysis;
+}
+
+it('proposes the measurements it read, unconfirmed', function (): void {
+    $version = $this->proposer->propose(analysed([
+        'estimated_dimensions' => ['width_mm' => 4_850, 'length_mm' => 5_200, 'height_mm' => 2_720, 'confidence' => 0.72],
+    ]));
+
+    expect($version)->not->toBeNull()
+        ->and($version->width_mm)->toBe(4_850)
+        ->and($version->source)->toBe('ai')
+        // The whole point. Until somebody says yes it is a guess with a decimal point on it.
+        ->and($version->is_confirmed)->toBeFalse()
+        ->and($version->confidence_bps)->toBe(7_200);
+});
+
+it('says nothing rather than guessing when the photograph did not tell it', function (): void {
+    expect($this->proposer->propose(analysed(['fixed_elements' => []])))->toBeNull();
+});
+
+it('drops an estimate that cannot be a room', function (): void {
+    // 485 mm across. A misread reference — a doll's house door, a photograph of a photograph —
+    // and a number that would be proposed to the customer as their living room.
+    expect($this->proposer->propose(analysed([
+        'estimated_dimensions' => ['width_mm' => 485, 'length_mm' => 5_200, 'height_mm' => 2_720],
+    ])))->toBeNull();
+});
+
+it('does not ask again about a room whose measurements are already agreed', function (): void {
+    RoomGeometryVersion::query()->create([
+        'room_id' => $this->room->getKey(),
+        'version' => 1,
+        'source' => 'user',
+        'width_mm' => 4_000,
+        'length_mm' => 4_000,
+        'height_mm' => 2_600,
+    ])->forceFill(['is_confirmed' => true, 'confirmed_at' => now()])->save();
+
+    // Re-reading a photograph should not put a question back in front of somebody who has
+    // answered it.
+    expect($this->proposer->propose(analysed([
+        'estimated_dimensions' => ['width_mm' => 4_850, 'length_mm' => 5_200, 'height_mm' => 2_720],
+    ])))->toBeNull();
+});
+
+it('proposes once per analysis rather than once per reading', function (): void {
+    $analysis = analysed([
+        'estimated_dimensions' => ['width_mm' => 4_850, 'length_mm' => 5_200, 'height_mm' => 2_720],
+    ]);
+
+    $first = $this->proposer->propose($analysis);
+    $second = $this->proposer->propose($analysis);
+
+    expect($second->getKey())->toBe($first->getKey())
+        ->and(RoomGeometryVersion::query()->where('room_id', $this->room->getKey())->count())->toBe(1);
+});
+
+// --- openings ---------------------------------------------------------------------
+
+it('carries the openings on the proposal instead of adding them to the room', function (): void {
+    $version = $this->proposer->propose(analysed([
+        'estimated_dimensions' => ['width_mm' => 4_850, 'length_mm' => 5_200, 'height_mm' => 2_720],
+        'openings' => [
+            ['type' => 'door', 'wall' => 'east', 'offset_mm' => 400, 'width_mm' => 900, 'height_mm' => 2_100],
+            ['type' => 'window', 'wall' => 'north', 'offset_mm' => 720, 'width_mm' => 1_800, 'sill_height_mm' => 900],
+        ],
+    ]));
+
+    /*
+     * A door detected in a photograph and silently added to the customer's fixed elements is
+     * a door they did not put there and will not think to check.
+     */
+    expect($version->payload['openings'])->toHaveCount(2)
+        ->and(RoomConstraint::query()->where('room_id', $this->room->getKey())->count())->toBe(0);
+});
+
+it('drops an opening it cannot place', function (): void {
+    $version = $this->proposer->propose(analysed([
+        'estimated_dimensions' => ['width_mm' => 4_850, 'length_mm' => 5_200, 'height_mm' => 2_720],
+        'openings' => [
+            // No wall: it cannot be drawn anywhere, and putting it somewhere would be a hole
+            // in a wall of the customer's room that does not have one.
+            ['type' => 'window', 'offset_mm' => 720, 'width_mm' => 1_800],
+            ['type' => 'door', 'wall' => 'upstairs', 'offset_mm' => 400, 'width_mm' => 900],
+            ['type' => 'door', 'wall' => 'east', 'offset_mm' => 400, 'width_mm' => 9_000],
+        ],
+    ]));
+
+    expect($version->payload['openings'])->toBe([]);
+});
+
+it('adopts the openings when the measurements are agreed to', function (): void {
+    $version = $this->proposer->propose(analysed([
+        'estimated_dimensions' => ['width_mm' => 4_850, 'length_mm' => 5_200, 'height_mm' => 2_720],
+        'openings' => [
+            ['type' => 'door', 'wall' => 'east', 'offset_mm' => 400, 'width_mm' => 900, 'height_mm' => 2_100],
+        ],
+    ]));
+
+    expect($this->proposer->adoptOpenings($version))->toBe(1);
+
+    $constraint = RoomConstraint::query()->where('room_id', $this->room->getKey())->firstOrFail();
+
+    // Said plainly, so the customer can see at a glance which entries are their own.
+    expect($constraint->wall)->toBe('east')
+        ->and($constraint->notes)->toBe('Fotoğraftan tespit edildi.');
+});
+
+it('leaves a room alone when it already has openings of its own', function (): void {
+    RoomConstraint::query()->create([
+        'room_id' => $this->room->getKey(),
+        'type' => 'window',
+        'wall' => 'north',
+        'offset_mm' => 700,
+        'width_mm' => 1_600,
+    ]);
+
+    $version = $this->proposer->propose(analysed([
+        'estimated_dimensions' => ['width_mm' => 4_850, 'length_mm' => 5_200, 'height_mm' => 2_720],
+        'openings' => [
+            ['type' => 'window', 'wall' => 'north', 'offset_mm' => 720, 'width_mm' => 1_800],
+        ],
+    ]));
+
+    // Two windows a hand's width apart, and no way to tell from here which is the real one.
+    expect($this->proposer->adoptOpenings($version))->toBe(0)
+        ->and(RoomConstraint::query()->where('room_id', $this->room->getKey())->count())->toBe(1);
+});
