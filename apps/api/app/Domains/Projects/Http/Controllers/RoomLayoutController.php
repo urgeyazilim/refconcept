@@ -5,13 +5,17 @@ declare(strict_types=1);
 namespace App\Domains\Projects\Http\Controllers;
 
 use App\Domains\Products\Models\ProductSku;
+use App\Domains\Projects\Enums\DesignVersionStatus;
 use App\Domains\Projects\Enums\MeasurementQuality;
 use App\Domains\Projects\Models\DesignLayout;
 use App\Domains\Projects\Models\DesignLayoutItem;
+use App\Domains\Projects\Models\DesignVersion;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\Room;
 use App\Domains\Projects\Models\RoomConstraint;
 use App\Domains\Projects\Models\RoomGeometryVersion;
+use App\Domains\Projects\Services\ComposableProducts;
+use App\Domains\Projects\Services\LayoutComposer;
 use App\Domains\Projects\Services\LayoutWriter;
 use App\Domains\Projects\Services\RoomGeometryProposer;
 use Illuminate\Http\JsonResponse;
@@ -37,6 +41,8 @@ final class RoomLayoutController
     public function __construct(
         private readonly LayoutWriter $layouts,
         private readonly RoomGeometryProposer $proposer,
+        private readonly LayoutComposer $composer,
+        private readonly ComposableProducts $products,
     ) {}
 
     /**
@@ -186,6 +192,70 @@ final class RoomLayoutController
      * while somebody works on it, and an API of individual moves needs every move to arrive,
      * in order, over a connection that drops.
      */
+    /**
+     * Arranges the products a design settled on, in the room's own measurements.
+     *
+     * The design decides what goes in the room and roughly where — a sofa on the north wall,
+     * a rug under the seating, a picture above the sideboard. Those are the right words for a
+     * model to produce and the wrong thing to trust with coordinates: asked for millimetres it
+     * produces millimetres that look like millimetres and put a wardrobe through a doorway,
+     * because nothing in it is checking. The arithmetic happens here, against the room the
+     * customer confirmed, and every position is checked before it is written.
+     *
+     * Refuses to overwrite an arrangement somebody has already made unless asked twice. A
+     * customer who spent ten minutes moving furniture and pressed the wrong button should get
+     * a question, not their afternoon back in the shape the engine likes.
+     */
+    public function compose(Request $request, Project $project, Room $room): JsonResponse
+    {
+        $this->authorizeProject($request, $project);
+        $this->assertBelongs($room, $project);
+
+        $geometry = $this->currentGeometry($room);
+
+        abort_if($geometry === null, 422, 'Önce oda ölçülerinin onaylanması gerekiyor.');
+
+        $version = $this->latestVersion($room, $request->string('design_version_id')->toString());
+
+        abort_if($version === null, 422, 'Bu oda için tamamlanmış bir tasarım yok.');
+
+        $layout = $this->layouts->draftFor($room, $geometry, $request->user()?->getKey());
+
+        abort_if(
+            $layout->items()->exists() && $request->boolean('replace') !== true,
+            409,
+            'Odada kayıtlı bir yerleşim var. Üzerine yazmak için onaylayın.',
+        );
+
+        $catalogue = $this->products->forVersion($version);
+
+        $composed = $this->composer->compose($geometry, $room->constraints->all(), $catalogue['pieces']);
+
+        $this->layouts->save($layout, array_map(static fn (array $item): array => [
+            'product_id' => $item['product_id'],
+            'sku_id' => $item['sku_id'],
+            'position_x_mm' => $item['position_x_mm'],
+            'position_y_mm' => $item['position_y_mm'],
+            'position_z_mm' => $item['position_z_mm'],
+            'rotation_y_deg' => $item['rotation_y_deg'],
+        ], $composed['items']));
+
+        return response()->json([
+            'data' => $this->layout($layout->fresh()),
+            'meta' => [
+                /*
+                 * What did not make it in, said plainly.
+                 *
+                 * A layout that quietly drops a product the customer chose is a layout that
+                 * lies about the shopping list beside it. "Bunlar sığmadı" is a sentence
+                 * somebody can act on — choose a narrower one, or move something themselves.
+                 */
+                'unplaced' => $composed['unplaced'],
+                'unmeasured' => $catalogue['unmeasured'],
+            ],
+        ]);
+    }
+
     public function save(Request $request, Project $project, Room $room): JsonResponse
     {
         $this->authorizeProject($request, $project);
@@ -251,6 +321,26 @@ final class RoomLayoutController
                 'Seçilen ürün ile varyant birbirine ait değil.',
             );
         }
+    }
+
+    /**
+     * The design version to arrange, named or the newest one that finished.
+     *
+     * Newest rather than the one marked current, because arranging furniture is something
+     * somebody does right after seeing a design they like — and a version explicitly asked
+     * for wins over both.
+     */
+    private function latestVersion(Room $room, string $id): ?DesignVersion
+    {
+        $query = DesignVersion::query()
+            ->whereIn('design_id', $room->designs()->select('id'))
+            ->where('status', DesignVersionStatus::Ready);
+
+        if ($id !== '') {
+            return $query->whereKey($id)->first();
+        }
+
+        return $query->latest('created_at')->first();
     }
 
     private function currentGeometry(Room $room): ?RoomGeometryVersion

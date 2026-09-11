@@ -77,6 +77,10 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, EnsureEmailIsVerif
             ->name('rooms.layout.show');
         Route::put('{project}/rooms/{room}/layout', [RoomLayoutController::class, 'save'])
             ->name('rooms.layout.save');
+        // Arranging what a design settled on. Spends no credits — the design was paid for
+        // and this is arithmetic against the room, not another trip to a provider.
+        Route::post('{project}/rooms/{room}/layout/compose', [RoomLayoutController::class, 'compose'])
+            ->name('rooms.layout.compose');
         Route::post('{project}/rooms/{room}/geometry', [RoomLayoutController::class, 'storeGeometry'])
             ->name('rooms.geometry.store');
         Route::post('{project}/rooms/{room}/geometry/{version}/confirm', [RoomLayoutController::class, 'confirmGeometry'])

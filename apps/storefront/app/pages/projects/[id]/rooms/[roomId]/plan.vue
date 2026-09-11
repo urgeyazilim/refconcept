@@ -54,6 +54,12 @@ const loadError = ref<string | null>(null)
 const saveError = ref<string | null>(null)
 const confirming = ref(false)
 
+const composing = ref(false)
+const composeNotice = ref<string | null>(null)
+
+/** Set when the server refuses to overwrite an arrangement somebody already made. */
+const overwrite = ref(false)
+
 /** Shown when the customer says the measurements are wrong. Centimetres, like a tape. */
 const correcting = ref(false)
 const correction = reactive({ width: '', length: '', height: '' })
@@ -204,6 +210,51 @@ async function save(next: LayoutItem[]): Promise<void> {
   }
 }
 
+/**
+ * Arranges the products the latest design settled on.
+ *
+ * The server refuses when there is already a layout, and that refusal is the feature:
+ * somebody who spent ten minutes moving furniture and pressed the wrong button gets a
+ * question rather than their afternoon back in the shape the engine likes.
+ */
+async function composeLayout(replace = false): Promise<void> {
+  composing.value = true
+  saveError.value = null
+  composeNotice.value = null
+
+  try {
+    const response = await api.post<{
+      data: LayoutPayload
+      meta: { unplaced: Array<{ category: string | null }>, unmeasured: Array<{ category: string | null }> }
+    }>(`${base}/layout/compose`, replace ? { replace: true } : {})
+
+    items.value = response.data.items
+    overwrite.value = false
+
+    const missed = [...response.meta.unplaced, ...response.meta.unmeasured]
+
+    if (missed.length > 0) {
+      // Said rather than hidden. A layout that quietly drops a product the customer chose is
+      // a layout that lies about the shopping list beside it.
+      const names = missed.map(entry => entry.category ?? 'ürün').join(', ')
+
+      composeNotice.value = `Şunlar yerleştirilemedi: ${names}. Daha dar bir ürün seçebilir ya da kendiniz yerleştirebilirsiniz.`
+    }
+  }
+  catch (error) {
+    if (error instanceof ApiError && error.status === 409) {
+      overwrite.value = true
+
+      return
+    }
+
+    saveError.value = error instanceof Error ? error.message : 'Yerleşim oluşturulamadı.'
+  }
+  finally {
+    composing.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -343,6 +394,46 @@ onMounted(load)
     </section>
 
     <template v-else>
+      <!--
+        Arranging costs nothing. The design was paid for; this is arithmetic against the room
+        the customer confirmed, so it is a button rather than a purchase.
+      -->
+      <div class="flex flex-wrap items-center gap-3 rounded-md border border-line bg-surface p-4">
+        <button
+          type="button"
+          class="rounded-pill bg-charcoal px-4 py-2 text-sm text-white disabled:opacity-50"
+          :disabled="composing"
+          @click="composeLayout()"
+        >
+          {{ items.length === 0 ? 'Tasarıma göre yerleştir' : 'Yeniden yerleştir' }}
+        </button>
+
+        <p class="text-xs text-muted">
+          Son tasarımda seçilen ürünler, odanın ölçülerine göre dizilir. Sonra
+          istediğiniz gibi taşıyabilirsiniz.
+        </p>
+      </div>
+
+      <!-- The question the 409 exists to ask. -->
+      <div v-if="overwrite" class="rounded-md border border-line bg-warning-subtle p-4">
+        <p class="text-sm text-warning-strong">
+          Bu odada kayıtlı bir yerleşim var. Üzerine yazılsın mı?
+        </p>
+
+        <div class="mt-3 flex gap-2">
+          <button type="button" class="rounded-pill bg-charcoal px-4 py-2 text-sm text-white" @click="composeLayout(true)">
+            Evet, yeniden diz
+          </button>
+          <button type="button" class="rounded-pill border border-line px-4 py-2 text-sm" @click="overwrite = false">
+            Vazgeç
+          </button>
+        </div>
+      </div>
+
+      <p v-if="composeNotice" class="rounded-sm bg-warning-subtle p-3 text-sm text-warning-strong">
+        {{ composeNotice }}
+      </p>
+
       <Room3DScene :geometry="geometry" :openings="openings" :items="items" editable @save="save" />
 
       <p v-if="saveError" class="rounded-sm bg-danger-subtle p-3 text-sm text-danger-strong">
