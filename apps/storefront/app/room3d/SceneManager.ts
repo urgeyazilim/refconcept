@@ -1,19 +1,26 @@
-import type {
-  Group} from 'three';
+import type { Object3D } from 'three';
 import {
   ACESFilmicToneMapping,
   AmbientLight,
+  BufferGeometry,
   Color,
   DirectionalLight,
+  Group,
+  Line,
+  LineBasicMaterial,
   PCFSoftShadowMap,
   Scene,
   SRGBColorSpace,
+  Vector3,
   WebGLRenderer,
 } from 'three'
 
 import { CameraManager } from './CameraManager'
+import type { CollisionState } from './CollisionEngine'
+import { FurnitureBuilder } from './FurnitureBuilder'
 import { RoomGeometryBuilder } from './RoomGeometryBuilder'
-import { type RoomGeometry, type RoomOpening, type ViewMode, toUnits } from './types'
+import type { SnapGuide } from './SnapEngine'
+import { type LayoutItem, type RoomGeometry, type RoomOpening, type ViewMode, toUnits } from './types'
 
 /**
  * Owns the canvas, the renderer and the render loop.
@@ -38,6 +45,25 @@ export class SceneManager {
 
   private readonly rooms = new RoomGeometryBuilder()
 
+  private readonly furniture = new FurnitureBuilder()
+
+  /**
+   * Every piece currently in the scene, by id.
+   *
+   * Kept as a map rather than read back out of the scene graph each time because a drag
+   * touches one piece sixty times a second, and searching a graph by name to move something
+   * is a search that gets slower as the room gets fuller.
+   */
+  private readonly pieces = new Map<string, Group>()
+
+  /** Holds the furniture, so it can be raycast without the walls getting in the way. */
+  private readonly layout = new Group()
+
+  /** The alignment lines a snap draws, cleared and rebuilt whenever they change. */
+  private readonly guides = new Group()
+
+  private readonly guideMaterial = new LineBasicMaterial({ color: 0x1f6feb, transparent: true, opacity: 0.7 })
+
   private room: Group | null = null
 
   /** Kept so occlusion can be recomputed without asking the room its size every frame. */
@@ -47,6 +73,9 @@ export class SceneManager {
 
   /** Set whenever something moved; cleared once a frame has been drawn. */
   private dirty = true
+
+  /** Told after each drawn frame, so HTML overlays can follow the camera. */
+  private frameCallback: (() => void) | null = null
 
   private readonly resize: () => void
 
@@ -73,6 +102,10 @@ export class SceneManager {
     this.scene.background = new Color(0xeeece8)
 
     this.cameras = new CameraManager(canvas)
+
+    this.layout.name = 'layout'
+    this.guides.name = 'guides'
+    this.scene.add(this.layout, this.guides)
 
     this.light()
 
@@ -102,6 +135,127 @@ export class SceneManager {
 
     this.cameras.frame(geometry)
     this.invalidate()
+  }
+
+  /**
+   * Puts the layout's furniture in the room.
+   *
+   * Reconciled rather than rebuilt: pieces already in the scene are moved and recoloured,
+   * new ones are added, and only what has actually gone is thrown away. Rebuilding the lot on
+   * every change would work and would also drop the selection outline, re-upload every
+   * geometry to the card, and make the room blink each time somebody turns a chair.
+   */
+  setItems(items: LayoutItem[], states: Map<string, CollisionState>, selectedId: string | null): void {
+    const seen = new Set<string>()
+
+    for (const item of items) {
+      seen.add(item.id)
+
+      let group = this.pieces.get(item.id)
+
+      if (group === undefined) {
+        group = this.furniture.build(item)
+        this.pieces.set(item.id, group)
+        this.layout.add(group)
+      }
+      else {
+        this.furniture.place(group, item)
+      }
+
+      this.furniture.paint(group, item, states.get(item.id) ?? 'ok', item.id === selectedId)
+    }
+
+    for (const [id, group] of this.pieces) {
+      if (seen.has(id)) {
+        continue
+      }
+
+      this.layout.remove(group)
+      this.furniture.dispose(group)
+      this.pieces.delete(id)
+    }
+
+    this.invalidate()
+  }
+
+  /**
+   * Moves one piece to a position nothing has been saved at yet.
+   *
+   * The drag's hot path. It takes the item and a position rather than a changed item so the
+   * caller does not have to clone its state sixty times a second to show a preview.
+   */
+  previewItem(item: LayoutItem, at: { x: number, z: number, rotation?: number }, state: CollisionState): void {
+    const group = this.pieces.get(item.id)
+
+    if (group === undefined) {
+      return
+    }
+
+    this.furniture.place(group, item, at)
+    this.furniture.paint(group, item, state, true)
+
+    this.invalidate()
+  }
+
+  /** The alignment lines for the snap in progress, or none. */
+  setGuides(guides: SnapGuide[]): void {
+    for (const child of [...this.guides.children]) {
+      this.guides.remove(child)
+
+      if (child instanceof Line) {
+        child.geometry.dispose()
+      }
+    }
+
+    for (const guide of guides) {
+      // Just off the floor. Exactly on it and the line and the floor fight over which is in
+      // front, in stripes, differently on every machine.
+      const y = 0.004
+
+      const points = guide.axis === 'x'
+        ? [new Vector3(toUnits(guide.at), y, toUnits(guide.from)), new Vector3(toUnits(guide.at), y, toUnits(guide.to))]
+        : [new Vector3(toUnits(guide.from), y, toUnits(guide.at)), new Vector3(toUnits(guide.to), y, toUnits(guide.at))]
+
+      this.guides.add(new Line(new BufferGeometry().setFromPoints(points), this.guideMaterial))
+    }
+
+    this.invalidate()
+  }
+
+  /** The furniture, for the drag's raycaster. Walls are deliberately not in here. */
+  pickable(): Object3D[] {
+    return this.layout.children
+  }
+
+  /**
+   * Where a point on the floor plan is on the screen, in CSS pixels.
+   *
+   * Used to hang measurement labels over the scene as ordinary HTML rather than drawing text
+   * into the canvas. Text in WebGL is either a texture that goes blurry the moment somebody
+   * zooms, or a font atlas nobody wants to maintain for the sake of "185 cm".
+   */
+  projectToScreen(point: { x: number, y?: number, z: number }): { x: number, y: number } | null {
+    const vector = new Vector3(toUnits(point.x), toUnits(point.y ?? 0), toUnits(point.z))
+
+    vector.project(this.cameras.active)
+
+    // Behind the camera. Projection wraps such points round to the far side of the screen,
+    // where a label would sit over the scene pointing at nothing.
+    if (vector.z > 1) {
+      return null
+    }
+
+    const { clientWidth, clientHeight } = this.canvas
+
+    return {
+      x: ((vector.x + 1) / 2) * clientWidth,
+      y: ((1 - vector.y) / 2) * clientHeight,
+    }
+  }
+
+  /** Called after every drawn frame, so overlays can follow the camera. */
+  onFrame(callback: () => void): void {
+    this.frameCallback = callback
   }
 
   /** Which way the customer is looking at it. */
@@ -187,6 +341,16 @@ export class SceneManager {
       this.room = null
     }
 
+    for (const group of this.pieces.values()) {
+      this.furniture.dispose(group)
+    }
+
+    this.pieces.clear()
+    this.setGuides([])
+
+    this.furniture.disposeMaterials()
+    this.guideMaterial.dispose()
+
     this.cameras.dispose()
     this.renderer.dispose()
   }
@@ -246,6 +410,11 @@ export class SceneManager {
   private render(): void {
     this.renderer.render(this.scene, this.cameras.active)
     this.dirty = false
+
+    // After the frame rather than before: an overlay positioned from a camera that is about
+    // to move is an overlay one frame behind the thing it labels, which reads as a label
+    // sliding around loose over the scene.
+    this.frameCallback?.()
   }
 
   private handleResize(): void {

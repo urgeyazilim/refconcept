@@ -73,6 +73,16 @@ export class CameraManager {
     return this.controls.update()
   }
 
+  /**
+   * Stops the camera moving while somebody is dragging furniture.
+   *
+   * Both gestures are a pointer dragged across the canvas, and without this a sofa pulled
+   * across the room takes the room with it.
+   */
+  setOrbitEnabled(enabled: boolean): void {
+    this.controls.enabled = enabled
+  }
+
   setMode(mode: ViewMode): void {
     this.mode = mode
 

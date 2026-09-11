@@ -1,0 +1,458 @@
+import { CollisionEngine, type CollisionState } from './CollisionEngine'
+import { DragController } from './DragController'
+import { type Measurement, MeasurementEngine, formatDistance } from './MeasurementEngine'
+import { SceneManager } from './SceneManager'
+import { SnapEngine } from './SnapEngine'
+import type { LayoutItem, RoomGeometry, RoomOpening, ViewMode } from './types'
+
+/** A measurement, already placed on the screen, for the HTML overlay to draw. */
+export interface OverlayLabel {
+  id: string
+  x: number
+  y: number
+  text: string
+  towards: string
+}
+
+/** Everything a component needs to redraw its panels after something changed. */
+export interface EditorState {
+  items: LayoutItem[]
+  states: Map<string, CollisionState>
+  selectedId: string | null
+  measurements: Measurement[]
+  canUndo: boolean
+  canRedo: boolean
+  /** True between a change and the moment it has been written to the server. */
+  unsaved: boolean
+}
+
+/** Where a piece stands. The only part of an item a layout edit ever changes. */
+interface Placement {
+  position_x_mm: number
+  position_z_mm: number
+  rotation_y_deg: number
+  locked: boolean
+}
+
+export interface RoomEditorOptions {
+  onChange: (state: EditorState) => void
+  onOverlay: (labels: OverlayLabel[]) => void
+  /** Called after edits have settled. Absent in read-only contexts. */
+  onPersist?: (items: LayoutItem[]) => void
+}
+
+/**
+ * The editor: one room, its furniture, and everything somebody can do to it.
+ *
+ * This is the piece that owns the truth while the page is open. The Vue component around it
+ * renders panels and buttons and holds no layout state of its own — it is handed a fresh
+ * {@link EditorState} whenever anything changes. Keeping it this way is what stops the room
+ * and the sidebar from ever disagreeing about where the sofa is, which is the bug every
+ * planner written the other way around eventually has.
+ *
+ * Editing is on placements only. Nothing here adds a product to the layout that the customer
+ * did not choose, and nothing changes what a product *is* — a plan that invents furniture is
+ * exactly what went wrong in the render pipeline, and a plan that quietly resizes a sofa to
+ * make it fit is the same mistake with better manners.
+ */
+export class RoomEditor {
+  private readonly scene: SceneManager
+
+  private readonly collisions: CollisionEngine
+
+  private readonly snaps: SnapEngine
+
+  private readonly measurements: MeasurementEngine
+
+  private readonly drag: DragController
+
+  private items: LayoutItem[] = []
+
+  private states = new Map<string, CollisionState>()
+
+  private selectedId: string | null = null
+
+  /**
+   * The past and the future, as whole-layout snapshots.
+   *
+   * Snapshots rather than a list of operations: a layout is a few dozen small records, and an
+   * undo stack of diffs is a second implementation of every edit — the one that has to be
+   * able to run backwards. The one time that goes wrong it goes wrong silently, days later,
+   * on a customer's saved plan.
+   */
+  private past: Array<Map<string, Placement>> = []
+
+  private future: Array<Map<string, Placement>> = []
+
+  /** Bounded, because a long session is thousands of drags and none of them are precious. */
+  private static readonly HISTORY_LIMIT = 60
+
+  /** How long after the last edit the layout is written. */
+  private static readonly AUTOSAVE_MS = 1200
+
+  private saveTimer: ReturnType<typeof setTimeout> | null = null
+
+  private unsaved = false
+
+  constructor(
+    canvas: HTMLCanvasElement,
+    private geometry: RoomGeometry,
+    private openings: RoomOpening[],
+    private readonly options: RoomEditorOptions,
+  ) {
+    this.scene = new SceneManager(canvas)
+    this.collisions = new CollisionEngine(geometry, openings)
+    this.snaps = new SnapEngine(geometry)
+    this.measurements = new MeasurementEngine(geometry)
+
+    this.scene.setRoom(geometry, openings)
+    this.scene.onFrame(() => this.publishOverlay())
+
+    this.drag = new DragController(canvas, {
+      items: () => this.items,
+      pickable: () => this.scene.pickable(),
+      camera: () => this.scene.cameras.active,
+      setOrbitEnabled: enabled => this.scene.cameras.setOrbitEnabled(enabled),
+      onSelect: id => this.select(id),
+      onPreview: (id, at, state, guides) => {
+        const item = this.find(id)
+
+        if (item === undefined) {
+          return
+        }
+
+        this.scene.previewItem(item, at, state)
+        this.scene.setGuides(guides)
+      },
+      onCommit: (id, at) => this.moveTo(id, at),
+      onCancel: () => {
+        // Put the piece back where it was; the preview moved it and nothing was saved.
+        this.scene.setGuides([])
+        this.scene.setItems(this.items, this.states, this.selectedId)
+      },
+      snap: (item, at) => this.snaps.snap(item, this.items, at),
+      stateAt: (item, at) => this.collisions.stateAt(item, this.items, at),
+    })
+  }
+
+  // --- the room --------------------------------------------------------------
+
+  setRoom(geometry: RoomGeometry, openings: RoomOpening[]): void {
+    this.geometry = geometry
+    this.openings = openings
+
+    this.collisions.setRoom(geometry, openings)
+    this.snaps.setRoom(geometry)
+    this.measurements.setRoom(geometry)
+
+    this.scene.setRoom(geometry, openings)
+    this.reevaluate()
+  }
+
+  /**
+   * Replaces the furniture wholesale.
+   *
+   * Used when a layout is loaded or the AI proposes one. It clears the history rather than
+   * appending to it: undo after "apply the AI's layout" should be the customer's own layout
+   * back, not the AI's plan halfway assembled.
+   */
+  setItems(items: LayoutItem[]): void {
+    this.items = items.map(item => ({ ...item }))
+    this.past = []
+    this.future = []
+    this.selectedId = null
+
+    this.reevaluate()
+  }
+
+  setView(mode: ViewMode): void {
+    this.scene.setView(mode)
+  }
+
+  // --- editing ---------------------------------------------------------------
+
+  select(id: string | null): void {
+    this.selectedId = id
+
+    this.scene.setGuides([])
+    this.scene.setItems(this.items, this.states, this.selectedId)
+    this.publish()
+  }
+
+  /** Moves a piece, having already decided where. The drag's commit path. */
+  moveTo(id: string, at: { x: number, z: number }): void {
+    this.edit(id, (item) => {
+      item.position_x_mm = at.x
+      item.position_z_mm = at.z
+    })
+
+    this.scene.setGuides([])
+  }
+
+  /**
+   * Turns a piece by a quarter turn, or by whatever step is asked for.
+   *
+   * Quarter turns because furniture in a room is square to the walls almost always, and
+   * because a rotation off a right angle makes the footprint conservative — the piece starts
+   * refusing positions it would actually fit in.
+   */
+  rotate(id: string, deltaDeg: number): void {
+    this.edit(id, (item) => {
+      item.rotation_y_deg = (((item.rotation_y_deg + deltaDeg) % 360) + 360) % 360
+    })
+  }
+
+  /**
+   * Nudges a piece by a fixed step, for the arrow keys.
+   *
+   * A pointer cannot place something to the centimetre at a normal zoom, and "10 mm to the
+   * left" is a thing people genuinely want once the room is nearly right.
+   */
+  nudge(id: string, dx: number, dz: number): void {
+    this.edit(id, (item) => {
+      item.position_x_mm += dx
+      item.position_z_mm += dz
+    })
+  }
+
+  /**
+   * Pins a piece so nothing moves it — including the AI layout engine.
+   *
+   * The reason this exists at all: somebody has a television on a wall with the aerial socket
+   * behind it, and no layout proposal, however good, is allowed to move it.
+   */
+  toggleLock(id: string): void {
+    // allowLocked, and this is the only caller that passes it: a locked piece refuses every
+    // other edit, and a lock that cannot be undone is furniture welded to the floor.
+    this.edit(id, (item) => {
+      item.locked = !item.locked
+    }, true)
+  }
+
+  remove(id: string): void {
+    this.remember()
+
+    this.items = this.items.filter(item => item.id !== id)
+
+    if (this.selectedId === id) {
+      this.selectedId = null
+    }
+
+    this.reevaluate()
+    this.schedulePersist()
+  }
+
+  /** Adds a product the customer picked from the catalogue. */
+  add(item: LayoutItem): void {
+    this.remember()
+
+    this.items = [...this.items, { ...item }]
+    this.selectedId = item.id
+
+    this.reevaluate()
+    this.schedulePersist()
+  }
+
+  undo(): void {
+    const previous = this.past.pop()
+
+    if (previous === undefined) {
+      return
+    }
+
+    this.future.push(this.placements())
+    this.apply(previous)
+  }
+
+  redo(): void {
+    const next = this.future.pop()
+
+    if (next === undefined) {
+      return
+    }
+
+    this.past.push(this.placements())
+    this.apply(next)
+  }
+
+  /** The canvas as a PNG, for the render pipeline and for thumbnails. */
+  snapshot(): string {
+    return this.scene.snapshot()
+  }
+
+  dispose(): void {
+    // Anything edited in the last second and a bit is written now rather than lost, because
+    // "I moved it and closed the tab" is the most ordinary way to leave a page there is.
+    this.flush()
+
+    this.drag.dispose()
+    this.scene.dispose()
+  }
+
+  // --- internals -------------------------------------------------------------
+
+  private find(id: string): LayoutItem | undefined {
+    return this.items.find(item => item.id === id)
+  }
+
+  /**
+   * One edit: remember where things were, change one piece, redraw, schedule a save.
+   *
+   * Every mutation goes through here so none of them can forget the history or the save. A
+   * locked piece is refused rather than silently allowed — the lock exists precisely so that
+   * something else cannot move it.
+   */
+  private edit(id: string, mutate: (item: LayoutItem) => void, allowLocked = false): void {
+    const item = this.find(id)
+
+    if (item === undefined || (item.locked && !allowLocked)) {
+      return
+    }
+
+    this.remember()
+
+    const changed = { ...item }
+    mutate(changed)
+
+    this.items = this.items.map(existing => (existing.id === id ? changed : existing))
+
+    this.reevaluate()
+    this.schedulePersist()
+  }
+
+  /** Pushes the current placements onto the undo stack and drops the redo stack. */
+  private remember(): void {
+    this.past.push(this.placements())
+
+    if (this.past.length > RoomEditor.HISTORY_LIMIT) {
+      this.past.shift()
+    }
+
+    // A new edit is a new timeline. Keeping the redo stack across one is how somebody gets a
+    // piece back in a position they never put it in.
+    this.future = []
+  }
+
+  private placements(): Map<string, Placement> {
+    return new Map(this.items.map(item => [item.id, {
+      position_x_mm: item.position_x_mm,
+      position_z_mm: item.position_z_mm,
+      rotation_y_deg: item.rotation_y_deg,
+      locked: item.locked,
+    }]))
+  }
+
+  private apply(placements: Map<string, Placement>): void {
+    this.items = this.items
+      // A piece that was added after this snapshot is not in it, and undoing an addition is
+      // taking it away again.
+      .filter(item => placements.has(item.id))
+      .map((item) => {
+        const placement = placements.get(item.id)
+
+        return placement === undefined ? item : { ...item, ...placement }
+      })
+
+    this.reevaluate()
+    this.schedulePersist()
+  }
+
+  private reevaluate(): void {
+    this.states = this.collisions.evaluate(this.items)
+
+    this.scene.setItems(this.items, this.states, this.selectedId)
+    this.publish()
+  }
+
+  private publish(): void {
+    const selected = this.selectedId === null ? undefined : this.find(this.selectedId)
+
+    this.options.onChange({
+      items: this.items,
+      states: this.states,
+      selectedId: this.selectedId,
+      measurements: selected === undefined ? [] : this.measurements.measure(selected, this.items),
+      canUndo: this.past.length > 0,
+      canRedo: this.future.length > 0,
+      unsaved: this.unsaved,
+    })
+
+    this.publishOverlay()
+  }
+
+  /**
+   * Puts the selected piece's gaps on the screen.
+   *
+   * Recomputed after every frame, which sounds expensive and is not: frames are only drawn
+   * when something has moved, and the arithmetic is four rectangles and four projections.
+   */
+  private publishOverlay(): void {
+    const selected = this.selectedId === null ? undefined : this.find(this.selectedId)
+
+    if (selected === undefined) {
+      this.options.onOverlay([])
+
+      return
+    }
+
+    const labels: OverlayLabel[] = []
+
+    for (const [index, measurement] of this.measurements.measure(selected, this.items).entries()) {
+      const middle = {
+        x: (measurement.from.x + measurement.to.x) / 2,
+        z: (measurement.from.z + measurement.to.z) / 2,
+      }
+
+      const point = this.scene.projectToScreen(middle)
+
+      if (point === null) {
+        continue
+      }
+
+      labels.push({
+        id: `${selected.id}-${index}`,
+        x: point.x,
+        y: point.y,
+        text: formatDistance(measurement.mm),
+        towards: measurement.towards,
+      })
+    }
+
+    this.options.onOverlay(labels)
+  }
+
+  /**
+   * Saves a short while after the last change.
+   *
+   * Not on every change: a drag is sixty changes a second and each one is a request. Not on a
+   * button either — a plan somebody spent twenty minutes on and lost to a closed tab is a
+   * plan they do not make again.
+   */
+  private schedulePersist(): void {
+    if (this.options.onPersist === undefined) {
+      return
+    }
+
+    this.unsaved = true
+
+    if (this.saveTimer !== null) {
+      clearTimeout(this.saveTimer)
+    }
+
+    this.saveTimer = setTimeout(() => this.flush(), RoomEditor.AUTOSAVE_MS)
+  }
+
+  private flush(): void {
+    if (this.saveTimer !== null) {
+      clearTimeout(this.saveTimer)
+      this.saveTimer = null
+    }
+
+    if (!this.unsaved || this.options.onPersist === undefined) {
+      return
+    }
+
+    this.unsaved = false
+    this.options.onPersist(this.items)
+  }
+}

@@ -11,7 +11,7 @@
  * inside out. Openings are the part most likely to be wrong and the part hardest to see in a
  * screenshot, so they are pinned to known numbers here and varied by hand.
  */
-import type { RoomGeometry, RoomOpening } from '~/room3d/types'
+import type { LayoutItem, RoomGeometry, RoomOpening } from '~/room3d/types'
 
 definePageMeta({ layout: false })
 useHead({ title: 'Oda 3D · laboratuvar' })
@@ -60,6 +60,65 @@ const openings = ref<RoomOpening[]>([
     sill_height_mm: 1_000,
   },
 ])
+
+/**
+ * A furnished room, with one of everything the editor treats differently.
+ *
+ * A rug, because everything is allowed to stand on it and nothing else. A picture at 1.5 m,
+ * because anything off the floor shares no space with anything on it. A sideboard against
+ * the east wall beside the door, because that is where the clearance rule bites. And a piece
+ * with no dimensions at all, which the catalogue is full of and which has to be visible as a
+ * placeholder rather than quietly drawn at a guessed size.
+ */
+const items = ref<LayoutItem[]>([
+  item('rug', 'Halı', 'hali', 2_400, 1_700, 20, 2_400, 2_800),
+  item('sofa', 'Üçlü kanepe', 'kanepe', 2_200, 900, 820, 2_400, 1_900),
+  item('table', 'Orta sehpa', 'sehpa', 900, 900, 400, 2_400, 2_900),
+  item('sideboard', 'Konsol', 'konsol', 1_400, 420, 780, 3_900, 4_200, 90),
+  item('picture', 'Tablo', 'tablo', 900, 50, 700, 2_400, 120, 0, 1_500),
+  { ...item('lamp', 'Zemin lambası (ölçüsüz)', 'aydinlatma', 0, 0, 0, 900, 900), width_mm: null, depth_mm: null, height_mm: null },
+])
+
+function item(
+  id: string,
+  name: string,
+  category: string,
+  width: number,
+  depth: number,
+  height: number,
+  x: number,
+  z: number,
+  rotation = 0,
+  y = 0,
+): LayoutItem {
+  return {
+    id,
+    product_id: id,
+    sku_id: id,
+    name,
+    category,
+    position_x_mm: x,
+    position_y_mm: y,
+    position_z_mm: z,
+    rotation_y_deg: rotation,
+    locked: false,
+    collision_state: 'ok',
+    width_mm: width,
+    height_mm: height,
+    depth_mm: depth,
+    image_url: null,
+    model_url: null,
+  }
+}
+
+/** Nothing to save here; seeing what would have been sent is the point of the bench. */
+const saved = ref<string>('—')
+
+function onSave(next: LayoutItem[]): void {
+  saved.value = next
+    .map(entry => `${entry.name}: ${entry.position_x_mm}, ${entry.position_z_mm} @ ${entry.rotation_y_deg}°`)
+    .join(' · ')
+}
 </script>
 
 <template>
@@ -73,7 +132,11 @@ const openings = ref<RoomOpening[]>([
         </p>
       </header>
 
-      <Room3DScene :geometry="geometry" :openings="openings" />
+      <Room3DScene :geometry="geometry" :openings="openings" :items="items" editable @save="onSave" />
+
+      <p class="rounded-sm bg-surface p-3 text-xs text-muted">
+        Son kaydedilecek yerleşim: {{ saved }}
+      </p>
 
       <div class="grid gap-4 sm:grid-cols-3">
         <label v-for="axis in (['width_mm', 'length_mm', 'height_mm'] as const)" :key="axis" class="block">
