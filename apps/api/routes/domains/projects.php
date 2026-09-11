@@ -9,6 +9,7 @@ use App\Domains\Projects\Http\Controllers\DesignController;
 use App\Domains\Projects\Http\Controllers\ProjectController;
 use App\Domains\Projects\Http\Controllers\ProjectMemberController;
 use App\Domains\Projects\Http\Controllers\RoomController;
+use App\Domains\Projects\Http\Controllers\RoomLayoutController;
 use App\Domains\Projects\Http\Controllers\RoomMediaController;
 use Illuminate\Support\Facades\Route;
 
@@ -63,6 +64,23 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, EnsureEmailIsVerif
             ->name('rooms.constraints.update');
         Route::delete('{project}/rooms/{room}/constraints/{constraint}', [RoomController::class, 'destroyConstraint'])
             ->name('rooms.constraints.destroy');
+
+        /*
+         * --- the plan ---------------------------------------------------------
+         *
+         * Measurements are proposed and then confirmed rather than used as they arrive. A
+         * photograph read by a model gives numbers that are usually close and occasionally
+         * wrong by half a metre, and everything downstream rests on them: whether the sofa
+         * fits, what the render is told, what the customer is invited to buy.
+         */
+        Route::get('{project}/rooms/{room}/layout', [RoomLayoutController::class, 'show'])
+            ->name('rooms.layout.show');
+        Route::put('{project}/rooms/{room}/layout', [RoomLayoutController::class, 'save'])
+            ->name('rooms.layout.save');
+        Route::post('{project}/rooms/{room}/geometry', [RoomLayoutController::class, 'storeGeometry'])
+            ->name('rooms.geometry.store');
+        Route::post('{project}/rooms/{room}/geometry/{version}/confirm', [RoomLayoutController::class, 'confirmGeometry'])
+            ->name('rooms.geometry.confirm');
 
         // --- photographs -----------------------------------------------------
         Route::get('{project}/rooms/{room}/media', [RoomMediaController::class, 'index'])
