@@ -315,6 +315,25 @@ const walls = [
         @changed="load"
       />
 
+      <!--
+        The plan. Separate from the measurements below it on purpose: those are a form, and
+        this is a room somebody walks around in.
+      -->
+      <section class="rc-card p-6 sm:p-8">
+        <h2 class="text-lg font-medium">3B plan</h2>
+        <p class="mt-1.5 max-w-[62ch] text-sm leading-relaxed text-ink-secondary">
+          Odayı üç boyutlu görün, ürünleri sürükleyerek yerleştirin. Bir şeyin kapının
+          önüne geldiğini ya da geçiş için yer kalmadığını taşırken söyler.
+        </p>
+
+        <NuxtLink
+          :to="`/projects/${projectId}/rooms/${roomId}/plan`"
+          class="mt-6 inline-flex rounded-pill bg-charcoal px-4 py-2 text-sm text-white"
+        >
+          Planı aç
+        </NuxtLink>
+      </section>
+
       <!-- Measurements -->
       <section class="rc-card p-6 sm:p-8">
         <h2 class="text-lg font-medium">Ölçüler</h2>
