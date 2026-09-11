@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Domains\Projects\Services;
 
+use App\Domains\Projects\Enums\ConstraintType;
 use App\Domains\Projects\Models\DesignLayout;
 use App\Domains\Projects\Models\DesignLayoutItem;
-use App\Domains\Projects\Enums\ConstraintType;
 use App\Domains\Projects\Models\RoomConstraint;
 use App\Domains\Projects\Models\RoomGeometryVersion;
 
@@ -74,7 +74,7 @@ final class LayoutGeometry
      */
     public function evaluate(DesignLayout $layout): array
     {
-        $layout->loadMissing(['items.sku.dimensions', 'items.product.categories', 'geometry', 'room.constraints']);
+        $layout->loadMissing(['items.sku.dimensions', 'items.product.categories', 'items.product.primaryCategory', 'geometry', 'room.constraints']);
 
         $geometry = $layout->geometry;
         $items = $layout->items->all();
@@ -215,10 +215,29 @@ final class LayoutGeometry
 
     private function isUnderfoot(DesignLayoutItem $item): bool
     {
-        // A product belongs to several categories, so this asks whether *any* of them is
-        // something people stand furniture on rather than picking a primary one — a rug
-        // filed under both "halı" and "ev tekstili" is still a rug.
-        $slugs = $item->product?->categories?->pluck('slug')->all() ?? [];
+        $product = $item->product;
+
+        if ($product === null) {
+            return false;
+        }
+
+        /*
+         * The primary category and the secondary ones together.
+         *
+         * Both, because they are populated by different paths: importers and the catalogue
+         * screens fill the many-to-many, while everything that creates a product in one go
+         * sets only `primary_category_id`. Reading either alone makes this answer depend on
+         * how the rug happened to get into the catalogue — and a rug that reports itself as
+         * ordinary furniture puts a collision warning under every coffee table, which is how
+         * somebody learns to ignore the warnings.
+         */
+        $slugs = $product->categories->pluck('slug')->all();
+
+        $primary = $product->primaryCategory?->slug;
+
+        if ($primary !== null) {
+            $slugs[] = $primary;
+        }
 
         return array_intersect($slugs, self::UNDERFOOT_CATEGORIES) !== [];
     }

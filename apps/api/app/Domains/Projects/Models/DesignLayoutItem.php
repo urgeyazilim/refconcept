@@ -119,8 +119,15 @@ class DesignLayoutItem extends Model
         // nulls somebody eventually treats as zero.
         $dimensions = $this->sku?->dimensions;
 
-        $width = (int) ($dimensions?->width_mm ?? 0);
-        $depth = (int) ($dimensions?->depth_mm ?? 0);
+        if ($dimensions === null) {
+            // Never measured. Zero is the honest answer and the safe one: an unmeasured piece
+            // occupies nothing, collides with nothing, and is obvious on screen as a product
+            // the seller has not given dimensions for.
+            return ['width' => 0, 'depth' => 0];
+        }
+
+        $width = (int) ($dimensions->width_mm ?? 0);
+        $depth = (int) ($dimensions->depth_mm ?? 0);
 
         $angle = ((int) $this->rotation_y_deg % 360 + 360) % 360;
 
