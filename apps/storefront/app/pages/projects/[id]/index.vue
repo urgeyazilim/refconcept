@@ -262,7 +262,7 @@ async function setStatus(status: string) {
       </section>
 
       <!-- Sharing -->
-      <section v-if="project.is_owner">
+      <section v-if="project.is_owner" id="paylasim">
         <header class="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h2 class="text-lg font-medium">Paylaşım</h2>

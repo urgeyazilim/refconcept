@@ -637,9 +637,22 @@ onMounted(async () => {
         </p>
       </div>
 
-      <NuxtLink :to="`/projects/${projectId}/rooms/${roomId}`" class="text-sm text-ink-secondary hover:underline">
-        Odaya dön
-      </NuxtLink>
+      <div class="flex items-center gap-4">
+        <!--
+          Sharing is a property of the project, not of this screen.
+
+          A separate "share this plan" would be a second way to give somebody access to the
+          inside of a home, with its own idea of who can see what. There is one, it is on the
+          project, and this points at it.
+        -->
+        <NuxtLink :to="`/projects/${projectId}#paylasim`" class="text-sm text-ink-secondary hover:underline">
+          Paylaş
+        </NuxtLink>
+
+        <NuxtLink :to="`/projects/${projectId}/rooms/${roomId}`" class="text-sm text-ink-secondary hover:underline">
+          Odaya dön
+        </NuxtLink>
+      </div>
     </header>
 
     <p v-if="loadError" class="rounded-sm bg-danger-subtle p-3 text-sm text-danger-strong">
