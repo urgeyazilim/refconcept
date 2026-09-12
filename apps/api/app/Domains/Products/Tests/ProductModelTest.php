@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Domains\Ai\Enums\AiTask;
+use App\Domains\Ai\Models\AiTaskRoute;
 use App\Domains\Ai\Providers\FakeAiProvider;
 use App\Domains\Ai\Services\AiJobDispatcher;
 use App\Domains\Ai\Services\GeneratedImageStore;
@@ -66,7 +67,56 @@ function glb(string $tail = 'x'): string
     return 'glTF'.str_repeat($tail, 64);
 }
 
+/**
+ * Points the route at a real adapter, with fal.ai itself faked at the HTTP boundary.
+ *
+ * The simulator is what runs with no key, and what it answers is deliberately not stored.
+ * Everything below this line is about the behaviour a key buys, so the test has to buy one —
+ * and faking the provider's HTTP rather than the adapter means the adapter is under test too.
+ */
+function realProvider(): void
+{
+    $model = AiTaskRoute::query()->where('task', 'product_model')->firstOrFail()->primaryModel;
+
+    $provider = $model?->provider;
+
+    $provider?->forceFill(['driver' => 'fal'])->save();
+
+    $provider?->credentials()->updateOrCreate(
+        ['label' => 'test'],
+        ['secret_encrypted' => 'fal-test-key', 'secret_hint' => 'tkey', 'is_active' => true],
+    );
+
+    Http::fake([
+        'fal.run/*' => Http::response(['model_mesh' => ['url' => 'https://cdn.fal.test/mesh.glb']]),
+        'cdn.fal.test/*' => Http::response(glb(), 200, ['Content-Type' => 'model/gltf-binary']),
+    ]);
+}
+
+it('throws away what the simulator answers rather than storing it', function (): void {
+    /*
+     * With no key on file the task routes to the fake provider, which succeeds — that is its
+     * job — and returns bytes that begin the way a glTF binary begins. Storing that would put
+     * a file that is not a model of anything on the public bucket for every product ever
+     * approved, and the planner would try to load each one and fall back to the photograph it
+     * should have used in the first place.
+     */
+    (new GenerateProductModel((string) $this->product->getKey()))->handle(
+        app(AiJobDispatcher::class),
+        app(GeneratedImageStore::class),
+        $this->models,
+    );
+
+    expect(ProductMedia::query()
+        ->where('product_id', $this->product->getKey())
+        ->where('type', 'model_3d')
+        ->exists())->toBeFalse();
+});
+
 it('makes a model from the product photograph', function (): void {
+    // Answered by something that is not the simulator, which is what a key buys.
+    realProvider();
+
     (new GenerateProductModel((string) $this->product->getKey()))->handle(
         app(AiJobDispatcher::class),
         app(GeneratedImageStore::class),

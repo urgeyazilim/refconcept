@@ -112,6 +112,31 @@ final class GenerateProductModel implements ShouldQueue
             return;
         }
 
+        /*
+         * A simulator's answer is thrown away rather than stored.
+         *
+         * With no key on file the task routes to the fake provider, which succeeds — that is
+         * its job — and returns a few bytes that begin the way a glTF binary begins. Storing
+         * that would put a file that is not a model of anything on the public bucket for
+         * every product ever approved, and the planner would try to load each one, fail, and
+         * fall back to the photograph it should have used in the first place.
+         *
+         * Read from the request row rather than from configuration: what actually answered is
+         * the only thing worth deciding on, and a route repointed by an operator at midday
+         * would make any other answer stale.
+         */
+        $answeredBySimulator = $ran->requests()
+            ->with('model.provider')
+            ->latest('attempt')
+            ->first()
+            ?->model?->provider?->driver === 'fake';
+
+        if ($answeredBySimulator) {
+            Log::info('3B model simülatörden geldi; kaydedilmedi.', ['product' => $this->productId]);
+
+            return;
+        }
+
         /** @var array<int, string> $refs */
         $refs = (array) ($ran->output['image_refs'] ?? []);
 
