@@ -46,6 +46,15 @@ const view = ref<ViewMode>('perspective')
 const display = ref<DisplayMode>('3d')
 
 /**
+ * Whether the distances are drawn over the scene.
+ *
+ * On by default, because the measurements are the reason a plan beats a photograph. Off is
+ * for the moment somebody wants to look at the room rather than at the numbers — and for a
+ * screenshot, where four labels over a sofa are four labels in the picture.
+ */
+const showMeasurements = ref(true)
+
+/**
  * Shallow rather than a plain `let`: the template has to see it change, and shallow
  * because a Three.js scene wrapped in a deep proxy has every object in the graph made
  * reactive — thousands of getters on a hot path, for a graph nothing ever observes.
@@ -185,7 +194,6 @@ watch(
   items => editor.value?.setItems(items),
 )
 
-/** The canvas as a PNG, for the render pipeline. */
 /**
  * What the page around this component may do to the room.
  *
@@ -227,7 +235,7 @@ defineExpose({
         either a texture that blurs the moment somebody zooms or a font atlas nobody wants to
         maintain for the sake of "185 cm".
       -->
-      <div v-if="display === '3d'" class="pointer-events-none absolute inset-0">
+      <div v-if="display === '3d' && showMeasurements" class="pointer-events-none absolute inset-0">
         <span
           v-for="label in labels"
           :key="label.id"
@@ -244,6 +252,19 @@ defineExpose({
           @click="display = display === 'plan' ? '3d' : 'plan'"
         >
           Plan
+        </button>
+
+        <!--
+          Off is for looking at the room rather than at the numbers — and for a screenshot,
+          where four labels over a sofa are four labels in the picture.
+        -->
+        <button
+          type="button"
+          class="rounded-pill px-3 py-1.5 text-xs transition-colors"
+          :class="showMeasurements ? 'bg-charcoal text-white' : 'text-ink-secondary hover:bg-bg-muted'"
+          @click="showMeasurements = !showMeasurements"
+        >
+          Ölçüler
         </button>
 
         <span class="my-1 w-px bg-line" />
@@ -331,6 +352,24 @@ defineExpose({
             <button type="button" class="rounded-pill border border-line px-3 py-1.5 text-xs hover:bg-bg-muted" @click="editor?.rotate(selected.id, 90)">
               ⟳ 90°
             </button>
+            <!--
+              The tidy-ups a pointer is worst at.
+
+              "Against the wall" is a position no drag ever quite reaches, and a sideboard
+              30 mm off the wall looks like a mistake in every render made from the layout
+              afterwards. Aligning also turns the piece to face the room, because a sofa
+              against a wall with its back to the middle of it is not what anybody meant.
+            -->
+            <button type="button" class="rounded-pill border border-line px-3 py-1.5 text-xs hover:bg-bg-muted" @click="editor?.alignToWall(selected.id)">
+              Duvara hizala
+            </button>
+            <button type="button" class="rounded-pill border border-line px-3 py-1.5 text-xs hover:bg-bg-muted" @click="editor?.centreInRoom(selected.id)">
+              Oda merkezine
+            </button>
+            <!-- A pair of bedside tables, four dining chairs: the search has been done once. -->
+            <button type="button" class="rounded-pill border border-line px-3 py-1.5 text-xs hover:bg-bg-muted" @click="editor?.duplicate(selected.id)">
+              Kopyala
+            </button>
             <button
               type="button"
               class="rounded-pill border border-line px-3 py-1.5 text-xs hover:bg-bg-muted"
@@ -342,6 +381,27 @@ defineExpose({
               Kaldır
             </button>
           </div>
+
+          <!--
+            How high it hangs.
+
+            A picture, a mirror, a wall shelf, a television: anything above the floor is out
+            of the way of everything on it, which is what turns a box standing in the middle
+            of the room into something on a wall. Centimetres, like everything else somebody
+            measures with a tape.
+          -->
+          <label class="mt-3 flex items-center gap-2 text-xs text-muted">
+            Yerden yükseklik (cm)
+            <input
+              type="number"
+              min="0"
+              max="290"
+              step="5"
+              class="w-24 rounded-sm border border-line bg-surface px-2 py-1 text-xs tabular-nums"
+              :value="Math.round(selected.position_y_mm / 10)"
+              @change="editor?.setHeight(selected.id, Number(($event.target as HTMLInputElement).value) * 10)"
+            >
+          </label>
 
           <!--
             The gaps around the selected piece, written out. 60 cm is a person sideways and

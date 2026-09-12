@@ -1,4 +1,4 @@
-import type { LayoutItem, RoomGeometry, RoomOpening } from './types'
+import type { LayoutItem, RoomGeometry, RoomOpening, WallName } from './types'
 
 /**
  * The floor-plan arithmetic, shared by everything that needs to know where a piece stands.
@@ -110,6 +110,53 @@ export function overlaps(a: Rect, b: Rect, tolerance = TOUCH_TOLERANCE_MM): bool
     && a.x2 > b.x1 + tolerance
     && a.z1 < b.z2 - tolerance
     && a.z2 > b.z1 + tolerance
+}
+
+/**
+ * Where a piece stands when it is put flat against a wall, facing the room.
+ *
+ * Pure arithmetic, out here rather than in the editor, because it is the part that can be
+ * quietly wrong. The subtlety: the piece is turned first and then measured with the footprint
+ * it has *after* turning. A 2200 × 900 sofa against the east wall stands 900 deep across the
+ * room, and offsetting it by the width it had before the turn puts half of it through the
+ * wall — a position the collision rules then refuse, on an alignment the customer asked for
+ * by name.
+ *
+ * The gap is for a skirting board. Flush against the plane of the wall looks wrong in a
+ * render and is not where furniture actually sits.
+ */
+export function againstWall(
+  item: LayoutItem,
+  wall: WallName,
+  geometry: RoomGeometry,
+  gapMm: number,
+): { position_x_mm: number, position_z_mm: number, rotation_y_deg: number } {
+  const rotation = { north: 0, south: 180, west: 90, east: 270 }[wall]
+
+  const turned = footprintOf(item, rotation)
+
+  const position = {
+    position_x_mm: item.position_x_mm,
+    position_z_mm: item.position_z_mm,
+    rotation_y_deg: rotation,
+  }
+
+  switch (wall) {
+    case 'north':
+      position.position_z_mm = Math.trunc(turned.depth / 2) + gapMm
+      break
+    case 'south':
+      position.position_z_mm = geometry.length_mm - Math.trunc(turned.depth / 2) - gapMm
+      break
+    case 'west':
+      position.position_x_mm = Math.trunc(turned.width / 2) + gapMm
+      break
+    case 'east':
+      position.position_x_mm = geometry.width_mm - Math.trunc(turned.width / 2) - gapMm
+      break
+  }
+
+  return position
 }
 
 export function insideRoom(rect: Rect, geometry: RoomGeometry): boolean {

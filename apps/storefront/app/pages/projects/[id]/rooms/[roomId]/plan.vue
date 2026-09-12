@@ -78,6 +78,26 @@ const searching = ref(false)
 const candidates = ref<Candidate[]>([])
 const searched = ref(false)
 
+/**
+ * The categories that belong in this room, for browsing rather than searching.
+ *
+ * Somebody who knows they want a bookcase types "kitaplık". Somebody furnishing a room does
+ * not know yet, and a search box is a blank page for them — the list is the difference
+ * between shopping and having to name what you want first.
+ */
+interface RoomCategory {
+  slug: string
+  name: string
+}
+
+const categories = ref<RoomCategory[]>([])
+const activeCategory = ref<string | null>(null)
+const roomType = ref<string | null>(null)
+
+/** The design a final image would be made from, when the room has one. */
+const design = ref<{ design_id: string, version_id: string, version_number: number } | null>(null)
+const rendering = ref(false)
+
 const composing = ref(false)
 const composeNotice = ref<string | null>(null)
 
@@ -139,6 +159,8 @@ async function load(): Promise<void> {
         pending_geometry: GeometryVersion[]
         openings: RoomOpening[]
         layout: LayoutPayload | null
+        room_type: string | null
+        design: { design_id: string, version_id: string, version_number: number } | null
       }
     }>(`${base}/layout`)
 
@@ -146,6 +168,8 @@ async function load(): Promise<void> {
     pending.value = response.data.pending_geometry
     openings.value = response.data.openings
     items.value = response.data.layout?.items ?? []
+    roomType.value = response.data.room_type
+    design.value = response.data.design
 
     const source = response.data.geometry ?? response.data.pending_geometry[0]
 
@@ -347,19 +371,23 @@ async function composeLayout(replace = false): Promise<void> {
  * box, collide with nothing, and mean nothing. Better to not offer it here at all; it is
  * still in the shop, where its size is not load-bearing.
  */
-async function findProducts(): Promise<void> {
+async function findProducts(category: string | null = activeCategory.value): Promise<void> {
   const term = search.value.trim()
 
-  if (term.length < 2) {
+  if (term.length < 2 && category === null) {
     return
   }
 
   searching.value = true
   searched.value = true
+  activeCategory.value = category
 
   try {
     const response = await api.get<{ data: Array<Record<string, never>> }>('/api/v1/catalog/products', {
-      search: term,
+      // A category browse and a text search are the same request with different filters, so
+      // the results list has one shape and one set of rules about what may be placed.
+      ...(term.length >= 2 ? { search: term } : {}),
+      ...(category === null ? {} : { category }),
       per_page: 12,
     })
 
@@ -474,8 +502,74 @@ async function addLayoutToCart(): Promise<void> {
   }
 }
 
+/**
+ * The categories that belong in this room.
+ *
+ * Read from the taxonomy rather than written out here, so a category added to the catalogue
+ * appears in the planner without a deploy — and so a room type nobody has categorised falls
+ * back to the search box rather than to a wrong list.
+ */
+async function loadCategories(): Promise<void> {
+  if (roomType.value === null) {
+    return
+  }
+
+  try {
+    const response = await api.get<{ data: Array<{ slug: string, name: string, room_type: string | null, depth?: number }> }>(
+      '/api/v1/catalog/categories',
+    )
+
+    categories.value = response.data
+      .filter(category => category.room_type === roomType.value)
+      .map(category => ({ slug: category.slug, name: category.name }))
+      .slice(0, 10)
+  }
+  catch {
+    // The search box still works, and a failed taxonomy fetch is not worth an error
+    // message on a screen about furniture.
+    categories.value = []
+  }
+}
+
+/**
+ * Makes a new design version from what is standing in the room.
+ *
+ * The plan is the structure; the renderer is handed a picture of it and asked to make the
+ * photograph. Spending credits, so it says so on the button — and it goes to the design
+ * screen afterwards, where the progress of a render is already shown properly.
+ */
+async function renderFinal(): Promise<void> {
+  const current = design.value
+
+  if (current === null) {
+    return
+  }
+
+  rendering.value = true
+  saveError.value = null
+
+  try {
+    const created = await api.post<{ data: { id: string } }>(
+      `${base}/designs/${current.design_id}/branch`,
+      {
+        parent_version_id: current.version_id,
+        user_prompt: 'Oda planındaki yerleşimi birebir uygula: her ürün plandaki konumunda ve yönünde dursun.',
+      },
+    )
+
+    await navigateTo(`/projects/${projectId}/rooms/${roomId}/designs/${current.design_id}?version=${created.data.id}`)
+  }
+  catch (error) {
+    saveError.value = error instanceof Error ? error.message : 'Final görsel başlatılamadı.'
+  }
+  finally {
+    rendering.value = false
+  }
+}
+
 onMounted(async () => {
   await load()
+  await loadCategories()
 
   /*
    * Arranged straight away when somebody came from a design, and only into an empty room.
@@ -673,10 +767,29 @@ onMounted(async () => {
           they have been checked against, and asking somebody to find each of them again in
           the shop is asking them to do the work twice.
         -->
+        <!--
+          The final image, from the plan.
+
+          The renderer is handed a picture of this room and asked to photograph it, so this
+          is the one button on the screen that spends credits — and it says so. Only offered
+          when there is a design to branch from; a button that answers with an error is worse
+          than no button.
+        -->
+        <button
+          v-if="design !== null && items.length > 0"
+          type="button"
+          class="ml-auto rounded-pill border border-line px-4 py-2 text-sm hover:bg-bg-muted disabled:opacity-50"
+          :disabled="rendering"
+          @click="renderFinal"
+        >
+          Final görseli üret
+        </button>
+
         <button
           v-if="items.length > 0"
           type="button"
-          class="ml-auto rounded-pill border border-line px-4 py-2 text-sm hover:bg-bg-muted disabled:opacity-50"
+          class="rounded-pill border border-line px-4 py-2 text-sm hover:bg-bg-muted disabled:opacity-50"
+          :class="design === null ? 'ml-auto' : ''"
           :disabled="adding"
           @click="addLayoutToCart"
         >
@@ -726,7 +839,7 @@ onMounted(async () => {
           Odaya ürün ekle
         </h2>
 
-        <form class="mt-3 flex gap-2" @submit.prevent="findProducts">
+        <form class="mt-3 flex gap-2" @submit.prevent="findProducts(null)">
           <input
             v-model="search"
             type="search"
@@ -741,6 +854,28 @@ onMounted(async () => {
             Ara
           </button>
         </form>
+
+        <!--
+          Browsing, for the customer who does not know what to call it yet.
+
+          A search box is a blank page to somebody furnishing a room: they know they want
+          "something for the corner", not "kitaplık". The categories come from the taxonomy
+          for this room type, so a new one appears here without a deploy.
+        -->
+        <div v-if="categories.length > 0" class="mt-3 flex flex-wrap gap-1.5">
+          <button
+            v-for="category in categories"
+            :key="category.slug"
+            type="button"
+            class="rounded-pill border px-3 py-1 text-xs transition-colors"
+            :class="activeCategory === category.slug
+              ? 'border-charcoal bg-charcoal text-white'
+              : 'border-line text-ink-secondary hover:bg-bg-muted'"
+            @click="findProducts(category.slug)"
+          >
+            {{ category.name }}
+          </button>
+        </div>
 
         <ul v-if="candidates.length > 0" class="mt-3 grid gap-2 sm:grid-cols-2">
           <li v-for="candidate in candidates" :key="candidate.sku_id">

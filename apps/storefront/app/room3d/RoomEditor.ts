@@ -3,8 +3,8 @@ import { DragController } from './DragController'
 import { type Measurement, MeasurementEngine, formatDistance } from './MeasurementEngine'
 import { SceneManager } from './SceneManager'
 import { SnapEngine } from './SnapEngine'
-import { footprintOf } from './footprint'
-import type { LayoutItem, RoomGeometry, RoomOpening, ViewMode } from './types'
+import { againstWall, footprintOf } from './footprint'
+import type { LayoutItem, RoomGeometry, RoomOpening, ViewMode, WallName } from './types'
 
 /** A measurement, already placed on the screen, for the HTML overlay to draw. */
 export interface OverlayLabel {
@@ -87,6 +87,9 @@ export class RoomEditor {
 
   /** Bounded, because a long session is thousands of drags and none of them are precious. */
   private static readonly HISTORY_LIMIT = 60
+
+  /** How far off the wall an aligned piece stands: enough for a skirting board. */
+  private static readonly WALL_GAP_MM = 60
 
   /** How long after the last edit the layout is written. */
   private static readonly AUTOSAVE_MS = 1200
@@ -222,6 +225,99 @@ export class RoomEditor {
    * The reason this exists at all: somebody has a television on a wall with the aerial socket
    * behind it, and no layout proposal, however good, is allowed to move it.
    */
+  /**
+   * Pushes a piece back against the nearest wall and turns it to face the room.
+   *
+   * The single most common correction somebody makes by hand, and the one a pointer is
+   * worst at: "against the wall" is a position no drag ever quite reaches, and a sideboard
+   * 30 mm off the wall looks like a mistake in every render made from the layout afterwards.
+   *
+   * Nearest wall rather than a chosen one, because the customer has already put it roughly
+   * where they mean it. This is a tidy-up, not a decision.
+   */
+  alignToWall(id: string): void {
+    const item = this.find(id)
+
+    if (item === undefined) {
+      return
+    }
+
+    /*
+     * The nearest wall, not a chosen one.
+     *
+     * The customer has already put the piece roughly where they mean it; this is a tidy-up
+     * rather than a decision, and asking which wall would be asking them to say again what
+     * they have just said with the drag.
+     */
+    const distances: Array<{ wall: WallName, gap: number }> = [
+      { wall: 'north', gap: item.position_z_mm },
+      { wall: 'south', gap: this.geometry.length_mm - item.position_z_mm },
+      { wall: 'west', gap: item.position_x_mm },
+      { wall: 'east', gap: this.geometry.width_mm - item.position_x_mm },
+    ]
+
+    distances.sort((a, b) => a.gap - b.gap)
+
+    const nearest = distances[0]
+
+    if (nearest === undefined) {
+      return
+    }
+
+    const placed = againstWall(item, nearest.wall, this.geometry, RoomEditor.WALL_GAP_MM)
+
+    this.edit(id, (moved) => {
+      moved.position_x_mm = placed.position_x_mm
+      moved.position_z_mm = placed.position_z_mm
+      moved.rotation_y_deg = placed.rotation_y_deg
+    })
+  }
+
+  /** Puts a piece in the middle of the room, keeping the way it faces. */
+  centreInRoom(id: string): void {
+    this.edit(id, (item) => {
+      item.position_x_mm = Math.round(this.geometry.width_mm / 2)
+      item.position_z_mm = Math.round(this.geometry.length_mm / 2)
+    })
+  }
+
+  /**
+   * Another one of the same product, beside it.
+   *
+   * A pair of bedside tables, four dining chairs, two armchairs facing each other: the
+   * catalogue search has already been done and doing it again to place the second one is
+   * work nobody should be asked for twice.
+   */
+  duplicate(id: string): LayoutItem | null {
+    const item = this.find(id)
+
+    if (item === undefined) {
+      return null
+    }
+
+    const copy: LayoutItem = { ...item, id: crypto.randomUUID(), locked: false }
+
+    this.add(copy)
+
+    return copy
+  }
+
+  /**
+   * How high off the floor a piece hangs.
+   *
+   * For pictures, mirrors, wall shelves and televisions. Anything above the floor is out of
+   * the way of everything on it, which is why the collision rules exempt it — and why this
+   * is the control that turns a box standing in the middle of the room into a picture on a
+   * wall.
+   */
+  setHeight(id: string, millimetres: number): void {
+    this.edit(id, (item) => {
+      // Floor to just under three metres: below zero is under the floor, and above that is
+      // a ceiling in almost every home this will ever run in.
+      item.position_y_mm = Math.max(0, Math.min(2_900, Math.round(millimetres)))
+    })
+  }
+
   toggleLock(id: string): void {
     // allowLocked, and this is the only caller that passes it: a locked piece refuses every
     // other edit, and a lock that cannot be undone is furniture welded to the floor.

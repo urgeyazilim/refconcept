@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { MeasurementEngine, formatDistance } from './MeasurementEngine'
 import { SnapEngine } from './SnapEngine'
+import { againstWall } from './footprint'
 import type { LayoutItem, RoomGeometry } from './types'
 
 const room: RoomGeometry = { id: 'r', width_mm: 4_850, length_mm: 5_200, height_mm: 2_720 }
@@ -122,5 +123,42 @@ describe('formatDistance', () => {
     // "185 cm" is a number to be read; "1,85 m" is a distance to be pictured.
     expect(formatDistance(850)).toBe('85 cm')
     expect(formatDistance(1_850)).toBe('1,85 m')
+  })
+})
+
+describe('againstWall', () => {
+  const room: RoomGeometry = { id: 'r', width_mm: 4_850, length_mm: 5_200, height_mm: 2_720 }
+
+  it('turns a piece to face the room and stands it off the wall', () => {
+    const sofa = place('sofa', 2_200, 900, 2_400, 2_600)
+
+    const north = againstWall(sofa, 'north', room, 60)
+
+    // Facing south, which is what "against the north wall" means from inside the room.
+    expect(north.rotation_y_deg).toBe(0)
+    expect(north.position_z_mm).toBe(510)
+    expect(north.position_x_mm).toBe(2_400)
+  })
+
+  it('measures with the footprint the piece has after being turned', () => {
+    const sofa = place('sofa', 2_200, 900, 2_400, 2_600)
+
+    const east = againstWall(sofa, 'east', room, 60)
+
+    /*
+     * The subtlety this test exists for. A 2200 × 900 sofa against the east wall stands 900
+     * deep across the room, so its centre is 450 mm plus the gap from the wall. Offsetting it
+     * by the width it had before the turn would put half of it through the wall — a position
+     * the collision rules then refuse, on an alignment the customer asked for by name.
+     */
+    expect(east.rotation_y_deg).toBe(270)
+    expect(east.position_x_mm).toBe(4_850 - 450 - 60)
+  })
+
+  it('leaves the other axis where the customer put it', () => {
+    const sofa = place('sofa', 2_200, 900, 1_200, 3_400)
+
+    // Aligning is a tidy-up, not a decision: along the wall, they have already chosen.
+    expect(againstWall(sofa, 'south', room, 60).position_x_mm).toBe(1_200)
   })
 })

@@ -81,6 +81,17 @@ final class RoomLayoutController
                 'pending_geometry' => $this->pendingGeometry($room),
                 'openings' => $room->constraints->map(fn (RoomConstraint $c): array => $this->opening($c))->all(),
                 'layout' => $layout === null ? null : $this->layout($layout),
+                // What the room is for, so the product search can offer the categories that
+                // belong in it rather than the whole catalogue.
+                'room_type' => $room->room_type->value,
+                /*
+                 * The design a final image would be made from, if there is one.
+                 *
+                 * Named here so the plan screen can offer "produce the final image" without a
+                 * second request — and can say nothing at all when there is no design to
+                 * branch from, rather than offering a button that answers with an error.
+                 */
+                'design' => $this->designSummary($room),
             ],
         ]);
     }
@@ -505,6 +516,26 @@ final class RoomLayoutController
         abort_if($info === false || $info[2] !== IMAGETYPE_PNG, 422, 'Görüntü PNG olmalı.');
 
         return $bytes;
+    }
+
+    /**
+     * The newest finished design in this room, for the screen to branch a final image from.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function designSummary(Room $room): ?array
+    {
+        $version = $this->latestVersion($room, '');
+
+        if ($version === null) {
+            return null;
+        }
+
+        return [
+            'design_id' => $version->design_id,
+            'version_id' => $version->id,
+            'version_number' => $version->version_number,
+        ];
     }
 
     private function currentGeometry(Room $room): ?RoomGeometryVersion
