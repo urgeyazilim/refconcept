@@ -525,6 +525,28 @@ onMounted(load)
           </div>
         </dl>
 
+        <!--
+          The same numbers, drawn.
+
+          Three measurements in a list are three numbers to agree with; the shape of the room
+          is something somebody can recognise or fail to recognise at a glance, which is the
+          judgement actually being asked for. A room that came back square when theirs is long
+          is obvious here and invisible above.
+        -->
+        <div class="mt-4 h-64 overflow-hidden rounded-md border border-line">
+          <RoomPlanSvg
+            :geometry="{
+              id: proposal.id,
+              width_mm: proposal.width_mm,
+              length_mm: proposal.length_mm,
+              height_mm: proposal.height_mm,
+            }"
+            :openings="openings"
+            :items="[]"
+            :states="new Map()"
+          />
+        </div>
+
         <p class="mt-3 text-xs text-muted">
           {{ proposal.source === 'ai'
             ? `Fotoğraftan tahmin edildi${proposal.confidence_percent === null ? '' : ` (%${proposal.confidence_percent} güven)`}. Bir metre şerit varsa kontrol etmeye değer.`
