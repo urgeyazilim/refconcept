@@ -40,7 +40,7 @@ customer, place every product at its real size, and hand the renderer that as st
 | `SnapEngine.ts` | Pulls a drag onto walls, edges and centre lines. |
 | `MeasurementEngine.ts` | The four gaps around the selected piece. |
 | `RoomGeometryBuilder.ts` | Walls, floor and ceiling with real holes cut for openings. |
-| `FurnitureBuilder.ts` | Boxes at the SKU's real dimensions. |
+| `FurnitureBuilder.ts` | Boxes at the SKU's dimensions, wearing the product photograph. |
 | `DragController.ts` | Press, move, release. |
 | `SceneManager.ts` | Canvas, renderer, dirty-flag render loop, occlusion. |
 | `CameraManager.ts` | Üstten / Perspektif / İçeriden. |
@@ -82,7 +82,7 @@ no evidence, to somebody about to pay for a delivery.
 ## The flow
 
 1. **Analysis** estimates the room's size and openings from the photograph
-   (`room_analysis` prompt v2) and `RoomGeometryProposer` writes them as an **unconfirmed**
+   (`room_analysis` prompt v3: measurements, openings, and boxes on the photograph) and `RoomGeometryProposer` writes them as an **unconfirmed**
    `room_geometry_versions` row.
 2. **The customer is asked**: "Bu ölçüler doğru mu?" — `[Evet, devam et]` or `[Düzelt]`.
    Confirming writes the figures back onto the room and adopts the detected openings, but only
@@ -104,10 +104,25 @@ path to it**. There is no model and no table row — one layout has one current 
 regenerated whenever the furniture moves, and a file nothing points at is rubbish rather than
 a record.
 
+## Against the storyboard
+
+The product storyboard has six panels. Five are built as drawn: the photograph, the analysis
+with its boxes on the picture and "Bu ölçüler doğru mu?", the 3D room with Üstten / Perspektif
+/ İçeriden, the catalogue in the room, the editing tools (align to wall, centre, duplicate,
+height, lock, measurements on or off), and the final image produced from the plan.
+
+Two differences, both deliberate:
+
+- **No translate gizmo.** Furniture is moved by dragging it and nudged with the arrow keys —
+  a centimetre a press, ten with shift. A three-arrow gizmo is a second input system to keep
+  in step with snapping and collision, for a gesture the pointer already does.
+- **Products are boxes with their photograph on the front.** See below.
+
 ## What is not built yet
 
-- Products are boxes. The catalogue has photographs for everything and GLB models for almost
-  nothing, and a planner that waits for models is a planner nobody can use this year.
+- Products are boxes wearing their own photograph. The catalogue has photographs for
+  everything and GLB models for almost nothing, and a planner that waits for models is a
+  planner nobody can use this year.
 - The snapshot conditions the render as a reference image, which is weaker than depth-conditioned
   generation (ControlNet on SD/Flux). That would need a third provider and is the next real
   step for wall fidelity.
