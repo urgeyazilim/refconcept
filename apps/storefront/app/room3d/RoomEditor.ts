@@ -3,6 +3,7 @@ import { DragController } from './DragController'
 import { type Measurement, MeasurementEngine, formatDistance } from './MeasurementEngine'
 import { SceneManager } from './SceneManager'
 import { SnapEngine } from './SnapEngine'
+import { footprintOf } from './footprint'
 import type { LayoutItem, RoomGeometry, RoomOpening, ViewMode } from './types'
 
 /** A measurement, already placed on the screen, for the HTML overlay to draw. */
@@ -242,15 +243,81 @@ export class RoomEditor {
     this.schedulePersist()
   }
 
-  /** Adds a product the customer picked from the catalogue. */
+  /**
+   * Adds a product the customer picked from the catalogue, somewhere it fits.
+   *
+   * Somewhere it fits rather than the middle of the room, because the middle of a furnished
+   * room is usually the coffee table. A new piece that lands on top of something and turns
+   * red is a piece the customer has to rescue before they can even look at it, and the first
+   * thing the editor did was tell them off.
+   *
+   * It is still only a starting position. They will move it.
+   */
   add(item: LayoutItem): void {
     this.remember()
 
-    this.items = [...this.items, { ...item }]
-    this.selectedId = item.id
+    const placed = { ...item, ...this.freeSpotFor(item) }
+
+    this.items = [...this.items, placed]
+    this.selectedId = placed.id
 
     this.reevaluate()
     this.schedulePersist()
+  }
+
+  /**
+   * The first position on a coarse grid where a piece is not in anything's way.
+   *
+   * Coarse on purpose — 250 mm steps, a few dozen candidates — because this runs once when
+   * somebody adds a product and an exhaustive search would be slower to no visible benefit.
+   * Falls back to the middle of the room, where at least it is obvious and easy to grab.
+   */
+  private freeSpotFor(item: LayoutItem): { position_x_mm: number, position_z_mm: number } {
+    const centre = {
+      position_x_mm: Math.round(this.geometry.width_mm / 2),
+      position_z_mm: Math.round(this.geometry.length_mm / 2),
+    }
+
+    const footprint = footprintOf(item)
+
+    if (footprint.width === 0) {
+      return centre
+    }
+
+    const step = 250
+
+    // Inset by half the piece, so a candidate is never a position half outside the room.
+    const fromX = Math.trunc(footprint.width / 2)
+    const fromZ = Math.trunc(footprint.depth / 2)
+
+    const candidates: Array<{ x: number, z: number, distance: number }> = []
+
+    for (let z = fromZ; z <= this.geometry.length_mm - fromZ; z += step) {
+      for (let x = fromX; x <= this.geometry.width_mm - fromX; x += step) {
+        candidates.push({
+          x,
+          z,
+          distance: (x - centre.position_x_mm) ** 2 + (z - centre.position_z_mm) ** 2,
+        })
+      }
+    }
+
+    /*
+     * Nearest the middle of the room first.
+     *
+     * Scanning corner to corner finds a free spot just as well and puts every new product in
+     * the same corner, one behind the other, as far from where somebody is looking as the
+     * room allows. What they meant by "add this" is "show me this here".
+     */
+    candidates.sort((a, b) => a.distance - b.distance)
+
+    for (const candidate of candidates) {
+      if (this.collisions.stateAt(item, this.items, candidate) === 'ok') {
+        return { position_x_mm: candidate.x, position_z_mm: candidate.z }
+      }
+    }
+
+    return centre
   }
 
   undo(): void {

@@ -54,8 +54,29 @@ const loadError = ref<string | null>(null)
 const saveError = ref<string | null>(null)
 const confirming = ref(false)
 
-/** The 3D scene, for the picture the renderer works from. */
-const scene = ref<{ snapshot: () => string | null } | null>(null)
+/** The 3D scene, for the picture the renderer works from and for adding products to. */
+const scene = ref<{
+  snapshot: () => string | null
+  add: (item: LayoutItem) => void
+} | null>(null)
+
+/** One catalogue result, reduced to what a plan needs: a name, a size and a price. */
+interface Candidate {
+  id: string
+  name: string
+  category: string | null
+  sku_id: string
+  width_mm: number | null
+  height_mm: number | null
+  depth_mm: number | null
+  price: string
+  image_url: string | null
+}
+
+const search = ref('')
+const searching = ref(false)
+const candidates = ref<Candidate[]>([])
+const searched = ref(false)
 
 const composing = ref(false)
 const composeNotice = ref<string | null>(null)
@@ -301,6 +322,108 @@ async function composeLayout(replace = false): Promise<void> {
   }
 }
 
+/**
+ * Finds products the customer could put in this room.
+ *
+ * Only the ones with measurements. A plan is a promise that these things fit, and a variant
+ * the seller never measured cannot be part of that promise — it would go in as a placeholder
+ * box, collide with nothing, and mean nothing. Better to not offer it here at all; it is
+ * still in the shop, where its size is not load-bearing.
+ */
+async function findProducts(): Promise<void> {
+  const term = search.value.trim()
+
+  if (term.length < 2) {
+    return
+  }
+
+  searching.value = true
+  searched.value = true
+
+  try {
+    const response = await api.get<{ data: Array<Record<string, never>> }>('/api/v1/catalog/products', {
+      search: term,
+      per_page: 12,
+    })
+
+    candidates.value = (response.data as unknown as CatalogProduct[])
+      .map(toCandidate)
+      .filter((candidate): candidate is Candidate => candidate !== null)
+  }
+  catch (error) {
+    saveError.value = error instanceof Error ? error.message : 'Ürünler aranamadı.'
+  }
+  finally {
+    searching.value = false
+  }
+}
+
+/** The shape the catalogue returns, narrowed to the parts a plan reads. */
+interface CatalogProduct {
+  id: string
+  name: string
+  category: { slug: string } | null
+  media?: Array<{ url: string | null }>
+  skus?: Array<{
+    id: string
+    is_available: boolean
+    effective_price?: { formatted?: string }
+    dimensions: { width_mm: number | null, height_mm: number | null, depth_mm: number | null } | null
+  }>
+}
+
+function toCandidate(product: CatalogProduct): Candidate | null {
+  // The first variant that is both for sale and measured. A product whose only measured
+  // variant is out of stock is not one to put in a plan somebody is about to order from.
+  const sku = (product.skus ?? []).find(
+    candidate => candidate.is_available && (candidate.dimensions?.width_mm ?? 0) > 0,
+  )
+
+  if (sku === undefined || sku.dimensions === null) {
+    return null
+  }
+
+  return {
+    id: product.id,
+    name: product.name,
+    category: product.category?.slug ?? null,
+    sku_id: sku.id,
+    width_mm: sku.dimensions.width_mm,
+    height_mm: sku.dimensions.height_mm,
+    depth_mm: sku.dimensions.depth_mm,
+    price: sku.effective_price?.formatted ?? '',
+    image_url: product.media?.[0]?.url ?? null,
+  }
+}
+
+/**
+ * Puts a chosen product in the room.
+ *
+ * The id is minted here so the piece has an identity before the server has seen it —
+ * selection, undo and the drag all need one immediately. The server keeps it unless it is
+ * already taken, in which case it mints its own and the next load corrects us.
+ */
+function addProduct(candidate: Candidate): void {
+  scene.value?.add({
+    id: crypto.randomUUID(),
+    product_id: candidate.id,
+    sku_id: candidate.sku_id,
+    name: candidate.name,
+    category: candidate.category,
+    position_x_mm: 0,
+    position_y_mm: 0,
+    position_z_mm: 0,
+    rotation_y_deg: 0,
+    locked: false,
+    collision_state: 'ok',
+    width_mm: candidate.width_mm,
+    height_mm: candidate.height_mm,
+    depth_mm: candidate.depth_mm,
+    image_url: candidate.image_url,
+    model_url: null,
+  })
+}
+
 onMounted(load)
 </script>
 
@@ -481,6 +604,65 @@ onMounted(load)
       </p>
 
       <Room3DScene ref="scene" :geometry="geometry" :openings="openings" :items="items" editable @save="save" />
+
+      <!--
+        The catalogue, in the room.
+
+        Only measured variants are offered. A plan is a promise that these things fit, and a
+        product whose size nobody recorded cannot be part of that promise — it would go in as
+        a placeholder and mean nothing. It is still in the shop, where its size is not
+        load-bearing.
+      -->
+      <section class="rounded-md border border-line bg-surface p-4">
+        <h2 class="text-sm font-medium text-ink">
+          Odaya ürün ekle
+        </h2>
+
+        <form class="mt-3 flex gap-2" @submit.prevent="findProducts">
+          <input
+            v-model="search"
+            type="search"
+            placeholder="Kanepe, sehpa, kitaplık…"
+            class="w-full rounded-sm border border-line bg-surface px-3 py-2 text-sm"
+          >
+          <button
+            type="submit"
+            class="shrink-0 rounded-pill bg-charcoal px-4 py-2 text-sm text-white disabled:opacity-50"
+            :disabled="searching || search.trim().length < 2"
+          >
+            Ara
+          </button>
+        </form>
+
+        <ul v-if="candidates.length > 0" class="mt-3 grid gap-2 sm:grid-cols-2">
+          <li v-for="candidate in candidates" :key="candidate.sku_id">
+            <button
+              type="button"
+              class="flex w-full items-center gap-3 rounded-sm border border-line p-2 text-left transition-colors hover:bg-bg-muted"
+              @click="addProduct(candidate)"
+            >
+              <img
+                v-if="candidate.image_url"
+                :src="candidate.image_url"
+                alt=""
+                class="size-12 shrink-0 rounded-sm object-cover"
+              >
+
+              <span class="min-w-0">
+                <span class="block truncate text-sm text-ink">{{ candidate.name }}</span>
+                <span class="block text-xs text-muted tabular-nums">
+                  {{ Math.round((candidate.width_mm ?? 0) / 10) }} × {{ Math.round((candidate.depth_mm ?? 0) / 10) }} cm
+                  <template v-if="candidate.price"> · {{ candidate.price }}</template>
+                </span>
+              </span>
+            </button>
+          </li>
+        </ul>
+
+        <p v-else-if="searched && !searching" class="mt-3 text-xs text-muted">
+          Ölçüsü girilmiş ürün bulunamadı. Plana ancak ölçüsü bilinen ürünler konabilir.
+        </p>
+      </section>
 
       <p v-if="saveError" class="rounded-sm bg-danger-subtle p-3 text-sm text-danger-strong">
         {{ saveError }}

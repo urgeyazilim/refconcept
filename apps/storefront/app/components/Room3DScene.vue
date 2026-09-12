@@ -186,7 +186,17 @@ watch(
 )
 
 /** The canvas as a PNG, for the render pipeline. */
-defineExpose({ snapshot: () => editor.value?.snapshot() ?? null })
+/**
+ * What the page around this component may do to the room.
+ *
+ * A snapshot for the render pipeline, and a way to put a product in — the catalogue search
+ * lives on the page, because what is worth offering depends on the screen, and the scene
+ * should not know what a shop is.
+ */
+defineExpose({
+  snapshot: () => editor.value?.snapshot() ?? null,
+  add: (item: LayoutItem) => editor.value?.add(item),
+})
 </script>
 
 <template>
