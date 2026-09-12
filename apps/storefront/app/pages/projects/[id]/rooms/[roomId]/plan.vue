@@ -81,6 +81,9 @@ const searched = ref(false)
 const composing = ref(false)
 const composeNotice = ref<string | null>(null)
 
+const adding = ref(false)
+const cartNotice = ref<string | null>(null)
+
 /** Set when the server refuses to overwrite an arrangement somebody already made. */
 const overwrite = ref(false)
 
@@ -424,6 +427,39 @@ function addProduct(candidate: Candidate): void {
   })
 }
 
+/**
+ * Puts everything standing in the room into the basket.
+ *
+ * The end of the module. A plan is a list of real products at real sizes in a room they have
+ * been checked against, so one press from being an order is the only sensible place for it to
+ * end. What could not be added is named rather than skipped — a basket that quietly contains
+ * four of the five things somebody planned is a basket they discover at the door.
+ */
+async function addLayoutToCart(): Promise<void> {
+  adding.value = true
+  saveError.value = null
+  cartNotice.value = null
+
+  try {
+    const response = await api.post<{
+      data: { added: number }
+      meta: { refused: Array<{ name: string | null, reason: string }> }
+    }>(`${base}/layout/cart`)
+
+    cartNotice.value = response.meta.refused.length === 0
+      ? `${response.data.added} ürün sepete eklendi.`
+      : `${response.data.added} ürün sepete eklendi. Eklenemeyenler: ${response.meta.refused
+        .map(entry => `${entry.name ?? 'ürün'} (${entry.reason})`)
+        .join(' · ')}`
+  }
+  catch (error) {
+    saveError.value = error instanceof Error ? error.message : 'Sepete eklenemedi.'
+  }
+  finally {
+    adding.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -581,7 +617,29 @@ onMounted(load)
           Son tasarımda seçilen ürünler, odanın ölçülerine göre dizilir. Sonra
           istediğiniz gibi taşıyabilirsiniz.
         </p>
+
+        <!--
+          The end of the module: a plan is a list of real products at real sizes in a room
+          they have been checked against, and asking somebody to find each of them again in
+          the shop is asking them to do the work twice.
+        -->
+        <button
+          v-if="items.length > 0"
+          type="button"
+          class="ml-auto rounded-pill border border-line px-4 py-2 text-sm hover:bg-bg-muted disabled:opacity-50"
+          :disabled="adding"
+          @click="addLayoutToCart"
+        >
+          Odadakileri sepete ekle
+        </button>
       </div>
+
+      <p v-if="cartNotice" class="rounded-sm bg-bg-muted p-3 text-sm text-ink-secondary">
+        {{ cartNotice }}
+        <NuxtLink to="/cart" class="ml-1 underline">
+          Sepete git
+        </NuxtLink>
+      </p>
 
       <!-- The question the 409 exists to ask. -->
       <div v-if="overwrite" class="rounded-md border border-line bg-warning-subtle p-4">

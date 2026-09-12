@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domains\Projects\Http\Controllers;
 
+use App\Domains\Commerce\Exceptions\CartRefused;
+use App\Domains\Commerce\Services\CartService;
 use App\Domains\Products\Models\ProductSku;
 use App\Domains\Projects\Enums\DesignVersionStatus;
 use App\Domains\Projects\Enums\MeasurementQuality;
@@ -45,6 +47,7 @@ final class RoomLayoutController
         private readonly LayoutComposer $composer,
         private readonly ComposableProducts $products,
         private readonly RoomPhotoStorage $photos,
+        private readonly CartService $carts,
     ) {}
 
     /**
@@ -258,6 +261,76 @@ final class RoomLayoutController
                 'unplaced' => $composed['unplaced'],
                 'unmeasured' => $catalogue['unmeasured'],
             ],
+        ]);
+    }
+
+    /**
+     * Puts everything standing in the room into the basket.
+     *
+     * The point of the whole module. A plan is a list of real products at real sizes in a room
+     * they have been checked against — one press away from being an order is the only sensible
+     * place for it to end, and asking somebody to find each piece again in the shop is asking
+     * them to do the work twice.
+     *
+     * What cannot be bought is reported rather than skipped. A basket that quietly contains
+     * four of the five things somebody planned is a basket they discover at the door.
+     */
+    public function addToCart(Request $request, Project $project, Room $room): JsonResponse
+    {
+        $this->authorizeProject($request, $project);
+        $this->assertBelongs($room, $project);
+
+        $user = $request->user();
+
+        abort_if($user === null, 401);
+
+        $geometry = $this->currentGeometry($room);
+
+        abort_if($geometry === null, 422, 'Önce oda ölçülerinin onaylanması gerekiyor.');
+
+        $layout = DesignLayout::query()
+            ->where('room_id', $room->getKey())
+            ->where('geometry_version_id', $geometry->getKey())
+            ->whereHas('items')
+            ->latest('version')
+            ->first();
+
+        abort_if($layout === null, 422, 'Odada henüz ürün yok.');
+
+        /*
+         * Two of the same sideboard is a quantity of two, not two lines.
+         *
+         * The layout holds one row per piece standing in the room, which is the right shape
+         * for a plan and the wrong shape for a basket: a customer ordering a pair of bedside
+         * tables wants one line saying two.
+         */
+        $quantities = $layout->items->groupBy('sku_id')->map->count();
+
+        $skus = ProductSku::query()
+            // `product.skus`, because a product decides whether it is publicly visible by
+            // looking at its own variants. Lazily, that is a query per basket line — and with
+            // lazy loading disabled, which it is here, a 500 for the customer.
+            ->with(['product.skus.seller', 'seller'])
+            ->whereIn('id', $quantities->keys())
+            ->get();
+
+        $added = 0;
+        $refused = [];
+
+        foreach ($skus as $sku) {
+            try {
+                $this->carts->add($user, $sku, (int) $quantities[$sku->getKey()]);
+                $added++;
+            } catch (CartRefused $e) {
+                // Sold out, unpublished, or withdrawn since the plan was made. Named, so the
+                // customer can take it out of the room rather than wonder what happened.
+                $refused[] = ['name' => $sku->product?->name, 'reason' => $e->getMessage()];
+            }
+        }
+
+        return response()->json([
+            'data' => ['added' => $added],
+            'meta' => ['refused' => $refused],
         ]);
     }
 

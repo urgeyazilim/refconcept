@@ -90,6 +90,10 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, EnsureEmailIsVerif
          */
         Route::post('{project}/rooms/{room}/layout/snapshot', [RoomLayoutController::class, 'storeSnapshot'])
             ->name('rooms.layout.snapshot');
+        // The point of the whole module: a plan is a list of real products at real sizes,
+        // checked against a real room, and one press from being an order.
+        Route::post('{project}/rooms/{room}/layout/cart', [RoomLayoutController::class, 'addToCart'])
+            ->name('rooms.layout.cart');
         Route::post('{project}/rooms/{room}/geometry', [RoomLayoutController::class, 'storeGeometry'])
             ->name('rooms.geometry.store');
         Route::post('{project}/rooms/{room}/geometry/{version}/confirm', [RoomLayoutController::class, 'confirmGeometry'])
