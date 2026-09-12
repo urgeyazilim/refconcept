@@ -786,6 +786,20 @@ const statusTone: Record<string, string> = {
               sürüm oluşturabilirsiniz.
             </p>
           </RcAlert>
+
+          <!--
+            The plan, from the picture.
+
+            Here rather than on the room page, because this is the moment somebody asks "but
+            would it actually fit" — they have just seen the room and want to move the sofa a
+            little to the left. The plan opens with these products already arranged in it.
+          -->
+          <NuxtLink
+            :to="`/projects/${projectId}/rooms/${roomId}/plan?compose=${shownVersionId ?? ''}`"
+            class="mt-4 inline-flex rounded-pill border border-line px-4 py-2 text-sm hover:bg-bg-muted"
+          >
+            3B planda aç ve yerleştir
+          </NuxtLink>
         </div>
       </section>
 

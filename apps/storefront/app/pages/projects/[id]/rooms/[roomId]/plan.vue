@@ -84,6 +84,14 @@ const composeNotice = ref<string | null>(null)
 const adding = ref(false)
 const cartNotice = ref<string | null>(null)
 
+/**
+ * The design somebody arrived from, if they arrived from one.
+ *
+ * A customer who presses "3B planda aç" while looking at a particular render means that
+ * render, not whichever version happens to be newest.
+ */
+const fromDesign = computed(() => String(route.query.compose ?? ''))
+
 /** Set when the server refuses to overwrite an arrangement somebody already made. */
 const overwrite = ref(false)
 
@@ -296,7 +304,13 @@ async function composeLayout(replace = false): Promise<void> {
     const response = await api.post<{
       data: LayoutPayload
       meta: { unplaced: Array<{ category: string | null }>, unmeasured: Array<{ category: string | null }> }
-    }>(`${base}/layout/compose`, replace ? { replace: true } : {})
+    }>(`${base}/layout/compose`, {
+      ...(replace ? { replace: true } : {}),
+      // Which design to arrange. Set when somebody came here from a render they were
+      // looking at — the newest finished version is the right default and the wrong answer
+      // for a customer who has just scrolled back to an older one.
+      ...(fromDesign.value === '' ? {} : { design_version_id: fromDesign.value }),
+    })
 
     items.value = response.data.items
     overwrite.value = false
@@ -460,7 +474,21 @@ async function addLayoutToCart(): Promise<void> {
   }
 }
 
-onMounted(load)
+onMounted(async () => {
+  await load()
+
+  /*
+   * Arranged straight away when somebody came from a design, and only into an empty room.
+   *
+   * They pressed a button that said "open it in the plan and arrange it"; making them press
+   * another one on arrival is asking twice. Into an empty room only, because the server
+   * refuses to overwrite an arrangement anyway and the refusal would arrive as a question
+   * nobody asked for.
+   */
+  if (fromDesign.value !== '' && geometry.value !== null && items.value.length === 0) {
+    await composeLayout()
+  }
+})
 </script>
 
 <template>
