@@ -39,12 +39,14 @@ final class AiGatewaySeeder extends Seeder
         $fake = $this->seedFakeProvider();
         $google = $this->seedGoogleProvider();
         $openai = $this->seedOpenAiProvider();
+        $fal = $this->seedFalProvider();
 
         $models = [
             'fake-text' => $this->model($fake, 'fake-text-1', 'Fake Metin', AiModality::Text, structured: true),
             'fake-vision' => $this->model($fake, 'fake-vision-1', 'Fake Görsel Anlama', AiModality::Vision, structured: true, imageInput: true),
             'fake-image' => $this->model($fake, 'fake-image-1', 'Fake Görsel Üretimi', AiModality::Image),
             'fake-embedding' => $this->model($fake, 'fake-embedding-1', 'Fake Vektör', AiModality::Embedding, maxOutputTokens: null),
+            'fake-model' => $this->model($fake, 'fake-model-1', 'Fake 3B Model', AiModality::Model3d, imageInput: true, maxOutputTokens: null),
         ];
 
         $models['gemini-text'] = $this->model(
@@ -146,6 +148,28 @@ final class AiGatewaySeeder extends Seeder
         $this->rate($models['veo'], inputPerMillion: 0, outputPerMillion: 0, perRequest: 640_000);
 
         /*
+         * The model that turns a product photograph into a mesh.
+         *
+         * Thirty cents a model with standard textures, which is why it is priced per request
+         * like video rather than per token: nothing here is measured in tokens, and forcing
+         * it into those columns would make every cost report about the catalogue wrong.
+         *
+         * Run once per product, ever. A catalogue of three thousand variants is a one-off
+         * bill smaller than a week of renders, and every customer who plans that product into
+         * a room afterwards uses the same file.
+         */
+        $models['tripo'] = $this->model(
+            $fal,
+            'tripo3d/tripo/v2.5/image-to-3d',
+            'Tripo 2.5 image-to-3D',
+            AiModality::Model3d,
+            imageInput: true,
+            maxOutputTokens: null,
+        );
+
+        $this->rate($models['tripo'], inputPerMillion: 0, outputPerMillion: 0, perRequest: 300_000);
+
+        /*
          * With no key on file a provider's models exist but cannot be called, so routing
          * to them would ship a build whose every AI feature fails on first use. Whatever
          * the plan names that cannot be reached is skipped, and the simulator — which needs
@@ -236,6 +260,49 @@ final class AiGatewaySeeder extends Seeder
 
         if ($key === '') {
             $this->command?->warn('OPENAI_API_KEY tanımlı değil; görsel üretimi Google tarafında kalıyor.');
+
+            return $provider;
+        }
+
+        DB::transaction(function () use ($provider, $key): void {
+            $provider->credentials()->update(['is_active' => false]);
+
+            $provider->credentials()->updateOrCreate(
+                ['label' => 'environment'],
+                [
+                    'secret_encrypted' => $key,
+                    'secret_hint' => mb_substr($key, -4),
+                    'is_active' => true,
+                ],
+            );
+        });
+
+        return $provider;
+    }
+
+    /**
+     * Registers fal.ai, and gives it the key from the environment if one is there.
+     *
+     * The one provider here whose work nobody waits for: a mesh is made once per product,
+     * in a queue, after a listing is approved. With no key on file its models exist and
+     * cannot be called, the task falls back to the simulator, and the planner goes on
+     * drawing products as cut-outs of their photographs.
+     */
+    private function seedFalProvider(): AiProvider
+    {
+        $provider = AiProvider::query()->updateOrCreate(
+            ['code' => 'fal'],
+            [
+                'name' => 'fal.ai',
+                'driver' => 'fal',
+                'is_active' => true,
+            ],
+        );
+
+        $key = (string) config('services.fal.key', '');
+
+        if ($key === '') {
+            $this->command?->warn('FAL_API_KEY tanımlı değil; ürünlerin 3B modeli üretilmeyecek.');
 
             return $provider;
         }
@@ -411,6 +478,7 @@ final class AiGatewaySeeder extends Seeder
             AiModality::Vision => 'fake-vision',
             AiModality::Image => 'fake-image',
             AiModality::Embedding => 'fake-embedding',
+            AiModality::Model3d => 'fake-model',
             default => 'fake-text',
         };
     }
@@ -787,6 +855,37 @@ final class AiGatewaySeeder extends Seeder
                         'No people, no text, no captions, no measurements, no arrows, no music.',
                         'Style reference: {{ style }}. Room: {{ room_type }}.',
                     ]),
+                ],
+            ],
+
+            AiTask::ProductModel->value => [
+                'primary' => 'tripo',
+                'fallback' => 'fake-model',
+                // Nobody is charged: this is a catalogue cost, like the photograph itself.
+                // Charging one customer to furnish the shop would be charging them for an
+                // asset every other customer then uses.
+                'credits' => 0,
+                // Thirty cents expected; the cap leaves room for a price change and stops a
+                // misrouted model from quietly costing ten times that per product.
+                'max_cost_micros' => 600_000,
+                // One at a time. There is no hurry — nobody is waiting — and a catalogue
+                // import that approved four hundred listings at once should trickle rather
+                // than spend a hundred and twenty dollars in a minute.
+                'concurrency' => 1,
+                'timeout' => 300,
+                // Once. A failed mesh is a product without one, which the planner already
+                // handles; retrying a paid generation is paying twice for the same picture.
+                'attempts' => 1,
+                'temperature_bps' => 0,
+                'description' => 'Ürün fotoğrafından oda planlayıcısı için 3B model üretir.',
+                'prompt' => [
+                    /*
+                     * Both empty, and they have to be: this endpoint takes an image and a few
+                     * numbers, and has nowhere to put a sentence. Anything written here would
+                     * be rendered, stored, and never sent.
+                     */
+                    'system' => '',
+                    'template' => '',
                 ],
             ],
 

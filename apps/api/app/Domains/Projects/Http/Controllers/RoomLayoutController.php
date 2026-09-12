@@ -812,8 +812,22 @@ final class RoomLayoutController
              * of theirs — so a plain URL is the right thing here and would not be two lines
              * further down, where the room photographs live.
              */
-            'image_url' => $item->product?->media?->first()?->url(),
-            'model_url' => null,
+            'image_url' => $item->product?->media?->firstWhere('type', 'image')?->url(),
+
+            /*
+             * A 3D model, when the product has one.
+             *
+             * The seller's own file wins over a mesh generated from their photograph: one is
+             * the shape of the thing and the other is a likeness whose far side was never
+             * photographed. The editor scales whichever it gets to the variant's recorded
+             * dimensions, so a model that came back at the wrong size is corrected rather
+             * than believed.
+             */
+            'model_url' => $item->product?->media
+                ?->where('type', 'model_3d')
+                ->sortBy(fn ($media): int => $media->source === 'seller' ? 0 : 1)
+                ->first()
+                ?->url(),
         ];
     }
 

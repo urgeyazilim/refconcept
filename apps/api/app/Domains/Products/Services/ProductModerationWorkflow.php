@@ -10,6 +10,7 @@ use App\Domains\Products\Enums\ModerationStatus;
 use App\Domains\Products\Enums\ProductStatus;
 use App\Domains\Products\Enums\SkuStatus;
 use App\Domains\Products\Exceptions\ProductNotSubmittable;
+use App\Domains\Products\Jobs\GenerateProductModel;
 use App\Domains\Products\Models\Product;
 use App\Domains\Products\Models\ProductModeration;
 use App\Domains\Products\Models\ProductStatusHistory;
@@ -121,6 +122,18 @@ final class ProductModerationWorkflow
                 actor: $actor,
                 organizationId: $product->organization_id,
             );
+
+            /*
+             * A 3D model for the planner, made from the listing's own photograph.
+             *
+             * After the commit rather than inside it: the generation is a network call to a
+             * provider that takes a few seconds and costs a few tens of cents, and a
+             * transaction held open across it is a row lock held across the internet. The
+             * listing is approved whether or not the mesh ever arrives — a product without
+             * one is drawn in the planner as a cut-out of its photograph, which is what every
+             * product was drawn as before this existed.
+             */
+            DB::afterCommit(fn () => GenerateProductModel::dispatch((string) $product->getKey()));
 
             return $product;
         });

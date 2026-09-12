@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\Storage;
  * @property string $id
  * @property string $product_id
  * @property string $type
+ * @property string $source
  * @property string $disk
  * @property string $storage_path
  * @property string $original_name
@@ -53,6 +54,7 @@ class ProductMedia extends Model
     protected $fillable = [
         'product_id',
         'type',
+        'source',
         'disk',
         'storage_path',
         'original_name',

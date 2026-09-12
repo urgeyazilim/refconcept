@@ -6969,6 +6969,55 @@
                 ]
             }
         },
+        "/api/v1/projects/{project}/rooms/{room}/layout/place": {
+            "post": {
+                "tags": [
+                    "projects"
+                ],
+                "summary": "RoomLayoutController::place",
+                "operationId": "v1.projects.rooms.layout.place",
+                "responses": {
+                    "200": {
+                        "description": "Başarılı."
+                    },
+                    "401": {
+                        "description": "Kimlik doğrulanmadı."
+                    },
+                    "403": {
+                        "description": "Yetki yok."
+                    },
+                    "422": {
+                        "description": "Doğrulama hatası."
+                    },
+                    "429": {
+                        "description": "Hız sınırı aşıldı."
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "project",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "room",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/projects/{project}/rooms/{room}/layout/snapshot": {
             "post": {
                 "tags": [

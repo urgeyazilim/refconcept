@@ -50,4 +50,16 @@ return [
         'key' => env('OPENAI_API_KEY'),
     ],
 
+    /*
+     * fal.ai, which turns a product photograph into a 3D model for the room planner.
+     *
+     * A catalogue cost rather than a customer-facing one: a few tens of cents per product,
+     * once, in a queue nobody is waiting on. With no key the task has no route and the
+     * planner draws products as cut-outs of their photographs, which is what it did before
+     * this existed.
+     */
+    'fal' => [
+        'key' => env('FAL_API_KEY'),
+    ],
+
 ];

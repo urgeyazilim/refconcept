@@ -7,6 +7,7 @@ namespace App\Domains\Ai\Services;
 use App\Domains\Ai\Contracts\AiProvider as AiProviderContract;
 use App\Domains\Ai\Models\AiProvider;
 use App\Domains\Ai\Providers\FakeAiProvider;
+use App\Domains\Ai\Providers\FalAiProvider;
 use App\Domains\Ai\Providers\GoogleAiProvider;
 use App\Domains\Ai\Providers\OpenAiProvider;
 use RuntimeException;
@@ -29,6 +30,7 @@ final class ProviderRegistry
         'fake' => FakeAiProvider::class,
         'openai' => OpenAiProvider::class,
         'google' => GoogleAiProvider::class,
+        'fal' => FalAiProvider::class,
     ];
 
     public function for(AiProvider $provider): AiProviderContract

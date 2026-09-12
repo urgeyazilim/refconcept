@@ -33,6 +33,16 @@ enum AiModality: string
      */
     case Video = 'video';
 
+    /**
+     * Produces a 3D mesh from a photograph.
+     *
+     * Its own modality for the same reason video is: the call takes an image and answers
+     * with a file, the file is measured in megabytes rather than tokens, it is priced per
+     * model, and no text or image model can serve it. One product is converted once, ever —
+     * this is a catalogue job, not something a customer waits for.
+     */
+    case Model3d = 'model_3d';
+
     case Embedding = 'embedding';
 
     public function label(): string
@@ -42,6 +52,7 @@ enum AiModality: string
             self::Vision => 'Görsel anlama',
             self::Image => 'Görsel üretimi',
             self::Video => 'Video üretimi',
+            self::Model3d => '3B model üretimi',
             self::Embedding => 'Vektör',
         };
     }

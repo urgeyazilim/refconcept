@@ -103,6 +103,7 @@ final class GeneratedImageStore
              */
             'mp4' => 'video/mp4',
             'webm' => 'video/webm',
+            'glb' => 'model/gltf-binary',
             default => 'image/png',
         };
     }
@@ -134,6 +135,10 @@ final class GeneratedImageStore
             // in a job row, and a film of somebody's home must not be staged publicly.
             'video/mp4' => 'mp4',
             'video/webm' => 'webm',
+            // A mesh, staged the same way for the same reason: it is a file rather than a
+            // field, and where it finally lives is the caller's decision rather than this
+            // class's.
+            'model/gltf-binary' => 'glb',
             default => 'png',
         };
     }

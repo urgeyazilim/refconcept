@@ -1,4 +1,5 @@
 import {
+  Box3,
   BoxGeometry,
   ClampToEdgeWrapping,
   Color,
@@ -10,8 +11,11 @@ import {
   Mesh,
   MeshStandardMaterial,
   PlaneGeometry,
+  Vector3,
   type Object3D,
 } from 'three'
+
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 import type { CollisionState } from './CollisionEngine'
 import { cutOut } from './ProductCutout'
@@ -92,6 +96,9 @@ export class FurnitureBuilder {
   /** Requests in flight, so four chairs added at once make one request rather than four. */
   private readonly pending = new Map<string, Promise<MeshStandardMaterial | null>>()
 
+  /** Loads the glTF binaries the catalogue has, when it has them. */
+  private readonly models = new GLTFLoader()
+
   private readonly edgeMaterial = new LineBasicMaterial({ color: 0x3d3733 })
 
   private readonly selectedEdgeMaterial = new LineBasicMaterial({ color: 0xb08f52, linewidth: 2 })
@@ -147,7 +154,17 @@ export class FurnitureBuilder {
 
     this.place(group, item)
 
-    if (measured && item.image_url !== null) {
+    /*
+     * A real model if the catalogue has one, its own photograph if not.
+     *
+     * Both replace the box that was just built, and the box exists so that a room is never
+     * empty while a file is on its way: blocks that sharpen into furniture look like a page
+     * working, and an empty room that fills half a second later looks like one that broke.
+     */
+    if (measured && item.model_url !== null) {
+      void this.dressWithModel(group, item, width, height, depth)
+    }
+    else if (measured && item.image_url !== null) {
       void this.dressWithPhotograph(group, item, width, height, depth)
     }
 
@@ -274,6 +291,93 @@ export class FurnitureBuilder {
   // --- internals -------------------------------------------------------------
 
   /**
+   * Replaces the box with the product's actual 3D model.
+   *
+   * **Scaled to the variant's recorded dimensions, never to its own.** A generated mesh
+   * arrives in whatever units the generator felt like and with whatever proportions it
+   * inferred from one photograph; the catalogue knows the thing is 2200 mm wide because a
+   * seller measured it. Believing the mesh instead would be the "beautiful model at the
+   * wrong size" that makes a planner worse than a box — it would look convincing and it
+   * would not fit.
+   *
+   * Proportional: the largest dimension decides the scale and the other two follow, so a
+   * mesh whose depth is a little off stays a sofa rather than becoming a squashed one.
+   */
+  private async dressWithModel(
+    group: Group,
+    item: LayoutItem,
+    width: number,
+    height: number,
+    depth: number,
+  ): Promise<void> {
+    const url = item.model_url
+
+    if (url === null) {
+      return
+    }
+
+    let scene: Group
+
+    try {
+      const loaded = await this.models.loadAsync(url)
+
+      scene = loaded.scene
+    }
+    catch {
+      // No model after all. The photograph is the next best thing and the box is behind it.
+      if (item.image_url !== null) {
+        void this.dressWithPhotograph(group, item, width, height, depth)
+      }
+
+      return
+    }
+
+    // The piece may have been removed while the file was on its way.
+    if (group.parent === null) {
+      return
+    }
+
+    const bounds = new Box3().setFromObject(scene)
+    const size = bounds.getSize(new Vector3())
+
+    if (size.x <= 0 || size.y <= 0 || size.z <= 0) {
+      return
+    }
+
+    const scale = Math.min(
+      toUnits(width) / size.x,
+      toUnits(height) / size.y,
+      toUnits(depth) / size.z,
+    )
+
+    scene.scale.setScalar(scale)
+
+    // Stood on the floor and centred on the item's own origin: a mesh is modelled around
+    // whatever point its author chose, and that is rarely the middle of its base.
+    const scaled = new Box3().setFromObject(scene)
+    const centre = scaled.getCenter(new Vector3())
+
+    scene.position.set(-centre.x, -scaled.min.y, -centre.z)
+
+    scene.name = 'model'
+    scene.userData.itemId = item.id
+
+    scene.traverse((child) => {
+      if (child instanceof Mesh) {
+        child.castShadow = true
+        child.receiveShadow = true
+        child.userData.itemId = item.id
+      }
+    })
+
+    this.flatten(group, width, depth)
+
+    group.add(scene)
+
+    this.onCutoutReady()
+  }
+
+  /**
    * Replaces the box with the product, once its photograph has been cut out.
    *
    * The box does not disappear: it becomes the footprint slab, which is what carries the
@@ -300,26 +404,7 @@ export class FurnitureBuilder {
       return
     }
 
-    const body = group.getObjectByName('body')
-
-    if (body instanceof Mesh) {
-      // A slab rather than a block: the footprint is the honest part and the bulk was the
-      // part that looked like a carton.
-      body.geometry.dispose()
-      body.geometry = new BoxGeometry(toUnits(width), toUnits(FurnitureBuilder.PAD_MM), toUnits(depth))
-      body.position.y = toUnits(FurnitureBuilder.PAD_MM) / 2
-      body.castShadow = false
-    }
-
-    const edges = group.getObjectByName('edges')
-
-    if (edges instanceof LineSegments) {
-      edges.geometry.dispose()
-      edges.geometry = new EdgesGeometry(
-        new BoxGeometry(toUnits(width), toUnits(FurnitureBuilder.PAD_MM), toUnits(depth)),
-      )
-      edges.position.y = toUnits(FurnitureBuilder.PAD_MM) / 2
-    }
+    this.flatten(group, width, depth)
 
     const plane = new Mesh(new PlaneGeometry(toUnits(width), toUnits(height)), material)
 
@@ -331,6 +416,33 @@ export class FurnitureBuilder {
     group.add(plane)
 
     this.onCutoutReady()
+  }
+
+  /**
+   * Turns the solid box into the footprint slab under a product.
+   *
+   * The bulk was the part that looked like a carton; the footprint is the honest part, and
+   * it carries the collision colour, turns with the piece and proves the thing fits.
+   */
+  private flatten(group: Group, width: number, depth: number): void {
+    const pad = new BoxGeometry(toUnits(width), toUnits(FurnitureBuilder.PAD_MM), toUnits(depth))
+
+    const body = group.getObjectByName('body')
+
+    if (body instanceof Mesh) {
+      body.geometry.dispose()
+      body.geometry = pad
+      body.position.y = toUnits(FurnitureBuilder.PAD_MM) / 2
+      body.castShadow = false
+    }
+
+    const edges = group.getObjectByName('edges')
+
+    if (edges instanceof LineSegments) {
+      edges.geometry.dispose()
+      edges.geometry = new EdgesGeometry(pad)
+      edges.position.y = toUnits(FurnitureBuilder.PAD_MM) / 2
+    }
   }
 
   /**

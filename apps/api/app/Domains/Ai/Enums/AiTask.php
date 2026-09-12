@@ -41,6 +41,15 @@ enum AiTask: string
      */
     case VideoTour = 'video_tour';
 
+    /**
+     * Turns a product photograph into a 3D model for the room planner.
+     *
+     * Run once per variant when a listing is approved, never per customer, and never for
+     * the final render — the mesh's back is a guess, and a guess is fine in a planner seen
+     * across a room and not fine in a picture somebody buys from.
+     */
+    case ProductModel = 'product_model';
+
     /** Find the individual pieces of furniture inside a render. */
     case ObjectExtraction = 'object_extraction';
 
@@ -70,6 +79,7 @@ enum AiTask: string
             self::ImageRenderPremium => 'Görsel üretimi (yüksek kalite)',
             self::ImageEdit => 'Görsel düzenleme',
             self::VideoTour => 'Oda videosu',
+            self::ProductModel => 'Ürün 3B modeli',
             self::ObjectExtraction => 'Nesne çıkarımı',
             self::ProductTagging => 'Ürün etiketleme',
             self::TextEmbedding => 'Metin vektörü',
@@ -89,6 +99,7 @@ enum AiTask: string
             self::TextEmbedding => AiModality::Embedding,
             self::ImageRenderDraft, self::ImageRenderPremium, self::ImageEdit => AiModality::Image,
             self::VideoTour => AiModality::Video,
+            self::ProductModel => AiModality::Model3d,
             default => AiModality::Text,
         };
     }

@@ -173,6 +173,25 @@ final class FakeAiProvider implements AiProvider
             );
         }
 
+        if ($call->modality() === AiModality::Model3d) {
+            /*
+             * Bytes that start the way a glTF binary starts.
+             *
+             * The storage checks the magic number before it writes anything to a bucket the
+             * open web can read, so a fake that returned hello would fail there rather
+             * than in the assertion the test is actually about — and a fake that skipped
+             * the check would hide the day somebody removes it.
+             */
+            return AiResult::success(
+                imageRefs: [app(GeneratedImageStore::class)->stash(
+                    'glTF'.$call->fingerprint(),
+                    'model/gltf-binary',
+                )],
+                imageCount: 1,
+                inputTokens: $this->tokensFor($call->prompt),
+            );
+        }
+
         if ($call->modality() === AiModality::Image) {
             /*
              * A real image, written to the real store.
