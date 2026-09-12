@@ -298,6 +298,17 @@ final class FakeAiProvider implements AiProvider
                 'material' => 'boucle',
             ],
 
+            /*
+             * The simulator declines to say which side a photograph shows.
+             *
+             * Not laziness — the right answer. A label is written to the database and stops
+             * the task ever running again for that product, so a fabricated "this is the
+             * front" from a system with no key on file would quietly block the real answer
+             * forever, and a fabricated "this is the back" would feed the mesh generator two
+             * fronts. The shape is real; the list is empty.
+             */
+            AiTask::ProductViewTagging => ['views' => []],
+
             AiTask::ProductMatchRerank => [
                 'ranking' => [
                     ['candidate' => 0, 'score' => 0.92],

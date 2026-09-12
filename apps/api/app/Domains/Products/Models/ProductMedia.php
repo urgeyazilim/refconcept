@@ -24,6 +24,7 @@ use Illuminate\Support\Facades\Storage;
  * @property string $product_id
  * @property string $type
  * @property string $source
+ * @property string|null $view
  * @property string $disk
  * @property string $storage_path
  * @property string $original_name
@@ -55,6 +56,7 @@ class ProductMedia extends Model
         'product_id',
         'type',
         'source',
+        'view',
         'disk',
         'storage_path',
         'original_name',

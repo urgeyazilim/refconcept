@@ -82,6 +82,10 @@ interface Candidate {
   depth_mm: number | null
   price: string
   image_url: string | null
+  // Carried so a just-added product is drawn as a mesh straight away rather than as a
+  // cut-out until the next load. `model_source` is what makes the editor say "temsilî".
+  model_url: string | null
+  model_source: 'seller' | 'ai' | null
 }
 
 const search = ref('')
@@ -459,7 +463,8 @@ interface CatalogProduct {
   id: string
   name: string
   category: { slug: string } | null
-  media?: Array<{ url: string | null }>
+  media?: Array<{ url: string | null, is_cover?: boolean }>
+  model?: { url: string, source: 'seller' | 'ai' } | null
   skus?: Array<{
     id: string
     is_available: boolean
@@ -488,7 +493,11 @@ function toCandidate(product: CatalogProduct): Candidate | null {
     height_mm: sku.dimensions.height_mm,
     depth_mm: sku.dimensions.depth_mm,
     price: sku.effective_price?.formatted ?? '',
-    image_url: product.media?.[0]?.url ?? null,
+    // The cover, which is the photograph the seller chose to represent the product —
+    // position 0, but said rather than assumed.
+    image_url: (product.media?.find(item => item.is_cover) ?? product.media?.[0])?.url ?? null,
+    model_url: product.model?.url ?? null,
+    model_source: product.model?.source ?? null,
   }
 }
 
@@ -559,7 +568,8 @@ async function addProduct(candidate: Candidate): Promise<void> {
     height_mm: candidate.height_mm,
     depth_mm: candidate.depth_mm,
     image_url: candidate.image_url,
-    model_url: null,
+    model_url: candidate.model_url,
+    model_source: candidate.model_source,
   })
 }
 

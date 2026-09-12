@@ -13,6 +13,8 @@ use App\Domains\Products\Services\ProductModelStorage;
 use App\Domains\Products\Services\ProductModerationWorkflow;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
@@ -134,17 +136,45 @@ final class ProductMediaController
         return response()->json(['data' => new ProductResource($this->reload($product))]);
     }
 
-    /** Alt text only. Position is a whole-gallery operation, so it lives in reorder(). */
+    /** Alt text and which side the photograph shows. Position is a whole-gallery operation, so it lives in reorder(). */
     public function update(Request $request, Product $product, ProductMedia $medium): JsonResponse
     {
         $this->authorizeProduct($request, $product);
         $this->assertBelongsTo($medium, $product);
 
         $validated = $request->validate([
-            'alt_text' => ['required', 'nullable', 'string', 'max:300'],
+            'alt_text' => ['sometimes', 'nullable', 'string', 'max:300'],
+            /*
+             * Which side of the product this photograph shows.
+             *
+             * Worth a seller's ten seconds: given the back as well as the front, the mesh
+             * generator stops inventing one, at exactly the same price. Null is a real answer
+             * — a detail shot or a photograph of the sofa in a room is the absence of a view
+             * rather than a view of its own, and a wrong label is worse than none.
+             */
+            'view' => ['sometimes', 'nullable', Rule::in(['front', 'left', 'back', 'right'])],
         ]);
 
-        $medium->update(['alt_text' => $validated['alt_text']]);
+        /*
+         * Naming a side takes it off whichever photograph held it.
+         *
+         * One of each per product, kept by a partial unique index — so without this a seller
+         * correcting themselves gets a constraint violation for an edit that plainly means
+         * "this one is the front, not that one". Done here rather than in the portal because
+         * two requests from a browser can interleave and this cannot.
+         */
+        DB::transaction(function () use ($validated, $product, $medium): void {
+            if (($validated['view'] ?? null) !== null) {
+                ProductMedia::query()
+                    ->where('product_id', $product->getKey())
+                    ->where('type', 'image')
+                    ->whereKeyNot($medium->getKey())
+                    ->where('view', $validated['view'])
+                    ->update(['view' => null]);
+            }
+
+            $medium->update($validated);
+        });
 
         $this->afterChange($request, $product);
 

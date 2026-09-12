@@ -148,6 +148,58 @@ walls, openings and furniture positions come from it. A weaker instrument than
 depth-conditioned generation, which needs a third provider, and the strongest one available
 without changing the AI stack.
 
+### PRODUCT_3D_MODELS — DONE (2026-09-12)
+
+```text
+UPDATED_AT: 2026-09-12
+COMMIT_OR_SNAPSHOT: product-3d-models
+PHASE: Post-Phase-9 — design engine follow-up
+TASK: A 3D model per product, made from the seller's own photographs
+STATUS: DONE (dormant until a fal.ai key is on file)
+FILES_CHANGED:
+  apps/api/app/Domains/Ai/Providers/FalAiProvider.php,
+  apps/api/app/Domains/Ai/Enums/{AiTask,AiModality}.php,
+  apps/api/app/Domains/Ai/Providers/FakeAiProvider.php,
+  apps/api/app/Domains/Products/Services/{ProductModelStorage,ProductViewTagger}.php,
+  apps/api/app/Domains/Products/Jobs/GenerateProductModel.php,
+  apps/api/app/Domains/Products/Console/GenerateProductModelsCommand.php,
+  apps/api/app/Domains/Products/Http/Controllers/ProductMediaController.php,
+  apps/api/app/Domains/Products/Http/Resources/ProductResource.php,
+  apps/api/database/seeders/AiGatewaySeeder.php, apps/api/config/services.php,
+  apps/seller-portal/app/components/ProductMediaManager.vue,
+  apps/storefront/app/room3d/FurnitureBuilder.ts, packages/ui/src/runtime/types.ts,
+  docs/design/3D_ROOM_EDITOR.md
+MIGRATIONS:
+  000048 product_media.source + driver/modality CHECK widening,
+  000049 product_media.view + one photograph per side
+TESTS_RUN: php artisan test · vitest (storefront) · phpstan level 6 · pint
+  · eslint · vue-tsc · refconcept:openapi --check
+BLOCKERS: FAL_API_KEY is not on file; the task routes to the simulator until it is
+NEXT_ACTION: key in apps/api/.env, seed the gateway, then refconcept:product-models --limit=3
+```
+
+**Nothing here spends money without somebody saying so.** The route exists, the adapter
+exists, and with no key on file every call goes to the simulator — which answers, because
+that is its job. Both places that would have written the simulator's answer to the database
+refuse it instead: a fake mesh would be a file that is not a model of anything on the public
+bucket for every product ever approved, and a fabricated view label would be written once and
+then block the real answer forever, because a product with any label is never asked again.
+
+**Four views cost what one view costs.** Given only a front, the generator invents the back
+of the sofa. Given the back, it does not — so the only thing between a guessed back and a
+photographed one is knowing which photograph is which, which is why `product_media.view`
+exists and why sellers are asked. Optional, always: an unlabelled catalogue gets exactly the
+model it got before any of this.
+
+**The classifier is allowed to say it does not know.** A photograph mislabelled as the back
+is worse than a missing one — the generator fuses two fronts and produces something that is
+not furniture. Under 0.7 confidence, or an answer that is not one of the four sides, writes
+nothing, and a seller's own label is never checked by a model, let alone overruled.
+
+**The mesh's own size is discarded.** The catalogue knows the variant is 2200 mm wide because
+a seller measured it. A beautiful model at the wrong size is worse than a box: it looks
+convincing and it does not fit.
+
 ### ROOM_TOUR_VIDEO — DONE (2026-09-01)
 
 ```text

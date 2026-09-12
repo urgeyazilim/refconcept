@@ -209,13 +209,29 @@ export type ModerationStatus =
   | 'approved'
   | 'rejected'
 
+/** Which side of the product a photograph shows. Null means nobody knows, which is allowed. */
+export type ProductMediaView = 'front' | 'left' | 'back' | 'right'
+
 export interface ProductMediaItem {
   id: string
   type: string
   url: string
+  view: ProductMediaView | null
   alt_text: string | null
   position: number
   is_cover: boolean
+}
+
+/**
+ * The product's 3D model, when it has one.
+ *
+ * `seller` is the manufacturer's own file — the shape of the thing. `ai` is a likeness made
+ * from the photographs, and the planner labels it as one.
+ */
+export interface ProductModelRef {
+  id: string
+  url: string
+  source: 'seller' | 'ai'
 }
 
 export interface ProductDimensions {
@@ -278,6 +294,7 @@ export interface Product {
   category?: (ProductSummaryRef & { path: string, room_type: string | null }) | null
   style?: { id: string, code: string, name: string } | null
   media?: ProductMediaItem[]
+  model?: ProductModelRef | null
   attributes?: ProductAttributeValueItem[]
   skus?: ProductSkuItem[]
   /** Cheapest purchasable offer — null when nothing is on sale. */

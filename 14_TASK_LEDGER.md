@@ -165,6 +165,9 @@
 
 | E3D-T011 | — | AI_AGENT | E3D-T003 | DONE | photo to 3D model | fal.ai/Tripo, $0.30 once per product on approval; scaled to the SKU, planner only |
 | E3D-T012 | — | BACKEND_AGENT | E3D-T011 | DONE | model storage + backfill | Seller file outranks a likeness; refconcept:product-models prices before it queues |
+| E3D-T013 | — | BACKEND_AGENT | E3D-T011 | DONE | four views instead of one | product_media.view + multi-view endpoint at the same price; one photograph per side |
+| E3D-T014 | — | AI_AGENT | E3D-T013 | DONE | view classification | Allowed to say "I don't know" under 0.7; never overrules a seller; the simulator labels nothing |
+| E3D-T015 | — | FRONTEND_AGENT | E3D-T013 | DONE | seller labels the sides | Per-photograph selector in the portal, optional, with the reason stated |
 
 ## Scope notes
 

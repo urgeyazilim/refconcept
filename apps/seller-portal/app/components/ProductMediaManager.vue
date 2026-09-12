@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Product, ProductMediaItem } from '@refconcept/ui/types'
+import type { Product, ProductMediaItem, ProductMediaView } from '@refconcept/ui/types'
 
 /**
  * The product gallery.
@@ -136,6 +136,47 @@ async function saveAltText(item: ProductMediaItem, value: string) {
   }
 }
 
+/**
+ * Which side of the product this photograph shows.
+ *
+ * Ten seconds of a seller's time buys a better 3D model: told which picture is the back, the
+ * generator stops inventing one, at no extra cost. Left blank, a vision model has a guess and
+ * is allowed to say it does not know — so this is worth offering and never worth insisting on.
+ *
+ * One photograph per side. Picking a side another photograph already holds moves it there,
+ * which the API does in one transaction: a seller correcting themselves means the new answer.
+ */
+const VIEW_OPTIONS: { value: ProductMediaView, label: string }[] = [
+  { value: 'front', label: 'Önden' },
+  { value: 'left', label: 'Soldan' },
+  { value: 'back', label: 'Arkadan' },
+  { value: 'right', label: 'Sağdan' },
+]
+
+async function saveView(item: ProductMediaItem, value: string) {
+  const next = value === '' ? null : (value as ProductMediaView)
+
+  if ((item.view ?? null) === next) return
+
+  busyId.value = item.id
+  error.value = null
+
+  try {
+    // Whoever held this side gives it up, which the API does in the same transaction — so
+    // naming the front twice is a correction rather than an error.
+    const response = await api.patch<{ data: Product }>(
+      `/api/v1/seller/products/${props.productId}/media/${item.id}`,
+      { view: next },
+    )
+
+    emit('updated', response.data)
+  } catch (caught) {
+    error.value = caught instanceof ApiError ? caught.message : 'Görsel yönü kaydedilemedi.'
+  } finally {
+    busyId.value = null
+  }
+}
+
 async function remove(item: ProductMediaItem) {
   busyId.value = item.id
   error.value = null
@@ -162,6 +203,11 @@ async function remove(item: ProductMediaItem) {
         <p class="mt-1.5 max-w-[60ch] text-sm leading-relaxed text-ink-secondary">
           İlk görsel kapak görselidir: katalogda, arama sonuçlarında ve tasarım
           önerilerinde bu görsel kullanılır. JPEG, PNG veya WebP, en fazla 8 MB.
+        </p>
+        <p class="mt-1.5 max-w-[60ch] text-sm leading-relaxed text-ink-secondary">
+          Görselin hangi yönden çekildiğini işaretlerseniz ürünün 3B modeli çok daha
+          doğru çıkar: ön, sol, arka ve sağ görseli olan ürünün arka yüzü tahmin
+          edilmez. İşaretlemek zorunlu değildir.
         </p>
       </div>
 
@@ -190,6 +236,13 @@ async function remove(item: ProductMediaItem) {
           >
             Kapak
           </span>
+
+          <span
+            v-if="item.view"
+            class="absolute right-2 top-2 rounded-pill bg-surface/90 px-2.5 py-1 text-[11px] text-ink-secondary"
+          >
+            {{ VIEW_OPTIONS.find(option => option.value === item.view)?.label }}
+          </span>
         </div>
 
         <figcaption class="space-y-3 p-3">
@@ -201,6 +254,19 @@ async function remove(item: ProductMediaItem) {
             :disabled="disabled"
             @change="saveAltText(item, ($event.target as HTMLInputElement).value)"
           >
+
+          <select
+            :value="item.view ?? ''"
+            aria-label="Görsel hangi yönden çekildi"
+            class="w-full rounded-sm border border-line bg-surface px-3 py-2 text-xs"
+            :disabled="disabled || busyId !== null"
+            @change="saveView(item, ($event.target as HTMLSelectElement).value)"
+          >
+            <option value="">Yön belirtilmedi</option>
+            <option v-for="option in VIEW_OPTIONS" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
 
           <div class="flex flex-wrap items-center gap-1.5">
             <button

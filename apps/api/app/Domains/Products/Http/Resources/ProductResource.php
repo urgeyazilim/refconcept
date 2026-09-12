@@ -61,15 +61,47 @@ final class ProductResource extends JsonResource
                 'name' => $this->style->name,
             ]),
 
+            /*
+             * Photographs only.
+             *
+             * The relation also holds the 3D model, which is a media row on the same table but
+             * not a gallery entry: a client that maps this list into `<img src>` would draw a
+             * broken image for it, and a seller's gallery would offer to reorder it. The model
+             * is its own key below.
+             */
             'media' => $this->whenLoaded('media', fn (): array => $this->media
+                ->where('type', 'image')
                 ->map(fn ($item): array => [
                     'id' => $item->id,
                     'type' => $item->type,
+                    // Which side of the product this photograph shows, when anybody knows.
+                    // The mesh generator is given the four sides and stops inventing a back.
+                    'view' => $item->view,
                     'url' => $item->url(),
                     'alt_text' => $item->alt_text,
                     'position' => $item->position,
                     'is_cover' => $item->isCover(),
-                ])->all()),
+                ])->values()->all()),
+
+            /*
+             * The 3D model, if there is one, and where it came from.
+             *
+             * A seller's own file is the shape of the thing; one generated from a photograph is
+             * a likeness whose far side may never have been photographed, and the planner says
+             * so to the customer. Only one is ever offered — the seller's, when both exist.
+             */
+            'model' => $this->whenLoaded('media', function (): ?array {
+                $model = $this->media
+                    ->where('type', 'model_3d')
+                    ->sortBy(fn ($item): int => $item->source === 'seller' ? 0 : 1)
+                    ->first();
+
+                return $model === null ? null : [
+                    'id' => $model->id,
+                    'url' => $model->url(),
+                    'source' => $model->source,
+                ];
+            }),
 
             'attributes' => $this->whenLoaded('attributeValues', fn (): array => $this->attributeValues
                 ->map(fn ($value): array => [

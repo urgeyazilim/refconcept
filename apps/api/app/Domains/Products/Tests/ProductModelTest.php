@@ -10,7 +10,10 @@ use App\Domains\Ai\Services\GeneratedImageStore;
 use App\Domains\Products\Jobs\GenerateProductModel;
 use App\Domains\Products\Models\ProductMedia;
 use App\Domains\Products\Services\ProductModelStorage;
+use App\Domains\Products\Services\ProductViewTagger;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -105,6 +108,7 @@ it('throws away what the simulator answers rather than storing it', function ():
         app(AiJobDispatcher::class),
         app(GeneratedImageStore::class),
         $this->models,
+        app(ProductViewTagger::class),
     );
 
     expect(ProductMedia::query()
@@ -121,6 +125,7 @@ it('makes a model from the product photograph', function (): void {
         app(AiJobDispatcher::class),
         app(GeneratedImageStore::class),
         $this->models,
+        app(ProductViewTagger::class),
     );
 
     $model = ProductMedia::query()
@@ -134,6 +139,75 @@ it('makes a model from the product photograph', function (): void {
         ->and($model->source)->toBe('ai')
         ->and($model->mime_type)->toBe('model/gltf-binary')
         ->and(Storage::disk('s3-public')->exists((string) $model->storage_path))->toBeTrue();
+});
+
+it('sends four sides to the generator when the photographs say which is which', function (): void {
+    realProvider();
+
+    /*
+     * The whole point of labelling. Four views cost exactly what one costs, and given the
+     * back the generator stops inventing one — so a labelled catalogue gets better meshes for
+     * the same money, through a different endpoint.
+     */
+    foreach (['left' => 1, 'back' => 2, 'right' => 3] as $view => $position) {
+        ProductMedia::query()->create([
+            'product_id' => $this->product->getKey(),
+            'type' => 'image',
+            'view' => $view,
+            'disk' => 's3-public',
+            'storage_path' => 'product-media/'.$this->product->getKey().'/'.$view.'.jpg',
+            'original_name' => $view.'.jpg',
+            'mime_type' => 'image/jpeg',
+            'size_bytes' => 120_000,
+            'position' => $position,
+        ]);
+    }
+
+    ProductMedia::query()
+        ->where('product_id', $this->product->getKey())
+        ->where('position', 0)
+        ->update(['view' => 'front']);
+
+    (new GenerateProductModel((string) $this->product->getKey()))->handle(
+        app(AiJobDispatcher::class),
+        app(GeneratedImageStore::class),
+        $this->models,
+        app(ProductViewTagger::class),
+    );
+
+    Http::assertSent(function (Request $request): bool {
+        if (! str_contains($request->url(), 'multiview-to-3d')) {
+            return false;
+        }
+
+        $body = $request->data();
+
+        return str_contains((string) $body['front_image_url'], 'cover.jpg')
+            && str_contains((string) $body['left_image_url'], 'left.jpg')
+            && str_contains((string) $body['back_image_url'], 'back.jpg')
+            && str_contains((string) $body['right_image_url'], 'right.jpg')
+            // Never `auto_size`: the catalogue knows the sofa is 2200 mm because a seller
+            // measured it, and a mesh scaled to a guess is worse than a box.
+            && ! array_key_exists('auto_size', $body)
+            && $body['texture'] === 'standard';
+    });
+});
+
+it('sends one image when nobody has said which side is which', function (): void {
+    realProvider();
+
+    // An unlabelled catalogue still gets a model — the same one it would have got before any
+    // of the labelling existed, through the single-image endpoint.
+    (new GenerateProductModel((string) $this->product->getKey()))->handle(
+        app(AiJobDispatcher::class),
+        app(GeneratedImageStore::class),
+        $this->models,
+        app(ProductViewTagger::class),
+    );
+
+    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), 'image-to-3d')
+        && ! str_contains($request->url(), 'multiview')
+        && str_contains((string) $request->data()['image_url'], 'cover.jpg'));
 });
 
 it('leaves a seller their own file', function (): void {
@@ -159,6 +233,7 @@ it('leaves a seller their own file', function (): void {
         app(AiJobDispatcher::class),
         app(GeneratedImageStore::class),
         $this->models,
+        app(ProductViewTagger::class),
     );
 
     // And the job did not spend anything trying to improve on it.
@@ -213,6 +288,7 @@ it('does nothing for a product with no photograph', function (): void {
         app(AiJobDispatcher::class),
         app(GeneratedImageStore::class),
         $this->models,
+        app(ProductViewTagger::class),
     );
 
     // Nothing to convert, nothing spent, and the planner draws a box. Not an error.

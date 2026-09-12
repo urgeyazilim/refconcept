@@ -124,10 +124,25 @@ Four ways, in order of preference, each falling back to the next:
 
 1. **The seller's own glTF binary**, if they have one from their manufacturer. It is the
    shape of the thing.
-2. **A mesh generated from the product photograph** — fal.ai / Tripo 2.5, thirty cents, once
-   per product, queued when a listing is approved. A likeness: its far side was never
-   photographed. Used only in the planner and never in a render, and an operator can throw it
-   away without touching what the seller uploaded.
+2. **A mesh generated from the product photographs** — fal.ai / Tripo 2.5, thirty cents, once
+   per product, queued when a listing is approved. A likeness: whatever side was not
+   photographed is a guess. Used only in the planner and never in a render, and an operator can
+   throw it away without touching what the seller uploaded.
+
+   **One photograph or four, at the same price.** `product_media.view` holds `front`, `left`,
+   `back` or `right`; given more than one the adapter posts to Tripo's multi-view endpoint
+   instead of the single-image one, and the generator stops inventing a back. A partial unique
+   index keeps one photograph per side, and naming a side that another photograph holds moves
+   it there in the same transaction, because that is what a seller correcting themselves means.
+
+   Sellers label their own photographs in the portal. For the ones nobody labelled,
+   `ProductViewTagger` asks a vision model and is allowed to answer "I don't know": under 0.7
+   confidence, or anything that is not one of the four sides, is left blank. A photograph
+   mislabelled as the back is worse than a missing one — the generator fuses two fronts and
+   produces something that is not furniture. **A seller's own label is never overruled**, and
+   the simulator deliberately labels nothing: a fabricated label would be written once and
+   would then block the real answer forever, because a product with any label is never asked
+   about again.
 3. **The photograph, cut out of its background**, standing on its footprint slab and turning
    to face the camera as it narrows to the silhouette the real piece would present.
 4. **A plain box**, when the photograph cannot be read at all, or was taken in a room rather

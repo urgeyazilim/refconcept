@@ -50,7 +50,16 @@ final class FalAiProvider implements AiProvider
      * swapping the route to a different mesh generator would need a different adapter, which
      * is exactly what the driver column is for.
      */
-    private const MODEL_PATH = 'tripo3d/tripo/v2.5/image-to-3d';
+    private const SINGLE_PATH = 'tripo3d/tripo/v2.5/image-to-3d';
+
+    /**
+     * The same model, given four sides instead of one.
+     *
+     * Identical price. With only a front it has to invent the back of the sofa; given the
+     * back it does not, which makes this the cheapest quality available anywhere in this
+     * system — the only cost is knowing which photograph is which.
+     */
+    private const MULTIVIEW_PATH = 'tripo3d/tripo/v2.5/multiview-to-3d';
 
     /**
      * Generous, and deliberately so.
@@ -107,6 +116,52 @@ final class FalAiProvider implements AiProvider
             );
         }
 
+        /*
+         * Four views when four views are known, one when only one is.
+         *
+         * A different endpoint rather than a flag, because that is how the provider is built —
+         * and the price is identical, which is the whole reason to bother: given the back, the
+         * generator stops inventing one for nothing.
+         *
+         * Only the four sides are passed on. A detail shot or a photograph of the sofa in
+         * somebody's living room would be a fifth angle of a different scene, and a generator
+         * told that is the left side produces something that is not furniture.
+         */
+        $views = array_filter(
+            (array) ($call->options['views'] ?? []),
+            static fn (mixed $url, string $side): bool => is_string($url)
+                && $url !== ''
+                && in_array($side, ['front', 'left', 'back', 'right'], true),
+            ARRAY_FILTER_USE_BOTH,
+        );
+
+        $multiview = count($views) > 1;
+
+        $path = $multiview ? self::MULTIVIEW_PATH : self::SINGLE_PATH;
+
+        $body = $multiview
+            ? [
+                'front_image_url' => $views['front'] ?? $image,
+                ...(isset($views['left']) ? ['left_image_url' => $views['left']] : []),
+                ...(isset($views['back']) ? ['back_image_url' => $views['back']] : []),
+                ...(isset($views['right']) ? ['right_image_url' => $views['right']] : []),
+            ]
+            : ['image_url' => $image];
+
+        $body = [
+            ...$body,
+            // Standard textures. HD costs a third more per model and the difference is
+            // invisible on a sofa seen across a room, which is the only place these are shown.
+            'texture' => 'standard',
+            /*
+             * `auto_size` is left off on purpose: it asks the model to guess real-world
+             * dimensions, and the catalogue already knows them because a seller measured the
+             * thing. A mesh scaled to a guess is the "beautiful model at the wrong size" that
+             * makes a planner worse than a box.
+             */
+            'face_limit' => (int) ($call->options['face_limit'] ?? 20_000),
+        ];
+
         try {
             $response = Http::withHeaders([
                 // fal's own scheme: the word Key, then the credential.
@@ -114,20 +169,7 @@ final class FalAiProvider implements AiProvider
                 'Content-Type' => 'application/json',
             ])
                 ->timeout(self::TIMEOUT_SECONDS)
-                ->post(rtrim($call->options['base_url'] ?? self::DEFAULT_BASE_URL, '/').'/'.self::MODEL_PATH, [
-                    'image_url' => $image,
-                    // Standard textures. HD costs a third more per model and the difference
-                    // is invisible on a sofa seen across a room, which is the only place
-                    // these are ever shown.
-                    'texture' => 'standard',
-                    /*
-                     * Left off on purpose: `auto_size` asks the model to guess real-world
-                     * dimensions, and the catalogue already knows them because a seller
-                     * measured the thing. A mesh scaled to a guess is the "beautiful model at
-                     * the wrong size" that makes a planner worse than a box.
-                     */
-                    'face_limit' => (int) ($call->options['face_limit'] ?? 20_000),
-                ]);
+                ->post(rtrim($call->options['base_url'] ?? self::DEFAULT_BASE_URL, '/').'/'.$path, $body);
         } catch (ConnectionException $e) {
             return AiResult::failure(AiFailureKind::NetworkError, $e->getMessage());
         } catch (Throwable $e) {

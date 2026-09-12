@@ -858,6 +858,61 @@ final class AiGatewaySeeder extends Seeder
                 ],
             ],
 
+            AiTask::ProductViewTagging->value => [
+                'primary' => 'gemini-text',
+                'fallback' => 'fake-vision',
+                // Nobody is charged: a catalogue cost, like the mesh it feeds.
+                'credits' => 0,
+                // A cent or two. The cap is there to catch a misrouted model rather than to
+                // ration anything.
+                'max_cost_micros' => 50_000,
+                'concurrency' => 2,
+                'timeout' => 120,
+                'attempts' => 1,
+                'temperature_bps' => 0,
+                'description' => 'Ürün fotoğraflarının hangi yüzü gösterdiğini belirler.',
+                'prompt' => [
+                    'system' => implode("\n", [
+                        'Sana bir ürünün fotoğrafları sırayla verilir. Her fotoğraf için ürünün hangi',
+                        'yüzünü gösterdiğini söyle: front, left, back, right.',
+                        '',
+                        'EMİN DEĞİLSEN "other" DE.',
+                        'Bu en önemli kural. Yanlış etiket, etiketsizden çok daha kötüdür: arka diye',
+                        'verilen bir ön görsel, 3B üreticinin iki ön yüzü birleştirip mobilya olmayan',
+                        'bir şey üretmesine yol açar. Detay çekimi, yakın plan, ortam/dekor fotoğrafı,',
+                        'ölçü çizimi ve birden fazla ürünün göründüğü kareler için her zaman "other"',
+                        'kullan.',
+                        '',
+                        'Açılı (üç çeyrek) çekimler için hangi yüz baskınsa onu seç; ürünün hem önünü',
+                        'hem yanını eşit gösteren bir kare "other" olsun.',
+                        '',
+                        'confidence alanına 0 ile 1 arasında ne kadar emin olduğunu yaz. 0.7 altındaki',
+                        'hiçbir etiket kullanılmayacak, o yüzden dürüst ol; emin olmadığında düşük',
+                        'değer vermek doğru davranıştır.',
+                    ]),
+                    'template' => "Ürün: {{ product_name }}\nKategori: {{ category }}\n\n"
+                        ."Görsellerin sırası: {{ image_roles }}\n\n"
+                        .'Her görsel için index, view ve confidence döndür.',
+                    'schema' => [
+                        'required' => ['views'],
+                        'properties' => [
+                            'views' => [
+                                'type' => 'array',
+                                'items' => [
+                                    'type' => 'object',
+                                    'required' => ['index', 'view'],
+                                    'properties' => [
+                                        'index' => ['type' => 'integer'],
+                                        'view' => ['type' => 'string'],
+                                        'confidence' => ['type' => 'number'],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+
             AiTask::ProductModel->value => [
                 'primary' => 'tripo',
                 'fallback' => 'fake-model',

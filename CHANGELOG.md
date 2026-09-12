@@ -11,6 +11,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a model, once per product, queued when a listing is approved. A catalogue cost like the
   photograph itself: no customer is charged, and every customer who plans that product
   into a room afterwards uses the same file.
+- **Four sides instead of one, for the same money.** A seller can say which photograph is
+  the front, the left, the back and the right; with more than one the generator is sent its
+  multi-view endpoint, which costs exactly what the single-image one costs and stops it
+  inventing the back of the sofa. Photographs nobody labelled get a vision pass that is
+  allowed to answer "I don't know" — a mislabelled back is worse than a missing one, so
+  anything under 0.7 confidence is left blank, and a seller's own label is never overruled.
 - **The mesh's size is never believed.** It arrives in whatever units the generator felt
   like; the catalogue knows the variant is 2200 mm wide because a seller measured it, and
   the editor scales every model to the recorded dimensions. A beautiful model at the wrong

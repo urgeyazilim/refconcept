@@ -159,6 +159,57 @@ it('never lets another seller touch the gallery', function (): void {
     expect(ProductMedia::query()->count())->toBe(1);
 });
 
+it('lets a seller say which side of the product a photograph shows', function (): void {
+    $media = uploadImages(1)[0];
+
+    /*
+     * Ten seconds of a seller's time, and the 3D model stops guessing at the back of the
+     * sofa — four views cost what one costs. Optional, so null has to be accepted as an
+     * answer: a detail shot is the absence of a view rather than a view of its own.
+     */
+    $this->actingAs($this->sellerUser)
+        ->patchJson("/api/v1/seller/products/{$this->product->getKey()}/media/{$media->getKey()}", [
+            'view' => 'back',
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.media.0.view', 'back');
+
+    $this->actingAs($this->sellerUser)
+        ->patchJson("/api/v1/seller/products/{$this->product->getKey()}/media/{$media->getKey()}", [
+            'view' => null,
+        ])
+        ->assertOk()
+        ->assertJsonPath('data.media.0.view', null);
+
+    // And nothing outside the four sides, because the generator understands nothing else.
+    $this->actingAs($this->sellerUser)
+        ->patchJson("/api/v1/seller/products/{$this->product->getKey()}/media/{$media->getKey()}", [
+            'view' => 'top',
+        ])
+        ->assertStatus(422);
+});
+
+it('moves a side rather than holding it twice', function (): void {
+    $media = uploadImages(2);
+
+    /*
+     * Two fronts is not a fact about the product, and a generator handed two of them fuses
+     * them into something that is not furniture — so a partial unique index refuses the
+     * second write. A seller naming the same side twice means the second one, which is an
+     * ordinary correction and must not be a 500.
+     */
+    foreach ($media as $item) {
+        $this->actingAs($this->sellerUser)
+            ->patchJson("/api/v1/seller/products/{$this->product->getKey()}/media/{$item->getKey()}", [
+                'view' => 'front',
+            ])
+            ->assertOk();
+    }
+
+    expect(ProductMedia::query()->where('view', 'front')->pluck('id')->all())
+        ->toBe([(string) $media[1]->getKey()]);
+});
+
 it('does not let a media id from another product be edited through this one', function (): void {
     $other = Product::factory()->forSeller($this->seller)->create([
         'primary_category_id' => $this->category->getKey(),

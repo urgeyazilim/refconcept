@@ -10,7 +10,9 @@ use App\Domains\Ai\Exceptions\AiJobRefused;
 use App\Domains\Ai\Services\AiJobDispatcher;
 use App\Domains\Ai\Services\GeneratedImageStore;
 use App\Domains\Products\Models\Product;
+use App\Domains\Products\Models\ProductMedia;
 use App\Domains\Products\Services\ProductModelStorage;
+use App\Domains\Products\Services\ProductViewTagger;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -54,6 +56,7 @@ final class GenerateProductModel implements ShouldQueue
         AiJobDispatcher $dispatcher,
         GeneratedImageStore $files,
         ProductModelStorage $models,
+        ProductViewTagger $viewTagger,
     ): void {
         $product = Product::query()->with('media')->find($this->productId);
 
@@ -68,11 +71,38 @@ final class GenerateProductModel implements ShouldQueue
             return;
         }
 
+        /*
+         * Which side of the product each photograph shows, if anybody knows.
+         *
+         * The generator charges the same for four views as for one and stops inventing a back
+         * when it is given one, so this is the cheapest quality there is. A seller's own
+         * labels are used as they are; otherwise a vision call has a look, and is allowed to
+         * say it does not know.
+         */
+        $viewTagger->tag($product);
+
+        $product->load('media');
+
+        $labelled = $product->media
+            ->where('type', 'image')
+            ->whereNotNull('view')
+            ->mapWithKeys(static fn (ProductMedia $media): array => [(string) $media->view => $media->url()])
+            ->all();
+
         $photograph = $product->media->firstWhere('type', 'image');
 
         if ($photograph === null) {
             return;
         }
+
+        /*
+         * The front is whichever photograph is labelled as the front, or the first one.
+         *
+         * The generator requires a front and treats the other three as optional, so an
+         * unlabelled catalogue still gets a model — the same one it would have got before any
+         * of this existed.
+         */
+        $front = $labelled['front'] ?? $photograph->url();
 
         try {
             $ran = $dispatcher->runInline(
@@ -84,7 +114,10 @@ final class GenerateProductModel implements ShouldQueue
                      * this system that is already public, and the provider fetches it itself.
                      * Room photographs are never in reach of this task.
                      */
-                    'image_urls' => [$photograph->url()],
+                    'image_urls' => [$front],
+                    // Front, left, back, right, as far as anybody knows them. The adapter
+                    // sends the multi-view endpoint when there is more than a front.
+                    'options' => ['views' => $labelled],
                 ],
                 subject: $product,
                 // Idempotent per photograph: a listing approved twice, or a worker that lost

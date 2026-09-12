@@ -56,6 +56,16 @@ enum AiTask: string
     case ProductTagging = 'product_tagging';
 
     /**
+     * Works out which side of a product each of its photographs shows.
+     *
+     * So the mesh generator can be given the back as well as the front, and stop inventing
+     * one. Cheap, once per product, and allowed to answer "I do not know" — a photograph
+     * mislabelled as the back is worse than a missing one, because the generator fuses two
+     * fronts and produces something that is not furniture.
+     */
+    case ProductViewTagging = 'product_view_tagging';
+
+    /**
      * Turn a product description into a vector.
      *
      * The task that makes "warm minimalist oak" find a product described as "İskandinav
@@ -80,6 +90,7 @@ enum AiTask: string
             self::ImageEdit => 'Görsel düzenleme',
             self::VideoTour => 'Oda videosu',
             self::ProductModel => 'Ürün 3B modeli',
+            self::ProductViewTagging => 'Ürün görsel yönü',
             self::ObjectExtraction => 'Nesne çıkarımı',
             self::ProductTagging => 'Ürün etiketleme',
             self::TextEmbedding => 'Metin vektörü',
@@ -100,6 +111,7 @@ enum AiTask: string
             self::ImageRenderDraft, self::ImageRenderPremium, self::ImageEdit => AiModality::Image,
             self::VideoTour => AiModality::Video,
             self::ProductModel => AiModality::Model3d,
+            self::ProductViewTagging => AiModality::Vision,
             default => AiModality::Text,
         };
     }
@@ -116,7 +128,8 @@ enum AiTask: string
     {
         return match ($this) {
             self::RoomAnalysis, self::DesignPlan, self::ObjectExtraction,
-            self::ProductTagging, self::ProductMatchRerank, self::BudgetOptimize => true,
+            self::ProductTagging, self::ProductMatchRerank, self::BudgetOptimize,
+            self::ProductViewTagging => true,
             default => false,
         };
     }
