@@ -152,6 +152,17 @@
 | P22-T007 | 22 | INDEPENDENT_TEST_AGENT | P22-T001..006 | DONE | full regression | 805 backend, 18 component, 76 E2E, audits, drills — all pass |
 | P22-T008 | 22 | INDEPENDENT_TEST_AGENT | P22-T007 | DONE | final audit | 117 items verified, 3 open; WEB_RELEASE_APPROVED withheld — no card payment is possible |
 
+| E3D-T001 | — | BACKEND_AGENT | P9 | DONE | room geometry + layout tables | Confirmed measurements, layouts, items; openings reuse room_constraints |
+| E3D-T002 | — | BACKEND_AGENT | E3D-T001 | DONE | collision engine | Doors refuse, windows warn, rugs are stood on; 10 tests |
+| E3D-T003 | — | FRONTEND_AGENT | E3D-T001 | DONE | 3D editor | Drag, snap, live distances, lock, undo, autosave; 19 unit tests |
+| E3D-T004 | — | FRONTEND_AGENT | E3D-T003 | DONE | 2D plan (SVG) | Labels are text; openings cut out of the wall rather than painted over |
+| E3D-T005 | — | BACKEND_AGENT | E3D-T001 | DONE | layout API + geometry confirm | "Bu ölçüler doğru mu?"; states recomputed server-side |
+| E3D-T006 | — | AI_AGENT | E3D-T005 | DONE | analysis estimates size + openings | room_analysis prompt v2; proposal is never adopted unasked |
+| E3D-T007 | — | BACKEND_AGENT | E3D-T005 | DONE | layout composer | Words to millimetres; composed rooms pass the collision rules |
+| E3D-T008 | — | AI_AGENT | E3D-T003 | DONE | render conditioned on the plan | Snapshot as second image; the fix for walls that moved |
+| E3D-T009 | — | FRONTEND_AGENT | E3D-T005 | DONE | catalogue into the room, room into the basket | Only measured variants; quantities grouped |
+| E3D-T010 | — | INDEPENDENT_TEST_AGENT | E3D-T001..009 | DONE | regression | 972 backend, 19 storefront unit, 1 new E2E journey; OpenAPI 218 operations |
+
 ## Scope notes
 
 - Customer-facing **sign-up / sign-in screens** belong to Phase 20 (Storefront Complete)

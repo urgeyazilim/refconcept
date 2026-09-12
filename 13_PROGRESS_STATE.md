@@ -91,6 +91,63 @@ Flutter/mobile/AR work must not start before `WEB_RELEASE_APPROVED`.
 
 ## Phase Log
 
+### 3D_ROOM_EDITOR — DONE (2026-09-12)
+
+```text
+UPDATED_AT: 2026-09-12
+COMMIT_OR_SNAPSHOT: 3d-room-editor
+PHASE: Post-Phase-9 — design engine follow-up
+TASK: Measure a room, agree to the measurements, furnish it, and condition the render on it
+STATUS: DONE
+FILES_CHANGED:
+  apps/api/app/Domains/Projects/Services/{LayoutGeometry,LayoutComposer,LayoutComposerState}.php,
+  apps/api/app/Domains/Projects/Services/{ComposableProducts,LayoutWriter,RoomGeometryProposer}.php,
+  apps/api/app/Domains/Projects/Services/{RoomAnalyser,RoomPhotoStorage,DesignGenerationPipeline}.php,
+  apps/api/app/Domains/Projects/Models/{RoomGeometryVersion,DesignLayout,DesignLayoutItem}.php,
+  apps/api/app/Domains/Projects/Http/Controllers/RoomLayoutController.php,
+  apps/api/routes/domains/projects.php, apps/api/openapi.json (218 operations),
+  apps/storefront/app/room3d/*  (12 modules),
+  apps/storefront/app/components/{Room3DScene,RoomPlanSvg}.vue,
+  apps/storefront/app/pages/projects/[id]/rooms/[roomId]/{plan,index}.vue,
+  apps/storefront/app/pages/projects/[id]/rooms/[roomId]/designs/[designId].vue,
+  tests/e2e/room-plan.spec.ts, docs/design/3D_ROOM_EDITOR.md
+MIGRATIONS:
+  000044 room_geometry_versions / design_layouts / design_layout_items,
+  000045 room_analysis prompt v2 (estimated dimensions + openings),
+  000046 design_layouts snapshot columns
+TESTS_RUN: php artisan test · vitest (storefront) · phpstan level 6 · pint
+  · eslint · vue-tsc · playwright tests/e2e/room-plan.spec.ts · refconcept:openapi --check
+TEST_RESULT: PASS (972 backend / 3118 assertions; 19 storefront unit; 1 E2E journey)
+BLOCKERS: none for this phase
+NEXT_ACTION: deploy to the Coolify stack; GLB models and depth-conditioned render remain open
+```
+
+**The measurements are agreed to before anything rests on them.** A photograph read by a
+model is right to within a hand's width most of the time and wrong by half a metre
+occasionally, and everything downstream — whether the sofa fits, what the renderer is told,
+what the customer is invited to buy — rests on those numbers. So the analysis proposes, the
+screen asks "Bu ölçüler doğru mu?" and draws the room it is asking about, and only a yes
+makes them real.
+
+**The collision rules exist twice and are tested against the same cases.** The browser has to
+answer in the frame the pointer moves; the server has to decide, because nothing arriving
+over HTTP can be trusted — least of all the collision flags the client computed.
+`CollisionEngine.spec.ts` and `LayoutGeometryTest.php` are the same scenarios with the same
+numbers, so a rule changed on one side fails on the other.
+
+**The layout engine is arithmetic, not a prompt.** A language model asked for millimetres
+produces millimetres that look like millimetres and put a wardrobe through a doorway. It
+decides what goes in the room and roughly where, in words; `LayoutComposer` turns that into
+positions and every one of them is checked by the same rules that check a customer's drag.
+
+**The render is conditioned on the room rather than asked to imagine one.** This is the fix
+for the design that narrowed a doorway, moved a wall and invented a sofa nobody sells. The
+model was not disobeying — it was resolving a scene left underdetermined — so the browser
+sends a picture of the room at its confirmed measurements, and the renderer is told the
+walls, openings and furniture positions come from it. A weaker instrument than
+depth-conditioned generation, which needs a third provider, and the strongest one available
+without changing the AI stack.
+
 ### ROOM_TOUR_VIDEO — DONE (2026-09-01)
 
 ```text
