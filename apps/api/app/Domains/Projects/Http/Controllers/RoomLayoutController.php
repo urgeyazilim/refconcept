@@ -357,6 +357,89 @@ final class RoomLayoutController
     }
 
     /**
+     * Where a product would go, if it were added to this room.
+     *
+     * Asked when somebody picks something from the catalogue. It writes nothing: the editor
+     * holds the arrangement while the page is open, and a position that arrives without the
+     * piece existing yet is a position it can put in its own undo history like any other.
+     *
+     * The same rules that arrange a whole design, because a customer adding a bookcase
+     * expects it against a wall — that is where bookcases go. The browser's own answer, the
+     * nearest free rectangle to the middle of the floor, is where nothing goes: five products
+     * added that way stand in a heap in the centre of the room.
+     */
+    public function place(Request $request, Project $project, Room $room): JsonResponse
+    {
+        $this->authorizeProject($request, $project);
+        $this->assertBelongs($room, $project);
+
+        $geometry = $this->currentGeometry($room);
+
+        abort_if($geometry === null, 422, 'Önce oda ölçülerinin onaylanması gerekiyor.');
+
+        $validated = $request->validate([
+            'sku_id' => ['required', 'uuid', 'exists:product_skus,id'],
+            // What is already standing in the room, as the editor currently has it — which is
+            // not what is saved: somebody may have moved three things since the last autosave
+            // and a position computed against stale furniture lands on top of something.
+            'existing' => ['present', 'array', 'max:200'],
+            'existing.*.category' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'existing.*.width_mm' => ['required', 'integer', 'min:0', 'max:30000'],
+            'existing.*.depth_mm' => ['required', 'integer', 'min:0', 'max:30000'],
+            'existing.*.position_x_mm' => ['required', 'integer', 'min:-60000', 'max:60000'],
+            'existing.*.position_y_mm' => ['sometimes', 'integer', 'min:0', 'max:30000'],
+            'existing.*.position_z_mm' => ['required', 'integer', 'min:-60000', 'max:60000'],
+            'existing.*.rotation_y_deg' => ['sometimes', 'integer', 'min:0', 'max:359'],
+        ]);
+
+        $sku = ProductSku::query()
+            ->with(['dimensions', 'product.primaryCategory'])
+            ->findOrFail($validated['sku_id']);
+
+        $dimensions = $sku->dimensions;
+
+        abort_if(
+            ($dimensions->width_mm ?? 0) <= 0 || ($dimensions->depth_mm ?? 0) <= 0,
+            422,
+            'Bu ürünün ölçüleri girilmemiş.',
+        );
+
+        $placed = $this->composer->placeOne(
+            $geometry,
+            $room->constraints->all(),
+            array_map(static fn (array $item): array => [
+                'product_id' => '',
+                'sku_id' => '',
+                'category' => $item['category'] ?? null,
+                'width_mm' => (int) $item['width_mm'],
+                'depth_mm' => (int) $item['depth_mm'],
+                'position_x_mm' => (int) $item['position_x_mm'],
+                'position_y_mm' => (int) ($item['position_y_mm'] ?? 0),
+                'position_z_mm' => (int) $item['position_z_mm'],
+                'rotation_y_deg' => (int) ($item['rotation_y_deg'] ?? 0),
+            ], $validated['existing']),
+            [
+                'product_id' => (string) $sku->product_id,
+                'sku_id' => (string) $sku->getKey(),
+                'category' => $sku->product?->primaryCategory?->slug,
+                'width_mm' => (int) $dimensions->width_mm,
+                'depth_mm' => (int) $dimensions->depth_mm,
+                'height_mm' => $dimensions->height_mm,
+                'wall' => null,
+            ],
+        );
+
+        return response()->json([
+            'data' => $placed === null ? null : [
+                'position_x_mm' => $placed['position_x_mm'],
+                'position_y_mm' => $placed['position_y_mm'],
+                'position_z_mm' => $placed['position_z_mm'],
+                'rotation_y_deg' => $placed['rotation_y_deg'],
+            ],
+        ]);
+    }
+
+    /**
      * Keeps a picture of the 3D plan, for the renderer to work from.
      *
      * The whole reason the 3D module exists. A photorealistic model handed a photograph and a

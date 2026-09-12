@@ -1,40 +1,47 @@
 import {
   BoxGeometry,
+  ClampToEdgeWrapping,
+  Color,
+  DoubleSide,
   EdgesGeometry,
   Group,
   LineBasicMaterial,
   LineSegments,
   Mesh,
   MeshStandardMaterial,
-  SRGBColorSpace,
-  TextureLoader,
+  PlaneGeometry,
   type Object3D,
 } from 'three'
 
 import type { CollisionState } from './CollisionEngine'
+import { cutOut } from './ProductCutout'
 import { isMeasured } from './footprint'
 import { type LayoutItem, toUnits } from './types'
 
 /**
- * Furniture, as boxes.
+ * Furniture: the product's own photograph, cut out and standing on its footprint.
  *
- * Boxes with the product's own photograph on the front.
+ * The first version drew a box at the right size with the photograph on its front face. It
+ * was honest and it looked like a warehouse of cartons — which is exactly what a customer
+ * said when they saw it. A catalogue photograph is a sofa on a white sweep; pasted on a box
+ * it reads as a box with a picture on it, and cut out it reads as a sofa.
  *
- * Boxes on purpose, for now. The catalogue has photographs and prices for everything and 3D
- * models for almost nothing, and a planner that waits for models is a planner nobody can use
- * this year. A box at the exact size of the real piece answers the question the plan is for —
- * does it fit, can you walk past it — and answers it honestly. A beautifully modelled sofa at
- * the wrong dimensions would look far better and be worth less than nothing.
+ * So a piece is two things:
  *
- * The photograph is what makes a box recognisable as the thing that was chosen. On the front
- * face only: wrapped round all six it reads as a printed carton.
- *
- * The edges are drawn as lines over the box because an untextured box under soft light has
- * corners that disappear, and the corner is the part somebody is trying to see.
- *
- * Sizes come from the SKU, never from the product. A sofa is 2200 mm or 2600 mm depending on
- * which variant was chosen, so a box drawn from the product is a box drawn from an average of
+ * **The footprint**, a low slab at the variant's real width and depth. It carries the
+ * collision colour, it turns when the piece turns, and it is what proves the thing fits.
+ * Dimensions come from the SKU and nowhere else — a sofa is 2200 mm or 2600 mm depending on
+ * which one was chosen, so a box drawn from the product is a box drawn from an average of
  * things the customer did not buy.
+ *
+ * **The cut-out**, a plane at the real width and height, turned to face the camera about the
+ * vertical axis only. Facing the camera because a photograph seen edge-on is a line; about
+ * one axis only because a plan view seen from above should show the footprint, not a sofa
+ * lying on the floor looking up.
+ *
+ * When the photograph cannot be cut — no CORS headers, or a picture taken in a room rather
+ * than on a sweep — the piece falls back to the solid box. A worse picture beats a sofa with
+ * a bite out of it.
  */
 export class FurnitureBuilder {
   /**
@@ -48,6 +55,9 @@ export class FurnitureBuilder {
 
   /** Height used when the variant has width and depth but no height. */
   private static readonly DEFAULT_HEIGHT_MM = 700
+
+  /** How thick the footprint slab under a cut-out is. */
+  private static readonly PAD_MM = 12
 
   /**
    * One material per state, shared by every piece in that state.
@@ -72,26 +82,27 @@ export class FurnitureBuilder {
   }
 
   /**
-   * The product photographs, by URL.
+   * The cut-out materials, by photograph.
    *
-   * Four dining chairs are one photograph, and four downloads would be three too many.
+   * Four dining chairs are one photograph and one cut; the plane's own size and crop live on
+   * the geometry and the texture's repeat, so the material itself is shared.
    */
-  private readonly photographs = new Map<string, MeshStandardMaterial>()
+  private readonly cutouts = new Map<string, MeshStandardMaterial>()
 
-  private readonly textures = new TextureLoader()
+  /** Requests in flight, so four chairs added at once make one request rather than four. */
+  private readonly pending = new Map<string, Promise<MeshStandardMaterial | null>>()
 
   private readonly edgeMaterial = new LineBasicMaterial({ color: 0x3d3733 })
 
   private readonly selectedEdgeMaterial = new LineBasicMaterial({ color: 0xb08f52, linewidth: 2 })
 
-  constructor(private readonly onTextureLoaded: () => void = () => {}) {}
+  constructor(private readonly onCutoutReady: () => void = () => {}) {}
 
   /**
    * One piece, at its position, ready to add to the scene.
    *
    * The group's origin is the piece's centre on the floor, which is where the API says it is
-   * and where rotation happens. The mesh inside is lifted by half its height so the box
-   * stands on the floor rather than being buried to its waist in it.
+   * and where rotation happens.
    */
   build(item: LayoutItem): Group {
     const group = new Group()
@@ -107,22 +118,38 @@ export class FurnitureBuilder {
       ? (item.height_mm ?? FurnitureBuilder.DEFAULT_HEIGHT_MM)
       : FurnitureBuilder.PLACEHOLDER_MM
 
+    /*
+     * The solid box, until a cut-out arrives.
+     *
+     * Built for every piece rather than only for the ones that fail, because the photograph
+     * takes a moment to load and cut: a room that is empty for half a second and then fills
+     * with furniture looks broken, and one that shows blocks and then sharpens into furniture
+     * looks like it is working.
+     */
     const geometry = new BoxGeometry(toUnits(width), toUnits(height), toUnits(depth))
 
-    const mesh = new Mesh(geometry, this.facesFor(item, measured ? 'ok' : 'placeholder'))
-    mesh.name = 'body'
-    mesh.castShadow = measured
-    mesh.receiveShadow = true
-    mesh.position.y = toUnits(height) / 2
-    mesh.userData.itemId = item.id
+    const body = new Mesh(geometry, measured ? this.materials.ok : this.materials.placeholder)
+    body.name = 'body'
+    body.castShadow = measured
+    body.receiveShadow = true
+    body.position.y = toUnits(height) / 2
+    body.userData.itemId = item.id
 
     const edges = new LineSegments(new EdgesGeometry(geometry), this.edgeMaterial)
     edges.name = 'edges'
-    edges.position.y = mesh.position.y
+    edges.position.y = body.position.y
 
-    group.add(mesh, edges)
+    // Read back per frame, to narrow the cut-out to the shadow the piece would really cast.
+    group.userData.widthMm = width
+    group.userData.depthMm = depth
+
+    group.add(body, edges)
 
     this.place(group, item)
+
+    if (measured && item.image_url !== null) {
+      void this.dressWithPhotograph(group, item, width, height, depth)
+    }
 
     return group
   }
@@ -146,49 +173,56 @@ export class FurnitureBuilder {
      *
      * The plan's degrees go clockwise seen from above — which is how anybody describes turning
      * a sofa — and Three.js's y rotation goes anticlockwise. The sign is invisible on a box
-     * and will not be on the first piece with a front.
+     * and is not on a piece with a front.
      */
     group.rotation.y = (-(at?.rotation ?? item.rotation_y_deg) * Math.PI) / 180
   }
 
   /**
-   * The six faces of a piece, with its photograph on the front.
+   * Turns every cut-out to face the camera, about the vertical axis only.
    *
-   * A room of anonymous boxes at the right sizes answers "does it fit" and nothing else — the
-   * customer cannot tell which box is the sofa they chose. The picture goes on the front face
-   * only: wrapped round all six it reads as a printed carton, and the front is the face a
-   * piece of furniture is photographed from and the one it is turned towards the room.
-   *
-   * Textures are cached by URL, because four dining chairs are one photograph and four
-   * downloads would be three too many.
+   * Called once per drawn frame. A photograph seen edge-on is a line, and a photograph that
+   * tips towards a camera looking down is a sofa lying on the floor looking up — so the plane
+   * turns about y and about nothing else. Seen from directly above it does become a line,
+   * which is correct: the plan view is about the footprint.
    */
-  private facesFor(item: LayoutItem, state: CollisionState | 'placeholder'): MeshStandardMaterial[] {
-    const base = this.materials[state]
+  faceCamera(group: Group, cameraX: number, cameraZ: number): void {
+    const cutout = group.getObjectByName('cutout')
 
-    const url = item.image_url
-
-    if (url === null || state !== 'ok') {
-      return [base, base, base, base, base, base]
+    if (cutout === undefined) {
+      return
     }
 
-    let front = this.photographs.get(url)
+    const towards = Math.atan2(cameraX - group.position.x, cameraZ - group.position.z)
 
-    if (front === undefined) {
-      // The loop only draws when something has changed, so a texture that arrives a moment
-      // later has to say so — otherwise the photograph is downloaded, applied, and never
-      // painted until the customer happens to move the camera.
-      const texture = this.textures.load(url, () => this.onTextureLoaded())
+    // Minus the group's own turn, because the plane is a child of it and inherits that.
+    const relative = Math.atan2(
+      Math.sin(towards - group.rotation.y),
+      Math.cos(towards - group.rotation.y),
+    )
 
-      texture.colorSpace = SRGBColorSpace
+    cutout.rotation.y = relative
 
-      front = new MeshStandardMaterial({ map: texture, roughness: 0.8, metalness: 0 })
+    /*
+     * Narrowed to the shadow the real piece would cast towards the camera.
+     *
+     * A billboard that turns fully and keeps its width is a 1.8 m bookcase swinging to face
+     * whoever is looking — and standing against a wall, sticking half of itself through it.
+     * Clamping the turn instead leaves pieces edge-on and paper-thin.
+     *
+     * Both are solved by the same line: as the piece turns, its plane narrows to the width a
+     * box of its footprint would actually present from that angle — its full width seen
+     * head-on, its depth seen from the side. It always faces the camera, and it never covers
+     * more floor than it occupies.
+     */
+    const width = Number(group.userData.widthMm ?? 0)
+    const depth = Number(group.userData.depthMm ?? 0)
 
-      this.photographs.set(url, front)
+    if (width > 0) {
+      const silhouette = Math.abs(width * Math.cos(relative)) + Math.abs(depth * Math.sin(relative))
+
+      cutout.scale.x = silhouette / width
     }
-
-    // BoxGeometry's material slots are +x, -x, +y, -y, +z, -z. The front of a piece faces
-    // +z in its own space, which is the direction it looks when its rotation is zero.
-    return [base, base, base, base, front, base]
   }
 
   /** Recolours a piece for its state, and outlines it when it is the one selected. */
@@ -197,7 +231,7 @@ export class FurnitureBuilder {
     const edges = group.getObjectByName('edges')
 
     if (body instanceof Mesh) {
-      body.material = this.facesFor(item, isMeasured(item) ? state : 'placeholder')
+      body.material = isMeasured(item) ? this.materials[state] : this.materials.placeholder
     }
 
     if (edges instanceof LineSegments) {
@@ -209,7 +243,7 @@ export class FurnitureBuilder {
    * Frees a piece's geometry.
    *
    * Materials are shared and deliberately not touched here — disposing one would blank every
-   * other piece in the same state.
+   * other piece in the same state, or every other copy of the same product.
    */
   dispose(object: Object3D): void {
     object.traverse((child) => {
@@ -225,14 +259,141 @@ export class FurnitureBuilder {
       material.dispose()
     }
 
-    for (const material of this.photographs.values()) {
+    for (const material of this.cutouts.values()) {
       material.map?.dispose()
       material.dispose()
     }
 
-    this.photographs.clear()
+    this.cutouts.clear()
+    this.pending.clear()
 
     this.edgeMaterial.dispose()
     this.selectedEdgeMaterial.dispose()
+  }
+
+  // --- internals -------------------------------------------------------------
+
+  /**
+   * Replaces the box with the product, once its photograph has been cut out.
+   *
+   * The box does not disappear: it becomes the footprint slab, which is what carries the
+   * collision colour and proves the piece fits. What goes is its bulk — the thing that made
+   * a furnished room look like a stack of cartons.
+   */
+  private async dressWithPhotograph(
+    group: Group,
+    item: LayoutItem,
+    width: number,
+    height: number,
+    depth: number,
+  ): Promise<void> {
+    const url = item.image_url
+
+    if (url === null) {
+      return
+    }
+
+    const material = await this.cutoutFor(url, width / height)
+
+    // The piece may have been removed while the photograph was loading.
+    if (material === null || group.parent === null) {
+      return
+    }
+
+    const body = group.getObjectByName('body')
+
+    if (body instanceof Mesh) {
+      // A slab rather than a block: the footprint is the honest part and the bulk was the
+      // part that looked like a carton.
+      body.geometry.dispose()
+      body.geometry = new BoxGeometry(toUnits(width), toUnits(FurnitureBuilder.PAD_MM), toUnits(depth))
+      body.position.y = toUnits(FurnitureBuilder.PAD_MM) / 2
+      body.castShadow = false
+    }
+
+    const edges = group.getObjectByName('edges')
+
+    if (edges instanceof LineSegments) {
+      edges.geometry.dispose()
+      edges.geometry = new EdgesGeometry(
+        new BoxGeometry(toUnits(width), toUnits(FurnitureBuilder.PAD_MM), toUnits(depth)),
+      )
+      edges.position.y = toUnits(FurnitureBuilder.PAD_MM) / 2
+    }
+
+    const plane = new Mesh(new PlaneGeometry(toUnits(width), toUnits(height)), material)
+
+    plane.name = 'cutout'
+    plane.position.y = toUnits(height) / 2
+    plane.castShadow = true
+    plane.userData.itemId = item.id
+
+    group.add(plane)
+
+    this.onCutoutReady()
+  }
+
+  /**
+   * The cut-out material for a photograph, made once and shared.
+   *
+   * The crop lives on the texture, which is shared too — every copy of the same product is
+   * the same size, so the same crop is right for all of them.
+   */
+  private async cutoutFor(url: string, faceAspect: number): Promise<MeshStandardMaterial | null> {
+    // Keyed by the shape of the plane as well as the photograph: the crop that fits a sofa
+    // does not fit a bedside table, and the same picture is never both.
+    const key = `${url}|${faceAspect.toFixed(2)}`
+
+    const ready = this.cutouts.get(key)
+
+    if (ready !== undefined) {
+      return ready
+    }
+
+    const inFlight = this.pending.get(key)
+
+    if (inFlight !== undefined) {
+      return await inFlight
+    }
+
+    const request = cutOut(url).then((cut) => {
+      if (cut === null) {
+        return null
+      }
+
+      const texture = cut.texture.clone()
+
+      texture.needsUpdate = true
+      texture.wrapS = ClampToEdgeWrapping
+      texture.wrapT = ClampToEdgeWrapping
+
+      const material = new MeshStandardMaterial({
+        map: texture,
+        color: new Color(0xffffff),
+        roughness: 1,
+        metalness: 0,
+        transparent: true,
+        /*
+         * Cut out rather than blended.
+         *
+         * `alphaTest` makes each pixel either there or not, which means the plane writes
+         * depth and can be behind and in front of things correctly. Blended transparency
+         * would need the whole scene sorted back to front, and furniture would flicker
+         * through furniture as the camera moved.
+         */
+        alphaTest: 0.5,
+        // Both faces: a cut-out is a photograph, and walking round the back of a sofa should
+        // show the sofa rather than nothing at all.
+        side: DoubleSide,
+      })
+
+      this.cutouts.set(key, material)
+
+      return material
+    })
+
+    this.pending.set(key, request)
+
+    return await request
   }
 }

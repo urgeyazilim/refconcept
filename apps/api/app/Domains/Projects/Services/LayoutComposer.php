@@ -99,6 +99,39 @@ final class LayoutComposer
         return ['items' => $items, 'unplaced' => $unplaced];
     }
 
+    /**
+     * Where one more piece goes in a room that is already furnished.
+     *
+     * The same rules as {@see compose()}, which is the entire reason this exists rather than
+     * the browser guessing. A customer who adds a bookcase to a room expects it against a
+     * wall, because that is where bookcases go; the first free rectangle nearest the middle
+     * of the floor is where nothing goes, and five products added that way stand in a heap in
+     * the centre of the room with five centimetres between them.
+     *
+     * Returns null when there is nowhere for it. The editor then puts it in the middle and
+     * lets the customer move it, which is honest: "it does not fit anywhere sensible" is
+     * worth knowing and is not worth refusing an addition over.
+     *
+     * @param  list<RoomConstraint>  $openings
+     * @param  list<array<string, mixed>>  $existing  what is already standing in the room
+     * @param  array<string, mixed>  $piece
+     * @return array<string, mixed>|null
+     */
+    public function placeOne(
+        RoomGeometryVersion $geometry,
+        array $openings,
+        array $existing,
+        array $piece,
+    ): ?array {
+        $state = new LayoutComposerState($geometry, $openings);
+
+        foreach ($existing as $item) {
+            $state->occupy($item);
+        }
+
+        return $this->place($piece, $state);
+    }
+
     // --- ordering --------------------------------------------------------------
 
     /**

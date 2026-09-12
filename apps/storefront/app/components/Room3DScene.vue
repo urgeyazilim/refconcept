@@ -32,7 +32,14 @@ const props = withDefaults(defineProps<{
   editable: false,
 })
 
-const emit = defineEmits<{ save: [items: LayoutItem[]] }>()
+/**
+ * `save` is the debounced write; `change` is every change, immediately.
+ *
+ * The page needs the second because it asks the server where a new product belongs, and
+ * that answer depends on what is already in the room *now* — not on what was last written
+ * a second and a half ago. Sending the stale list puts every new piece in the same place.
+ */
+const emit = defineEmits<{ save: [items: LayoutItem[]], change: [items: LayoutItem[]] }>()
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 const view = ref<ViewMode>('perspective')
@@ -157,6 +164,7 @@ onMounted(() => {
   editor.value = new RoomEditor(canvas.value, props.geometry, props.openings, {
     onChange: (next) => {
       state.value = next
+      emit('change', next.items)
     },
     onOverlay: (next) => {
       labels.value = next

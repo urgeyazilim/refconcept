@@ -352,7 +352,17 @@ export class RoomEditor {
   add(item: LayoutItem): void {
     this.remember()
 
-    const placed = { ...item, ...this.freeSpotFor(item) }
+    /*
+     * A position of nothing means nobody has chosen one.
+     *
+     * The page asks the server where a product belongs — the same rules that arrange a whole
+     * design, so a bookcase goes against a wall rather than into the first free rectangle in
+     * the middle of the floor. When that fails, or for anything added without a position, the
+     * search below is the fallback: a worse position rather than a lost product.
+     */
+    const chosen = item.position_x_mm !== 0 || item.position_z_mm !== 0
+
+    const placed = chosen ? { ...item } : { ...item, ...this.freeSpotFor(item) }
 
     this.items = [...this.items, placed]
     this.selectedId = placed.id

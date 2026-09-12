@@ -81,6 +81,10 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, EnsureEmailIsVerif
         // and this is arithmetic against the room, not another trip to a provider.
         Route::post('{project}/rooms/{room}/layout/compose', [RoomLayoutController::class, 'compose'])
             ->name('rooms.layout.compose');
+        // Where one product would go. Writes nothing — the editor holds the arrangement while
+        // the page is open, and this answers with a position it can undo like any other move.
+        Route::post('{project}/rooms/{room}/layout/place', [RoomLayoutController::class, 'place'])
+            ->name('rooms.layout.place');
         /*
          * A picture of the plan, for the renderer to follow.
          *

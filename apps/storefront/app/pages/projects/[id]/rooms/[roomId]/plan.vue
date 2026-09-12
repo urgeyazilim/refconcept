@@ -49,6 +49,17 @@ const pending = ref<GeometryVersion[]>([])
 const openings = ref<RoomOpening[]>([])
 const items = ref<LayoutItem[]>([])
 
+/**
+ * What is standing in the room right now, as the editor has it.
+ *
+ * Separate from `items`, which is what was loaded or composed and is bound to the scene as a
+ * prop — writing the live list back into that prop would hand it to the editor again and
+ * clear the undo history under whoever is working. This copy is for the page: the buttons
+ * that need to know whether the room is empty, and the placement request, which depends on
+ * what is in the room *now* rather than on what was last written a second and a half ago.
+ */
+const liveItems = ref<LayoutItem[]>([])
+
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const saveError = ref<string | null>(null)
@@ -488,17 +499,60 @@ function toCandidate(product: CatalogProduct): Candidate | null {
  * selection, undo and the drag all need one immediately. The server keeps it unless it is
  * already taken, in which case it mints its own and the next load corrects us.
  */
-function addProduct(candidate: Candidate): void {
+async function addProduct(candidate: Candidate): Promise<void> {
+  /*
+   * The server decides where it goes.
+   *
+   * Not because the browser cannot compute a free rectangle — it can, and that is exactly
+   * the problem: the first free space nearest the middle of the floor is where nothing goes,
+   * and five products added that way stand in a heap in the centre of the room. The rules
+   * about where furniture belongs are written once, in the composer, and this asks them.
+   *
+   * One request per click, which is what a click can afford. If it fails the editor falls
+   * back to its own free-spot search and the customer moves the piece, which is a worse
+   * position rather than a lost product.
+   */
+  interface Placement {
+    position_x_mm: number
+    position_y_mm: number
+    position_z_mm: number
+    rotation_y_deg: number
+  }
+
+  let placement: Placement | null = null
+
+  try {
+    const response = await api.post<{ data: Placement | null }>(`${base}/layout/place`, {
+      sku_id: candidate.sku_id,
+      existing: liveItems.value.map(item => ({
+        category: item.category,
+        width_mm: item.width_mm ?? 0,
+        depth_mm: item.depth_mm ?? 0,
+        position_x_mm: item.position_x_mm,
+        position_y_mm: item.position_y_mm,
+        position_z_mm: item.position_z_mm,
+        rotation_y_deg: item.rotation_y_deg,
+      })),
+    })
+
+    placement = response.data
+  }
+  catch {
+    placement = null
+  }
+
   scene.value?.add({
     id: crypto.randomUUID(),
     product_id: candidate.id,
     sku_id: candidate.sku_id,
     name: candidate.name,
     category: candidate.category,
-    position_x_mm: 0,
-    position_y_mm: 0,
-    position_z_mm: 0,
-    rotation_y_deg: 0,
+    // Zeroes when the server had nowhere for it: the editor reads that as "unplaced" and
+    // finds a free spot of its own rather than standing the piece in the corner.
+    position_x_mm: placement?.position_x_mm ?? 0,
+    position_y_mm: placement?.position_y_mm ?? 0,
+    position_z_mm: placement?.position_z_mm ?? 0,
+    rotation_y_deg: placement?.rotation_y_deg ?? 0,
     locked: false,
     collision_state: 'ok',
     width_mm: candidate.width_mm,
@@ -619,7 +673,7 @@ onMounted(async () => {
    * refuses to overwrite an arrangement anyway and the refusal would arrive as a question
    * nobody asked for.
    */
-  if (fromDesign.value !== '' && geometry.value !== null && items.value.length === 0) {
+  if (fromDesign.value !== '' && geometry.value !== null && liveItems.value.length === 0) {
     await composeLayout()
   }
 })
@@ -834,7 +888,7 @@ onMounted(async () => {
           :disabled="composing"
           @click="composeLayout()"
         >
-          {{ items.length === 0 ? 'Tasarıma göre yerleştir' : 'Yeniden yerleştir' }}
+          {{ liveItems.length === 0 ? 'Tasarıma göre yerleştir' : 'Yeniden yerleştir' }}
         </button>
 
         <p class="text-xs text-muted">
@@ -856,7 +910,7 @@ onMounted(async () => {
           than no button.
         -->
         <button
-          v-if="design !== null && items.length > 0"
+          v-if="design !== null && liveItems.length > 0"
           type="button"
           class="ml-auto rounded-pill border border-line px-4 py-2 text-sm hover:bg-bg-muted disabled:opacity-50"
           :disabled="rendering"
@@ -866,7 +920,7 @@ onMounted(async () => {
         </button>
 
         <button
-          v-if="items.length > 0"
+          v-if="liveItems.length > 0"
           type="button"
           class="rounded-pill border border-line px-4 py-2 text-sm hover:bg-bg-muted disabled:opacity-50"
           :class="design === null ? 'ml-auto' : ''"
@@ -904,7 +958,15 @@ onMounted(async () => {
         {{ composeNotice }}
       </p>
 
-      <Room3DScene ref="scene" :geometry="geometry" :openings="openings" :items="items" editable @save="save" />
+      <Room3DScene
+        ref="scene"
+        :geometry="geometry"
+        :openings="openings"
+        :items="items"
+        editable
+        @save="save"
+        @change="liveItems = $event"
+      />
 
       <!--
         The catalogue, in the room.

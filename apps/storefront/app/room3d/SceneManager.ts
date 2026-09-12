@@ -321,6 +321,20 @@ export class SceneManager {
     }
   }
 
+  /**
+   * Turns every product cut-out towards the camera.
+   *
+   * Per frame, before drawing, for the same reason the walls are hidden per frame: a photograph
+   * that turns one frame late is a piece of furniture that swings as the customer orbits.
+   */
+  private faceCutouts(): void {
+    const camera = this.cameras.active.position
+
+    for (const piece of this.pieces.values()) {
+      this.furniture.faceCamera(piece, camera.x, camera.z)
+    }
+  }
+
   /** The canvas as a PNG data URL, for the render pipeline and for thumbnails. */
   snapshot(): string {
     /*
@@ -410,6 +424,7 @@ export class SceneManager {
         // Before drawing, not after: a wall hidden a frame late is a wall the customer
         // sees flash across the room as they orbit past it.
         this.updateOcclusion()
+        this.faceCutouts()
         this.render()
       }
     }
