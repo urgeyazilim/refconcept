@@ -14,6 +14,7 @@ use App\Domains\Projects\Models\DesignLayoutItem;
 use App\Domains\Projects\Models\DesignVersion;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\Room;
+use App\Domains\Projects\Models\RoomAnalysis;
 use App\Domains\Projects\Models\RoomConstraint;
 use App\Domains\Projects\Models\RoomGeometryVersion;
 use App\Domains\Projects\Services\ComposableProducts;
@@ -92,6 +93,16 @@ final class RoomLayoutController
                  * branch from, rather than offering a button that answers with an error.
                  */
                 'design' => $this->designSummary($room),
+                /*
+                 * What the analysis says it saw, and where in the photograph it saw it.
+                 *
+                 * Three measurements are hard to answer: nobody knows their living room is
+                 * 4.85 m wide, and a screen of digits gets "yes, probably". What somebody can
+                 * answer instantly is whether the box drawn on their own photograph is around
+                 * the window — and if it is around a mirror, every number that followed from
+                 * it is wrong and they can see why.
+                 */
+                'detected' => $this->detected($room),
             ],
         ]);
     }
@@ -516,6 +527,70 @@ final class RoomLayoutController
         abort_if($info === false || $info[2] !== IMAGETYPE_PNG, 422, 'Görüntü PNG olmalı.');
 
         return $bytes;
+    }
+
+    /**
+     * The boxes the analysis drew on the photograph, and which photograph they are on.
+     *
+     * The media id rather than a link: a link is a separate, deliberate request that runs the
+     * ownership check and expires in five minutes, and one issued here would be issued on
+     * every load of this screen whether or not anybody looked at the picture.
+     *
+     * A box outside the frame is dropped rather than clamped. A model that answered in pixels
+     * when it was asked for fractions produces 1440 where it meant 0.75, and a box clamped to
+     * the edge is a confident rectangle around the wrong thing — which is precisely the
+     * mistake this feature exists to let the customer catch.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function detected(Room $room): ?array
+    {
+        $analysis = RoomAnalysis::query()
+            ->where('room_id', $room->getKey())
+            ->current()
+            ->first();
+
+        if ($analysis === null) {
+            return null;
+        }
+
+        $regions = [];
+
+        foreach ((array) ($analysis->payload['regions'] ?? []) as $region) {
+            if (! is_array($region)) {
+                continue;
+            }
+
+            $box = array_values(array_filter(
+                (array) ($region['box'] ?? []),
+                static fn (mixed $value): bool => is_int($value) || is_float($value),
+            ));
+
+            if (count($box) !== 4) {
+                continue;
+            }
+
+            $inFrame = array_filter($box, static fn (float|int $value): bool => $value >= 0 && $value <= 1);
+
+            if (count($inFrame) !== 4 || $box[0] >= $box[2] || $box[1] >= $box[3]) {
+                continue;
+            }
+
+            $regions[] = [
+                'kind' => is_string($region['kind'] ?? null) ? $region['kind'] : 'other',
+                'label' => is_string($region['label'] ?? null) ? $region['label'] : null,
+                'box' => array_map(static fn (float|int $value): float => round((float) $value, 4), $box),
+            ];
+        }
+
+        return [
+            'media_id' => $analysis->media_id,
+            'regions' => $regions,
+            'warnings' => array_values(array_filter(
+                (array) ($analysis->warnings ?? []),
+                static fn (mixed $warning): bool => is_string($warning),
+            )),
+        ];
     }
 
     /**

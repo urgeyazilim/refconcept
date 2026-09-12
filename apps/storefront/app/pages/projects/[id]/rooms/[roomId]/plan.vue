@@ -94,6 +94,22 @@ const categories = ref<RoomCategory[]>([])
 const activeCategory = ref<string | null>(null)
 const roomType = ref<string | null>(null)
 
+/**
+ * What the analysis found, and where in the photograph it found it.
+ *
+ * Fetched with the layout; the signed link to the photograph is asked for separately and only
+ * when there is something to draw on it, because a link is a deliberate request that runs the
+ * ownership check and expires in five minutes.
+ */
+interface Detection {
+  media_id: string | null
+  regions: Array<{ kind: string, label: string | null, box: number[] }>
+  warnings: string[]
+}
+
+const detected = ref<Detection | null>(null)
+const photoUrl = ref<string | null>(null)
+
 /** The design a final image would be made from, when the room has one. */
 const design = ref<{ design_id: string, version_id: string, version_number: number } | null>(null)
 const rendering = ref(false)
@@ -161,6 +177,7 @@ async function load(): Promise<void> {
         layout: LayoutPayload | null
         room_type: string | null
         design: { design_id: string, version_id: string, version_number: number } | null
+        detected: Detection | null
       }
     }>(`${base}/layout`)
 
@@ -170,6 +187,29 @@ async function load(): Promise<void> {
     items.value = response.data.layout?.items ?? []
     roomType.value = response.data.room_type
     design.value = response.data.design
+    detected.value = response.data.detected
+
+    /*
+     * The photograph, only when there is something to draw on it and nothing agreed yet.
+     *
+     * A signed link is a deliberate request that runs the ownership check and expires in five
+     * minutes; asking for one on every load of a screen nobody is looking at the picture on
+     * would be issuing links for the sake of it.
+     */
+    const media = response.data.detected?.media_id ?? null
+
+    if (media !== null && response.data.geometry === null && (response.data.detected?.regions.length ?? 0) > 0) {
+      try {
+        const link = await api.get<{ data: { url: string } }>(`${base}/media/${media}/link`)
+
+        photoUrl.value = link.data.url
+      }
+      catch {
+        // The numbers and the sketch still answer the question; a missing photograph is not
+        // worth an error on a screen about measurements.
+        photoUrl.value = null
+      }
+    }
 
     const source = response.data.geometry ?? response.data.pending_geometry[0]
 
@@ -648,6 +688,20 @@ onMounted(async () => {
         </dl>
 
         <!--
+          Their own photograph, with what was found drawn on it.
+
+          The measurement is derived from these: the width of the room is read off the door
+          in this picture. Showing the box is showing the working, and a box around a mirror
+          explains a wrong answer better than any confidence percentage.
+        -->
+        <RoomDetectionOverlay
+          v-if="photoUrl !== null && detected !== null"
+          class="mt-4"
+          :url="photoUrl"
+          :regions="detected.regions"
+        />
+
+        <!--
           The same numbers, drawn.
 
           Three measurements in a list are three numbers to agree with; the shape of the room
@@ -674,6 +728,19 @@ onMounted(async () => {
             ? `Fotoğraftan tahmin edildi${proposal.confidence_percent === null ? '' : ` (%${proposal.confidence_percent} güven)`}. Bir metre şerit varsa kontrol etmeye değer.`
             : 'Sizin girdiğiniz ölçüler.' }}
         </p>
+
+        <!--
+          What the analysis itself was unsure about, in its own words.
+
+          Kept because it is the honest half of a confidence figure: "pencerenin alt kenarı
+          görünmüyor" tells the customer which number to check, and 71% tells them nothing
+          they can act on.
+        -->
+        <ul v-if="(detected?.warnings.length ?? 0) > 0" class="mt-2 space-y-0.5 text-xs text-muted">
+          <li v-for="(warning, index) in detected?.warnings ?? []" :key="index">
+            • {{ warning }}
+          </li>
+        </ul>
 
         <div class="mt-4 flex flex-wrap gap-2">
           <button
