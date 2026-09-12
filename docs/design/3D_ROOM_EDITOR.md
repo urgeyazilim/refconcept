@@ -116,13 +116,28 @@ Two differences, both deliberate:
 - **No translate gizmo.** Furniture is moved by dragging it and nudged with the arrow keys —
   a centimetre a press, ten with shift. A three-arrow gizmo is a second input system to keep
   in step with snapping and collision, for a gesture the pointer already does.
-- **Products are boxes with their photograph on the front.** See below.
+- **Products are not hand-modelled.** See below.
+
+## How a product is drawn
+
+Four ways, in order of preference, each falling back to the next:
+
+1. **The seller's own glTF binary**, if they have one from their manufacturer. It is the
+   shape of the thing.
+2. **A mesh generated from the product photograph** — fal.ai / Tripo 2.5, thirty cents, once
+   per product, queued when a listing is approved. A likeness: its far side was never
+   photographed. Used only in the planner and never in a render, and an operator can throw it
+   away without touching what the seller uploaded.
+3. **The photograph, cut out of its background**, standing on its footprint slab and turning
+   to face the camera as it narrows to the silhouette the real piece would present.
+4. **A plain box**, when the photograph cannot be read at all, or was taken in a room rather
+   than on a studio sweep — keying that would eat holes in the furniture.
+
+**Every one of them is scaled to the SKU's recorded dimensions**, never to what the file or
+the generator thought. A beautiful model at the wrong size is worse than a box: it looks
+convincing and it does not fit.
 
 ## What is not built yet
-
-- Products are boxes wearing their own photograph. The catalogue has photographs for
-  everything and GLB models for almost nothing, and a planner that waits for models is a
-  planner nobody can use this year.
 - The snapshot conditions the render as a reference image, which is weaker than depth-conditioned
   generation (ControlNet on SD/Flux). That would need a third provider and is the next real
   step for wall fidelity.

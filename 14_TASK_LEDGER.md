@@ -163,6 +163,9 @@
 | E3D-T009 | — | FRONTEND_AGENT | E3D-T005 | DONE | catalogue into the room, room into the basket | Only measured variants; quantities grouped |
 | E3D-T010 | — | INDEPENDENT_TEST_AGENT | E3D-T001..009 | DONE | regression | 972 backend, 19 storefront unit, 1 new E2E journey; OpenAPI 218 operations |
 
+| E3D-T011 | — | AI_AGENT | E3D-T003 | DONE | photo to 3D model | fal.ai/Tripo, $0.30 once per product on approval; scaled to the SKU, planner only |
+| E3D-T012 | — | BACKEND_AGENT | E3D-T011 | DONE | model storage + backfill | Seller file outranks a likeness; refconcept:product-models prices before it queues |
+
 ## Scope notes
 
 - Customer-facing **sign-up / sign-in screens** belong to Phase 20 (Storefront Complete)

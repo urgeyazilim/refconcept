@@ -5,6 +5,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added — Products in three dimensions
+
+- **A 3D model made from the seller's own photograph.** fal.ai / Tripo 2.5, thirty cents
+  a model, once per product, queued when a listing is approved. A catalogue cost like the
+  photograph itself: no customer is charged, and every customer who plans that product
+  into a room afterwards uses the same file.
+- **The mesh's size is never believed.** It arrives in whatever units the generator felt
+  like; the catalogue knows the variant is 2200 mm wide because a seller measured it, and
+  the editor scales every model to the recorded dimensions. A beautiful model at the wrong
+  size is worse than a box.
+- **A seller's own glTF binary always wins**, and a generated likeness is never used in a
+  render — its far side was never photographed, which is fine in a planner seen across a
+  room and not fine in a picture somebody buys from.
+- **Products without a model are cut out of their photograph** and stand on their
+  footprint, turning to face the camera and narrowing to the silhouette the real piece
+  would present. A customer called the previous boxes "squares", and they were.
+- `refconcept:product-models` backfills a catalogue that already exists, printing both the
+  expected price and the ceiling before it queues anything, and saying plainly when the
+  task is still routed to the simulator.
+
 ### Added — The 3D room editor
 
 - **A room the customer measures, furnishes and walks around.** Three.js scene at the
