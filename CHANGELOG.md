@@ -31,6 +31,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   expected price and the ceiling before it queues anything, and saying plainly when the
   task is still routed to the simulator.
 
+### Fixed
+
+- **An idempotency key no longer pins a job to a failure forever.** The key exists to stop
+  a second charge, not to stop a second attempt: a job that failed *without spending
+  anything* — a cost ceiling set too low, a missing key, a locked provider account — now
+  releases its key and can be run again once the cause is fixed. A failure that had already
+  been billed still never re-runs, which is the case the key was written for.
+- **The view-classification ceiling was below its own estimate.** The gateway prices a call
+  pessimistically, at the model's entire output budget; for Gemini 2.5 Pro that is 8.2 cents
+  against an answer four lines long, and a five-cent ceiling refused every call before one
+  was made. Raised to twelve cents, which still catches a misrouted model.
+
 ### Added — The 3D room editor
 
 - **A room the customer measures, furnishes and walks around.** Three.js scene at the

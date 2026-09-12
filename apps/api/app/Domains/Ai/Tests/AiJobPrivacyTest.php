@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Domains\Ai\Enums\AiFailureKind;
 use App\Domains\Ai\Enums\AiJobStatus;
 use App\Domains\Ai\Enums\AiTask;
 use App\Domains\Ai\Exceptions\AiJobRefused;
@@ -164,6 +165,68 @@ it('returns the same job for a repeated idempotency key instead of charging twic
     // never saw, must not pay twice. The second tap should look like the first worked.
     expect($second->getKey())->toBe($first->getKey())
         ->and(AiJob::query()->where('idempotency_key', 'render-tap-1')->count())->toBe(1);
+});
+
+it('lets a key be tried again when the failure cost nothing', function (): void {
+    $dispatcher = app(AiJobDispatcher::class);
+
+    $first = $dispatcher->dispatch(
+        AiTask::RoomAnalysis,
+        ['room_type' => 'salon'],
+        $this->owner,
+        idempotencyKey: 'catalogue-key',
+    );
+
+    // Refused before anything was asked of a provider — a cost ceiling set too low, a key
+    // missing, an account locked. Nothing was spent and nothing was produced.
+    $first->forceFill([
+        'status' => AiJobStatus::Failed,
+        'failure_kind' => AiFailureKind::CostCapExceeded,
+        'total_cost_micros' => 0,
+    ])->save();
+
+    $second = $dispatcher->dispatch(
+        AiTask::RoomAnalysis,
+        ['room_type' => 'salon'],
+        $this->owner,
+        idempotencyKey: 'catalogue-key',
+    );
+
+    /*
+     * The key exists to stop a second charge, not to pin a product to a misconfiguration
+     * forever. Once the cause is fixed, the same caller asking again has to be able to try.
+     */
+    expect($second->getKey())->not->toBe($first->getKey())
+        // And the record of what failed is kept; only its claim on the key is released.
+        ->and(AiJob::query()->whereKey($first->getKey())->value('idempotency_key'))->toBeNull();
+});
+
+it('never re-runs a key whose failure had already been billed', function (): void {
+    $dispatcher = app(AiJobDispatcher::class);
+
+    $first = $dispatcher->dispatch(
+        AiTask::RoomAnalysis,
+        ['room_type' => 'salon'],
+        $this->owner,
+        idempotencyKey: 'billed-key',
+    );
+
+    // The provider answered and charged for it; what came back could not be used. Running
+    // this again is paying a second time for the same picture.
+    $first->forceFill([
+        'status' => AiJobStatus::Failed,
+        'failure_kind' => AiFailureKind::MalformedOutput,
+        'total_cost_micros' => 42_000,
+    ])->save();
+
+    $second = $dispatcher->dispatch(
+        AiTask::RoomAnalysis,
+        ['room_type' => 'salon'],
+        $this->owner,
+        idempotencyKey: 'billed-key',
+    );
+
+    expect($second->getKey())->toBe($first->getKey());
 });
 
 it('refuses a new job once the caller is at their concurrency limit', function (): void {

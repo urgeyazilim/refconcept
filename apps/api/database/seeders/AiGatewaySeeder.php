@@ -863,9 +863,16 @@ final class AiGatewaySeeder extends Seeder
                 'fallback' => 'fake-vision',
                 // Nobody is charged: a catalogue cost, like the mesh it feeds.
                 'credits' => 0,
-                // A cent or two. The cap is there to catch a misrouted model rather than to
-                // ration anything.
-                'max_cost_micros' => 50_000,
+                /*
+                 * A cent or two in practice; the ceiling is set against the estimate.
+                 *
+                 * The gateway prices a call pessimistically — the model's whole output
+                 * budget, 8k tokens for Gemini 2.5 Pro, against an answer that is four
+                 * short lines of JSON. That estimate came to 8.2 cents and a five-cent
+                 * ceiling refused every call before one was ever made. The cap is here to
+                 * catch a misrouted model, not to ration four lines of JSON.
+                 */
+                'max_cost_micros' => 120_000,
                 'concurrency' => 2,
                 'timeout' => 120,
                 'attempts' => 1,

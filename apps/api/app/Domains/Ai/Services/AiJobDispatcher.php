@@ -72,9 +72,31 @@ final class AiJobDispatcher
                 ->where('idempotency_key', $idempotencyKey)
                 ->first();
 
-            if ($existing !== null) {
+            /*
+             * The key protects against paying twice, not against ever trying again.
+             *
+             * A job that failed without spending anything is not a result worth handing
+             * back: the whole catalogue of product models was pinned to one failure this
+             * way — a cost ceiling set too low refused every call before it was made, and
+             * once the ceiling was raised the same key kept returning the refusal. The
+             * cause was fixed and nothing could be retried.
+             *
+             * Cost is what decides it rather than the failure kind. A job that failed after
+             * the provider had already billed us — a malformed answer, a worker that died
+             * holding a finished response — must never be re-run on the same key, because
+             * that is exactly the double charge the key exists to prevent.
+             */
+            $spentNothing = $existing !== null
+                && $existing->status === AiJobStatus::Failed
+                && $existing->total_cost_micros === 0;
+
+            if ($existing !== null && ! $spentNothing) {
                 return $existing;
             }
+
+            // Out of the way rather than deleted: what failed, why, and when is the record
+            // somebody reads when the same thing fails again.
+            $existing?->forceFill(['idempotency_key' => null])->save();
         }
 
         /*
