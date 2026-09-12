@@ -965,6 +965,38 @@
                 "description": "Gerekli platform yetkisi: `platform.ai.manage` (Yapay zekâ sağlayıcı ve görev yönetimi)."
             }
         },
+        "/api/v1/admin/analytics/catalogue-coverage": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "AdminAnalyticsController::catalogueCoverage",
+                "operationId": "v1.admin.analytics.catalogue-coverage",
+                "responses": {
+                    "200": {
+                        "description": "Başarılı."
+                    },
+                    "401": {
+                        "description": "Kimlik doğrulanmadı."
+                    },
+                    "403": {
+                        "description": "Yetki yok."
+                    },
+                    "422": {
+                        "description": "Doğrulama hatası."
+                    },
+                    "429": {
+                        "description": "Hız sınırı aşıldı."
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "description": "Gerekli platform yetkisi: `platform.analytics.view` (Platform raporlarını görüntüleme)."
+            }
+        },
         "/api/v1/admin/analytics/orders": {
             "get": {
                 "tags": [
@@ -1383,6 +1415,130 @@
                     }
                 ],
                 "description": "Gerekli platform yetkisi: `platform.credits.manage` (Kredi paketleri, promosyonlar ve bakiye düzeltme)."
+            }
+        },
+        "/api/v1/admin/customers": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "AdminCustomerController::index",
+                "operationId": "v1.admin.customers.index",
+                "responses": {
+                    "200": {
+                        "description": "Başarılı."
+                    },
+                    "401": {
+                        "description": "Kimlik doğrulanmadı."
+                    },
+                    "403": {
+                        "description": "Yetki yok."
+                    },
+                    "422": {
+                        "description": "Doğrulama hatası."
+                    },
+                    "429": {
+                        "description": "Hız sınırı aşıldı."
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "description": "Gerekli platform yetkisi: `platform.users.view` (Kullanıcıları görüntüleme)."
+            }
+        },
+        "/api/v1/admin/customers/{customer}": {
+            "get": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "AdminCustomerController::show",
+                "operationId": "v1.admin.customers.show",
+                "responses": {
+                    "200": {
+                        "description": "Başarılı."
+                    },
+                    "401": {
+                        "description": "Kimlik doğrulanmadı."
+                    },
+                    "403": {
+                        "description": "Yetki yok."
+                    },
+                    "422": {
+                        "description": "Doğrulama hatası."
+                    },
+                    "429": {
+                        "description": "Hız sınırı aşıldı."
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "customer",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "description": "Gerekli platform yetkisi: `platform.users.view` (Kullanıcıları görüntüleme)."
+            }
+        },
+        "/api/v1/admin/customers/{customer}/media/{media}": {
+            "post": {
+                "tags": [
+                    "admin"
+                ],
+                "summary": "AdminCustomerController::media",
+                "operationId": "v1.admin.customers.media",
+                "responses": {
+                    "200": {
+                        "description": "Başarılı."
+                    },
+                    "401": {
+                        "description": "Kimlik doğrulanmadı."
+                    },
+                    "403": {
+                        "description": "Yetki yok."
+                    },
+                    "422": {
+                        "description": "Doğrulama hatası."
+                    },
+                    "429": {
+                        "description": "Hız sınırı aşıldı."
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "customer",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "media",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "description": "Gerekli platform yetkisi: `platform.users.view` (Kullanıcıları görüntüleme)."
             }
         },
         "/api/v1/admin/finance/commission-rules": {
@@ -6383,6 +6539,485 @@
                 ]
             }
         },
+        "/api/v1/projects/{project}/rooms/{room}/designs/{design}/versions/{version}/video": {
+            "post": {
+                "tags": [
+                    "projects"
+                ],
+                "summary": "DesignController::startVideo",
+                "operationId": "v1.projects.designs.version.video.start",
+                "responses": {
+                    "200": {
+                        "description": "Başarılı."
+                    },
+                    "401": {
+                        "description": "Kimlik doğrulanmadı."
+                    },
+                    "403": {
+                        "description": "Yetki yok."
+                    },
+                    "422": {
+                        "description": "Doğrulama hatası."
+                    },
+                    "429": {
+                        "description": "Hız sınırı aşıldı."
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "project",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "room",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "design",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "version",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/projects/{project}/rooms/{room}/designs/{design}/versions/{version}/videos": {
+            "get": {
+                "tags": [
+                    "projects"
+                ],
+                "summary": "DesignController::videos",
+                "operationId": "v1.projects.designs.version.videos",
+                "responses": {
+                    "200": {
+                        "description": "Başarılı."
+                    },
+                    "401": {
+                        "description": "Kimlik doğrulanmadı."
+                    },
+                    "403": {
+                        "description": "Yetki yok."
+                    },
+                    "422": {
+                        "description": "Doğrulama hatası."
+                    },
+                    "429": {
+                        "description": "Hız sınırı aşıldı."
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "project",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "room",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "design",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "version",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/projects/{project}/rooms/{room}/geometry": {
+            "post": {
+                "tags": [
+                    "projects"
+                ],
+                "summary": "RoomLayoutController::storeGeometry",
+                "operationId": "v1.projects.rooms.geometry.store",
+                "responses": {
+                    "200": {
+                        "description": "Başarılı."
+                    },
+                    "401": {
+                        "description": "Kimlik doğrulanmadı."
+                    },
+                    "403": {
+                        "description": "Yetki yok."
+                    },
+                    "422": {
+                        "description": "Doğrulama hatası."
+                    },
+                    "429": {
+                        "description": "Hız sınırı aşıldı."
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "project",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "room",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/projects/{project}/rooms/{room}/geometry/{version}/confirm": {
+            "post": {
+                "tags": [
+                    "projects"
+                ],
+                "summary": "RoomLayoutController::confirmGeometry",
+                "operationId": "v1.projects.rooms.geometry.confirm",
+                "responses": {
+                    "200": {
+                        "description": "Başarılı."
+                    },
+                    "401": {
+                        "description": "Kimlik doğrulanmadı."
+                    },
+                    "403": {
+                        "description": "Yetki yok."
+                    },
+                    "422": {
+                        "description": "Doğrulama hatası."
+                    },
+                    "429": {
+                        "description": "Hız sınırı aşıldı."
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "project",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "room",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "version",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/projects/{project}/rooms/{room}/layout": {
+            "get": {
+                "tags": [
+                    "projects"
+                ],
+                "summary": "RoomLayoutController::show",
+                "operationId": "v1.projects.rooms.layout.show",
+                "responses": {
+                    "200": {
+                        "description": "Başarılı."
+                    },
+                    "401": {
+                        "description": "Kimlik doğrulanmadı."
+                    },
+                    "403": {
+                        "description": "Yetki yok."
+                    },
+                    "422": {
+                        "description": "Doğrulama hatası."
+                    },
+                    "429": {
+                        "description": "Hız sınırı aşıldı."
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "project",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "room",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "projects"
+                ],
+                "summary": "RoomLayoutController::save",
+                "operationId": "v1.projects.rooms.layout.save",
+                "responses": {
+                    "200": {
+                        "description": "Başarılı."
+                    },
+                    "401": {
+                        "description": "Kimlik doğrulanmadı."
+                    },
+                    "403": {
+                        "description": "Yetki yok."
+                    },
+                    "422": {
+                        "description": "Doğrulama hatası."
+                    },
+                    "429": {
+                        "description": "Hız sınırı aşıldı."
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "project",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "room",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/projects/{project}/rooms/{room}/layout/cart": {
+            "post": {
+                "tags": [
+                    "projects"
+                ],
+                "summary": "RoomLayoutController::addToCart",
+                "operationId": "v1.projects.rooms.layout.cart",
+                "responses": {
+                    "200": {
+                        "description": "Başarılı."
+                    },
+                    "401": {
+                        "description": "Kimlik doğrulanmadı."
+                    },
+                    "403": {
+                        "description": "Yetki yok."
+                    },
+                    "422": {
+                        "description": "Doğrulama hatası."
+                    },
+                    "429": {
+                        "description": "Hız sınırı aşıldı."
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "project",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "room",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/projects/{project}/rooms/{room}/layout/compose": {
+            "post": {
+                "tags": [
+                    "projects"
+                ],
+                "summary": "RoomLayoutController::compose",
+                "operationId": "v1.projects.rooms.layout.compose",
+                "responses": {
+                    "200": {
+                        "description": "Başarılı."
+                    },
+                    "401": {
+                        "description": "Kimlik doğrulanmadı."
+                    },
+                    "403": {
+                        "description": "Yetki yok."
+                    },
+                    "422": {
+                        "description": "Doğrulama hatası."
+                    },
+                    "429": {
+                        "description": "Hız sınırı aşıldı."
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "project",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "room",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/projects/{project}/rooms/{room}/layout/snapshot": {
+            "post": {
+                "tags": [
+                    "projects"
+                ],
+                "summary": "RoomLayoutController::storeSnapshot",
+                "operationId": "v1.projects.rooms.layout.snapshot",
+                "responses": {
+                    "200": {
+                        "description": "Başarılı."
+                    },
+                    "401": {
+                        "description": "Kimlik doğrulanmadı."
+                    },
+                    "403": {
+                        "description": "Yetki yok."
+                    },
+                    "422": {
+                        "description": "Doğrulama hatası."
+                    },
+                    "429": {
+                        "description": "Hız sınırı aşıldı."
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "project",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "room",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/projects/{project}/rooms/{room}/media": {
             "get": {
                 "tags": [
@@ -6634,6 +7269,55 @@
                     },
                     {
                         "name": "medium",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/projects/{project}/rooms/{room}/programme": {
+            "get": {
+                "tags": [
+                    "projects"
+                ],
+                "summary": "RoomController::programme",
+                "operationId": "v1.projects.rooms.programme",
+                "responses": {
+                    "200": {
+                        "description": "Başarılı."
+                    },
+                    "401": {
+                        "description": "Kimlik doğrulanmadı."
+                    },
+                    "403": {
+                        "description": "Yetki yok."
+                    },
+                    "422": {
+                        "description": "Doğrulama hatası."
+                    },
+                    "429": {
+                        "description": "Hız sınırı aşıldı."
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "project",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "room",
                         "in": "path",
                         "required": true,
                         "schema": {
