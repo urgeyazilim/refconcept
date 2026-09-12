@@ -19,6 +19,7 @@ use App\Domains\Identity\Console\GrantRoleCommand;
 use App\Domains\Inventory\Console\ReleaseExpiredReservationsCommand;
 use App\Domains\Matching\Console\EmbedCatalogueCommand;
 use App\Domains\Media\Console\EnsureStorageBucketsCommand;
+use App\Domains\Products\Console\GenerateProductModelsCommand;
 use App\Domains\Orders\Exceptions\OrderRefused;
 use App\Domains\Payments\Console\ExpireBankTransfersCommand;
 use App\Domains\Payments\Console\ExpireCheckoutSessionsCommand;
@@ -51,6 +52,7 @@ return Application::configure(basePath: dirname(__DIR__))
         GenerateOpenApiCommand::class,
         VerifyAiModelsCommand::class,
         EnsureStorageBucketsCommand::class,
+        GenerateProductModelsCommand::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         // The three Nuxt clients are separate origins; CORS is configured in config/cors.php.
