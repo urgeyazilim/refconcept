@@ -81,6 +81,14 @@ export interface LayoutItem {
   image_url: string | null
   /** A glTF or GLB, when the catalogue has one. Most of it does not, yet. */
   model_url: string | null
+  /**
+   * Where that model came from: the seller, or a mesh generated from the photograph.
+   *
+   * The editor says so on screen for a generated one. Its far side was never photographed,
+   * and somebody walking round the back of a sofa should know they are looking at a guess
+   * rather than at the thing they are about to buy.
+   */
+  model_source?: 'seller' | 'ai' | null
 }
 
 /** What the customer is looking at. */

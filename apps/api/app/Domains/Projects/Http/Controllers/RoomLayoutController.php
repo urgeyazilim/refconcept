@@ -6,6 +6,7 @@ namespace App\Domains\Projects\Http\Controllers;
 
 use App\Domains\Commerce\Exceptions\CartRefused;
 use App\Domains\Commerce\Services\CartService;
+use App\Domains\Products\Models\ProductMedia;
 use App\Domains\Products\Models\ProductSku;
 use App\Domains\Projects\Enums\DesignVersionStatus;
 use App\Domains\Projects\Enums\MeasurementQuality;
@@ -785,6 +786,18 @@ final class RoomLayoutController
     {
         $dimensions = $item->sku?->dimensions;
 
+        /*
+         * The seller's own file first, a mesh generated from their photograph second.
+         *
+         * One is the shape of the thing; the other is a likeness whose far side was never
+         * photographed. Ordered here rather than in the query because a layout carries a
+         * dozen products and this is a sort of at most two rows each.
+         */
+        $model = $item->product?->media
+            ?->where('type', 'model_3d')
+            ->sortBy(fn (ProductMedia $media): int => $media->source === 'seller' ? 0 : 1)
+            ->first();
+
         return [
             'id' => $item->id,
             'product_id' => $item->product_id,
@@ -823,11 +836,16 @@ final class RoomLayoutController
              * dimensions, so a model that came back at the wrong size is corrected rather
              * than believed.
              */
-            'model_url' => $item->product?->media
-                ?->where('type', 'model_3d')
-                ->sortBy(fn ($media): int => $media->source === 'seller' ? 0 : 1)
-                ->first()
-                ?->url(),
+            'model_url' => $model?->url(),
+
+            /*
+             * Whether that model is the real shape or a likeness.
+             *
+             * The planner says so on screen. A mesh made from a single photograph guessed its
+             * far side, and somebody walking round the back of a sofa should know they are
+             * looking at a guess rather than at the thing they are about to buy.
+             */
+            'model_source' => $model?->source,
         ];
     }
 

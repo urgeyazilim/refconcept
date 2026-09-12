@@ -61,6 +61,19 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])
             ->name('products.media.store');
         Route::post('products/{product}/media/reorder', [ProductMediaController::class, 'reorder'])
             ->name('products.media.reorder');
+
+        /*
+         * The 3D model, when a seller has one from their manufacturer.
+         *
+         * Their file outranks anything generated from a photograph: one is the shape of the
+         * thing and the other is a likeness whose far side was never photographed. Removing
+         * takes away the likeness rather than their own file — that is the whole point of the
+         * verb here.
+         */
+        Route::post('products/{product}/model', [ProductMediaController::class, 'storeModel'])
+            ->name('products.model.store');
+        Route::delete('products/{product}/model/generated', [ProductMediaController::class, 'destroyGeneratedModel'])
+            ->name('products.model.generated.destroy');
         Route::patch('products/{product}/media/{medium}', [ProductMediaController::class, 'update'])
             ->name('products.media.update');
         Route::delete('products/{product}/media/{medium}', [ProductMediaController::class, 'destroy'])

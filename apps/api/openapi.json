@@ -9456,6 +9456,88 @@
                 ]
             }
         },
+        "/api/v1/seller/products/{product}/model": {
+            "post": {
+                "tags": [
+                    "seller"
+                ],
+                "summary": "ProductMediaController::storeModel",
+                "operationId": "v1.seller.products.model.store",
+                "responses": {
+                    "200": {
+                        "description": "Başarılı."
+                    },
+                    "401": {
+                        "description": "Kimlik doğrulanmadı."
+                    },
+                    "403": {
+                        "description": "Yetki yok."
+                    },
+                    "422": {
+                        "description": "Doğrulama hatası."
+                    },
+                    "429": {
+                        "description": "Hız sınırı aşıldı."
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "product",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/seller/products/{product}/model/generated": {
+            "delete": {
+                "tags": [
+                    "seller"
+                ],
+                "summary": "ProductMediaController::destroyGeneratedModel",
+                "operationId": "v1.seller.products.model.generated.destroy",
+                "responses": {
+                    "200": {
+                        "description": "Başarılı."
+                    },
+                    "401": {
+                        "description": "Kimlik doğrulanmadı."
+                    },
+                    "403": {
+                        "description": "Yetki yok."
+                    },
+                    "422": {
+                        "description": "Doğrulama hatası."
+                    },
+                    "429": {
+                        "description": "Hız sınırı aşıldı."
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "product",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/seller/products/{product}/skus": {
             "post": {
                 "tags": [

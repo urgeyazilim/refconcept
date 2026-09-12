@@ -337,6 +337,18 @@ defineExpose({
                   : `${formatDistance(selected.width_mm)} × ${formatDistance(selected.depth_mm)}` }}
                 · {{ selected.rotation_y_deg }}°
               </p>
+
+              <!--
+                Said plainly when the shape is a guess.
+
+                A mesh made from a single photograph never saw the back of the sofa, so the
+                back it shows is invented. Somebody judging a purchase from the far side of
+                the room deserves to know which half of what they are looking at was
+                photographed and which half was inferred.
+              -->
+              <p v-if="selected.model_source === 'ai'" class="mt-1 text-xs text-muted">
+                3B görünüm fotoğraftan üretilmiş temsilî bir modeldir; arka yüzü tahminîdir.
+              </p>
             </div>
 
             <span
