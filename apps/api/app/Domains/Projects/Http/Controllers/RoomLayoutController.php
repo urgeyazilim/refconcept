@@ -676,7 +676,13 @@ final class RoomLayoutController
      */
     private function layout(DesignLayout $layout): array
     {
-        $layout->loadMissing(['items.product.primaryCategory', 'items.sku.dimensions']);
+        $layout->loadMissing([
+            'items.product.primaryCategory',
+            // The photograph the editor puts on the front of each box, eager because a layout
+            // is a dozen items and a query each is a dozen queries for one screen.
+            'items.product.media',
+            'items.sku.dimensions',
+        ]);
 
         return [
             'id' => $layout->id,
@@ -714,7 +720,16 @@ final class RoomLayoutController
             'width_mm' => $dimensions?->width_mm,
             'height_mm' => $dimensions?->height_mm,
             'depth_mm' => $dimensions?->depth_mm,
-            'image_url' => null,
+            /*
+             * The product's own photograph, which the editor wraps onto the front of the box.
+             *
+             * A room of anonymous brown boxes at the right sizes answers "does it fit" and
+             * nothing else; the customer cannot tell which box is the sofa they chose. The
+             * picture is on the public product disk — it is a shop photograph, not anything
+             * of theirs — so a plain URL is the right thing here and would not be two lines
+             * further down, where the room photographs live.
+             */
+            'image_url' => $item->product?->media?->first()?->url(),
             'model_url' => null,
         ];
     }

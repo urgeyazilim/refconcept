@@ -6,6 +6,8 @@ import {
   LineSegments,
   Mesh,
   MeshStandardMaterial,
+  SRGBColorSpace,
+  TextureLoader,
   type Object3D,
 } from 'three'
 
@@ -16,11 +18,16 @@ import { type LayoutItem, toUnits } from './types'
 /**
  * Furniture, as boxes.
  *
+ * Boxes with the product's own photograph on the front.
+ *
  * Boxes on purpose, for now. The catalogue has photographs and prices for everything and 3D
  * models for almost nothing, and a planner that waits for models is a planner nobody can use
  * this year. A box at the exact size of the real piece answers the question the plan is for —
  * does it fit, can you walk past it — and answers it honestly. A beautifully modelled sofa at
  * the wrong dimensions would look far better and be worth less than nothing.
+ *
+ * The photograph is what makes a box recognisable as the thing that was chosen. On the front
+ * face only: wrapped round all six it reads as a printed carton.
  *
  * The edges are drawn as lines over the box because an untextured box under soft light has
  * corners that disappear, and the corner is the part somebody is trying to see.
@@ -64,9 +71,20 @@ export class FurnitureBuilder {
     }),
   }
 
+  /**
+   * The product photographs, by URL.
+   *
+   * Four dining chairs are one photograph, and four downloads would be three too many.
+   */
+  private readonly photographs = new Map<string, MeshStandardMaterial>()
+
+  private readonly textures = new TextureLoader()
+
   private readonly edgeMaterial = new LineBasicMaterial({ color: 0x3d3733 })
 
   private readonly selectedEdgeMaterial = new LineBasicMaterial({ color: 0xb08f52, linewidth: 2 })
+
+  constructor(private readonly onTextureLoaded: () => void = () => {}) {}
 
   /**
    * One piece, at its position, ready to add to the scene.
@@ -91,7 +109,7 @@ export class FurnitureBuilder {
 
     const geometry = new BoxGeometry(toUnits(width), toUnits(height), toUnits(depth))
 
-    const mesh = new Mesh(geometry, measured ? this.materials.ok : this.materials.placeholder)
+    const mesh = new Mesh(geometry, this.facesFor(item, measured ? 'ok' : 'placeholder'))
     mesh.name = 'body'
     mesh.castShadow = measured
     mesh.receiveShadow = true
@@ -133,13 +151,53 @@ export class FurnitureBuilder {
     group.rotation.y = (-(at?.rotation ?? item.rotation_y_deg) * Math.PI) / 180
   }
 
+  /**
+   * The six faces of a piece, with its photograph on the front.
+   *
+   * A room of anonymous boxes at the right sizes answers "does it fit" and nothing else — the
+   * customer cannot tell which box is the sofa they chose. The picture goes on the front face
+   * only: wrapped round all six it reads as a printed carton, and the front is the face a
+   * piece of furniture is photographed from and the one it is turned towards the room.
+   *
+   * Textures are cached by URL, because four dining chairs are one photograph and four
+   * downloads would be three too many.
+   */
+  private facesFor(item: LayoutItem, state: CollisionState | 'placeholder'): MeshStandardMaterial[] {
+    const base = this.materials[state]
+
+    const url = item.image_url
+
+    if (url === null || state !== 'ok') {
+      return [base, base, base, base, base, base]
+    }
+
+    let front = this.photographs.get(url)
+
+    if (front === undefined) {
+      // The loop only draws when something has changed, so a texture that arrives a moment
+      // later has to say so — otherwise the photograph is downloaded, applied, and never
+      // painted until the customer happens to move the camera.
+      const texture = this.textures.load(url, () => this.onTextureLoaded())
+
+      texture.colorSpace = SRGBColorSpace
+
+      front = new MeshStandardMaterial({ map: texture, roughness: 0.8, metalness: 0 })
+
+      this.photographs.set(url, front)
+    }
+
+    // BoxGeometry's material slots are +x, -x, +y, -y, +z, -z. The front of a piece faces
+    // +z in its own space, which is the direction it looks when its rotation is zero.
+    return [base, base, base, base, front, base]
+  }
+
   /** Recolours a piece for its state, and outlines it when it is the one selected. */
   paint(group: Group, item: LayoutItem, state: CollisionState, selected: boolean): void {
     const body = group.getObjectByName('body')
     const edges = group.getObjectByName('edges')
 
     if (body instanceof Mesh) {
-      body.material = isMeasured(item) ? this.materials[state] : this.materials.placeholder
+      body.material = this.facesFor(item, isMeasured(item) ? state : 'placeholder')
     }
 
     if (edges instanceof LineSegments) {
@@ -166,6 +224,13 @@ export class FurnitureBuilder {
     for (const material of Object.values(this.materials)) {
       material.dispose()
     }
+
+    for (const material of this.photographs.values()) {
+      material.map?.dispose()
+      material.dispose()
+    }
+
+    this.photographs.clear()
 
     this.edgeMaterial.dispose()
     this.selectedEdgeMaterial.dispose()

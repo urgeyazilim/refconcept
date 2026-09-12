@@ -45,7 +45,9 @@ export class SceneManager {
 
   private readonly rooms = new RoomGeometryBuilder()
 
-  private readonly furniture = new FurnitureBuilder()
+  // Told to redraw when a product photograph finishes downloading: the loop only draws when
+  // something has changed, and a texture arriving later is a change nothing else reports.
+  private readonly furniture = new FurnitureBuilder(() => this.invalidate())
 
   /**
    * Every piece currently in the scene, by id.
