@@ -346,7 +346,10 @@ defineExpose({
                 the room deserves to know which half of what they are looking at was
                 photographed and which half was inferred.
               -->
-              <p v-if="selected.model_source === 'ai'" class="mt-1 text-xs text-muted">
+              <p v-if="selected.model_url === null" class="mt-1 text-xs text-muted">
+                Bu ürünün 3B modeli henüz yok; gerçek ölçülerinde yaklaşık şekliyle gösteriliyor.
+              </p>
+              <p v-else-if="selected.model_source === 'ai'" class="mt-1 text-xs text-muted">
                 3B görünüm fotoğraftan üretilmiş temsilî bir modeldir; arka yüzü tahminîdir.
               </p>
             </div>

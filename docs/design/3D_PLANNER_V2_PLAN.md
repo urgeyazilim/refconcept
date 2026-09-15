@@ -59,7 +59,7 @@ editor full of photograph cut-outs is still cut-outs.
 
 ## 4. The plan (Path A)
 
-### Phase 0 — Stop the bleeding (2 days, no cost)
+### Phase 0 — Stop the bleeding (2 days, no cost) — DONE 2026-09-15
 - Hard constraints in `DragController`/`CollisionEngine`: rotated footprint (OBB) clamped
   inside the room polygon inset by wall thickness; overlap with another OBB is refused and
   the piece slides to the nearest free position along the wall (separating-axis push-out).

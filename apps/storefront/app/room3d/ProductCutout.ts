@@ -42,6 +42,25 @@ export interface Cutout {
 }
 
 /**
+ * The photograph's dominant colour, and nothing else.
+ *
+ * What the placeholder shapes use: a sofa drawn as a shape is a better sofa than a photograph
+ * standing up, and a shape in the sofa's own colour is better again. Null when the photograph
+ * cannot be read at all, and the caller picks something neutral.
+ */
+export async function photographColour(url: string): Promise<{ r: number, g: number, b: number } | null> {
+  const cut = await cutOut(url)
+
+  if (cut === null) {
+    return null
+  }
+
+  cut.texture.dispose()
+
+  return cut.colour
+}
+
+/**
  * Loads a photograph and returns it without its background.
  *
  * Null when the image cannot be read — a photograph served without CORS headers taints the

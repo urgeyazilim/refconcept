@@ -31,6 +31,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   expected price and the ceiling before it queues anything, and saying plainly when the
   task is still routed to the simulator.
 
+### Changed — Planner v2, phase 0
+
+- **Furniture can no longer leave the room or enter another piece.** The first editor only
+  flagged a bad position; the product owner's screenshot showed a sofa half through a wall,
+  red. `ConstraintEngine` now runs on every drag frame, arrow-key nudge and rotation: the
+  rotated footprint is clamped inside the walls, an overlap is resolved by the shortest push
+  that stays in the room, and a position with no answer leaves the piece where it was. A
+  rotation that would put an end through the wall is nudged clear or refused.
+- **Photograph cut-outs are gone.** A product without a 3D model is drawn as a shape of its
+  kind in its own colour — a seat with a back and arms, a top on legs, a carcass on a plinth,
+  eleven shapes mapped from the category — at the SKU's exact size, casting a shadow, facing
+  the way the piece faces. Plain on purpose. The round table that became a red plate cannot
+  happen again.
+- The plan for the rest: `docs/design/3D_PLANNER_V2_PLAN.md`.
+
 ### Fixed
 
 - **The first real fal.ai run, and everything it found.** One armchair came back as a

@@ -143,10 +143,22 @@ Four ways, in order of preference, each falling back to the next:
    the simulator deliberately labels nothing: a fabricated label would be written once and
    would then block the real answer forever, because a product with any label is never asked
    about again.
-3. **The photograph, cut out of its background**, standing on its footprint slab and turning
-   to face the camera as it narrows to the silhouette the real piece would present.
-4. **A plain box**, when the photograph cannot be read at all, or was taken in a room rather
-   than on a studio sweep — keying that would eat holes in the furniture.
+3. **A shape of the product's kind, in the product's own colour** — a seat with a back and
+   arms, a top on legs, a carcass on a plinth — at the SKU's exact size, casting a shadow,
+   facing the way the piece faces. `PlaceholderShapes.ts` maps the category slug to one of
+   eleven shapes; the colour is the photograph's dominant one, pulled towards a mid tone.
+   Plain on purpose: it is a stand-in and looks like one.
+
+   Two earlier answers are gone and must not come back. A box with the photograph on its
+   front was "a warehouse of cartons". The photograph cut out and stood up on its footprint,
+   turning to face the camera, was a flat picture — and in the product owner's own screenshot
+   a round table on a red rug became a red plate. A picture is not a thing in a room.
+
+**Furniture cannot leave the room or enter another piece.** `ConstraintEngine.ts` runs on every
+drag frame, arrow-key nudge and rotation: the rotated footprint is clamped inside the walls,
+an overlap is resolved by the shortest push out, and a position with no answer leaves the
+piece where it was. The collision engine still runs behind it and the server still decides —
+with the constraint in front, "blocked" now means a bug rather than a state.
 
 **Every one of them is scaled to the SKU's recorded dimensions**, never to what the file or
 the generator thought. A beautiful model at the wrong size is worse than a box: it looks

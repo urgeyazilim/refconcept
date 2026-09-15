@@ -1,16 +1,13 @@
 import {
   Box3,
   BoxGeometry,
-  ClampToEdgeWrapping,
   Color,
-  DoubleSide,
   EdgesGeometry,
   Group,
   LineBasicMaterial,
   LineSegments,
   Mesh,
   MeshStandardMaterial,
-  PlaneGeometry,
   Vector3,
   type Object3D,
 } from 'three'
@@ -18,17 +15,19 @@ import {
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 import type { CollisionState } from './CollisionEngine'
-import { cutOut } from './ProductCutout'
+import { buildShape, shapeFor } from './PlaceholderShapes'
+import { photographColour } from './ProductCutout'
 import { isMeasured } from './footprint'
 import { type LayoutItem, toUnits } from './types'
 
 /**
- * Furniture: the product's own photograph, cut out and standing on its footprint.
+ * Furniture: the product's 3D model when the catalogue has one, and an honest shape when not.
  *
- * The first version drew a box at the right size with the photograph on its front face. It
- * was honest and it looked like a warehouse of cartons — which is exactly what a customer
- * said when they saw it. A catalogue photograph is a sofa on a white sweep; pasted on a box
- * it reads as a box with a picture on it, and cut out it reads as a sofa.
+ * Three ways of drawing a product without a model have been tried here and two are gone. A box
+ * with the photograph on its front was "a warehouse of cartons". The photograph cut out and
+ * stood on its footprint was a flat picture that turned to face whoever looked, and in the
+ * product owner's screenshot a round table became a red plate — "ben bu şekilde istemedim".
+ * A picture is not a thing in a room, however it is held up.
  *
  * So a piece is two things:
  *
@@ -38,14 +37,11 @@ import { type LayoutItem, toUnits } from './types'
  * which one was chosen, so a box drawn from the product is a box drawn from an average of
  * things the customer did not buy.
  *
- * **The cut-out**, a plane at the real width and height, turned to face the camera about the
- * vertical axis only. Facing the camera because a photograph seen edge-on is a line; about
- * one axis only because a plan view seen from above should show the footprint, not a sofa
- * lying on the floor looking up.
- *
- * When the photograph cannot be cut — no CORS headers, or a picture taken in a room rather
- * than on a sweep — the piece falls back to the solid box. A worse picture beats a sofa with
- * a bite out of it.
+ * **The body**: the glTF model scaled to those dimensions, or, until there is one, a shape of
+ * the product's kind in the product's own colour — a seat with a back and arms, a top on
+ * legs, a carcass on a plinth. Solid, shadowed, facing the way the piece faces, and never
+ * turning to face the camera. Plain on purpose: it is a stand-in and looks like one, and the
+ * model replaces it the moment the catalogue has one.
  */
 export class FurnitureBuilder {
   /**
@@ -86,15 +82,19 @@ export class FurnitureBuilder {
   }
 
   /**
-   * The cut-out materials, by photograph.
+   * The placeholder materials, by photograph: the product's colour and a darker accent.
    *
-   * Four dining chairs are one photograph and one cut; the plane's own size and crop live on
-   * the geometry and the texture's repeat, so the material itself is shared.
+   * Four dining chairs are one photograph and one colour, so the pair is shared; and the
+   * promise is cached rather than the result, so four chairs added at once read the photograph
+   * once rather than four times.
    */
-  private readonly cutouts = new Map<string, MeshStandardMaterial>()
+  private readonly palettes = new Map<string, Promise<{ body: MeshStandardMaterial, accent: MeshStandardMaterial }>>()
 
-  /** Requests in flight, so four chairs added at once make one request rather than four. */
-  private readonly pending = new Map<string, Promise<MeshStandardMaterial | null>>()
+  /** What a product with no photograph at all is drawn in: warm, neutral, obviously a stand-in. */
+  private readonly neutral = {
+    body: new MeshStandardMaterial({ color: 0xb9a48c, roughness: 0.85, metalness: 0 }),
+    accent: new MeshStandardMaterial({ color: 0x6b5d4f, roughness: 0.85, metalness: 0 }),
+  }
 
   /** Loads the glTF binaries the catalogue has, when it has them. */
   private readonly models = new GLTFLoader()
@@ -103,7 +103,8 @@ export class FurnitureBuilder {
 
   private readonly selectedEdgeMaterial = new LineBasicMaterial({ color: 0xb08f52, linewidth: 2 })
 
-  constructor(private readonly onCutoutReady: () => void = () => {}) {}
+  /** @param onDressed called when a model or shape has replaced a box, so the scene redraws */
+  constructor(private readonly onDressed: () => void = () => {}) {}
 
   /**
    * One piece, at its position, ready to add to the scene.
@@ -146,16 +147,12 @@ export class FurnitureBuilder {
     edges.name = 'edges'
     edges.position.y = body.position.y
 
-    // Read back per frame, to narrow the cut-out to the shadow the piece would really cast.
-    group.userData.widthMm = width
-    group.userData.depthMm = depth
-
     group.add(body, edges)
 
     this.place(group, item)
 
     /*
-     * A real model if the catalogue has one, its own photograph if not.
+     * A real model if the catalogue has one, a shape of its kind if not.
      *
      * Both replace the box that was just built, and the box exists so that a room is never
      * empty while a file is on its way: blocks that sharpen into furniture look like a page
@@ -164,8 +161,8 @@ export class FurnitureBuilder {
     if (measured && item.model_url !== null) {
       void this.dressWithModel(group, item, width, height, depth)
     }
-    else if (measured && item.image_url !== null) {
-      void this.dressWithPhotograph(group, item, width, height, depth)
+    else if (measured) {
+      void this.dressWithShape(group, item, width, height, depth)
     }
 
     return group
@@ -193,53 +190,6 @@ export class FurnitureBuilder {
      * and is not on a piece with a front.
      */
     group.rotation.y = (-(at?.rotation ?? item.rotation_y_deg) * Math.PI) / 180
-  }
-
-  /**
-   * Turns every cut-out to face the camera, about the vertical axis only.
-   *
-   * Called once per drawn frame. A photograph seen edge-on is a line, and a photograph that
-   * tips towards a camera looking down is a sofa lying on the floor looking up — so the plane
-   * turns about y and about nothing else. Seen from directly above it does become a line,
-   * which is correct: the plan view is about the footprint.
-   */
-  faceCamera(group: Group, cameraX: number, cameraZ: number): void {
-    const cutout = group.getObjectByName('cutout')
-
-    if (cutout === undefined) {
-      return
-    }
-
-    const towards = Math.atan2(cameraX - group.position.x, cameraZ - group.position.z)
-
-    // Minus the group's own turn, because the plane is a child of it and inherits that.
-    const relative = Math.atan2(
-      Math.sin(towards - group.rotation.y),
-      Math.cos(towards - group.rotation.y),
-    )
-
-    cutout.rotation.y = relative
-
-    /*
-     * Narrowed to the shadow the real piece would cast towards the camera.
-     *
-     * A billboard that turns fully and keeps its width is a 1.8 m bookcase swinging to face
-     * whoever is looking — and standing against a wall, sticking half of itself through it.
-     * Clamping the turn instead leaves pieces edge-on and paper-thin.
-     *
-     * Both are solved by the same line: as the piece turns, its plane narrows to the width a
-     * box of its footprint would actually present from that angle — its full width seen
-     * head-on, its depth seen from the side. It always faces the camera, and it never covers
-     * more floor than it occupies.
-     */
-    const width = Number(group.userData.widthMm ?? 0)
-    const depth = Number(group.userData.depthMm ?? 0)
-
-    if (width > 0) {
-      const silhouette = Math.abs(width * Math.cos(relative)) + Math.abs(depth * Math.sin(relative))
-
-      cutout.scale.x = silhouette / width
-    }
   }
 
   /** Recolours a piece for its state, and outlines it when it is the one selected. */
@@ -276,13 +226,17 @@ export class FurnitureBuilder {
       material.dispose()
     }
 
-    for (const material of this.cutouts.values()) {
-      material.map?.dispose()
-      material.dispose()
+    for (const palette of this.palettes.values()) {
+      void palette.then(({ body, accent }) => {
+        body.dispose()
+        accent.dispose()
+      })
     }
 
-    this.cutouts.clear()
-    this.pending.clear()
+    this.palettes.clear()
+
+    this.neutral.body.dispose()
+    this.neutral.accent.dispose()
 
     this.edgeMaterial.dispose()
     this.selectedEdgeMaterial.dispose()
@@ -324,10 +278,8 @@ export class FurnitureBuilder {
       scene = loaded.scene
     }
     catch {
-      // No model after all. The photograph is the next best thing and the box is behind it.
-      if (item.image_url !== null) {
-        void this.dressWithPhotograph(group, item, width, height, depth)
-      }
+      // No model after all. The shape is the next best thing and the box is behind it.
+      void this.dressWithShape(group, item, width, height, depth)
 
       return
     }
@@ -374,48 +326,52 @@ export class FurnitureBuilder {
 
     group.add(scene)
 
-    this.onCutoutReady()
+    this.onDressed()
   }
 
   /**
-   * Replaces the box with the product, once its photograph has been cut out.
+   * Replaces the box with a shape of the product's kind, in the product's own colour.
    *
    * The box does not disappear: it becomes the footprint slab, which is what carries the
-   * collision colour and proves the piece fits. What goes is its bulk — the thing that made
-   * a furnished room look like a stack of cartons.
+   * collision colour and proves the piece fits. What goes is its bulk — the carton — and what
+   * arrives is a sofa-shaped, table-shaped, wardrobe-shaped stand-in that sits in the room the
+   * way the real thing will.
    */
-  private async dressWithPhotograph(
+  private async dressWithShape(
     group: Group,
     item: LayoutItem,
     width: number,
     height: number,
     depth: number,
   ): Promise<void> {
-    const url = item.image_url
+    const palette = item.image_url === null ? this.neutral : await this.paletteFor(item.image_url)
 
-    if (url === null) {
-      return
-    }
-
-    const material = await this.cutoutFor(url, width / height)
-
-    // The piece may have been removed while the photograph was loading.
-    if (material === null || group.parent === null) {
+    // The piece may have been removed while the photograph was being read.
+    if (group.parent === null) {
       return
     }
 
     this.flatten(group, width, depth)
 
-    const plane = new Mesh(new PlaneGeometry(toUnits(width), toUnits(height)), material)
+    const shape = buildShape(
+      shapeFor(item.category),
+      toUnits(width),
+      toUnits(height),
+      toUnits(depth),
+      palette.body,
+      palette.accent,
+    )
 
-    plane.name = 'cutout'
-    plane.position.y = toUnits(height) / 2
-    plane.castShadow = true
-    plane.userData.itemId = item.id
+    shape.name = 'shape'
+    shape.userData.itemId = item.id
 
-    group.add(plane)
+    shape.traverse((child) => {
+      child.userData.itemId = item.id
+    })
 
-    this.onCutoutReady()
+    group.add(shape)
+
+    this.onDressed()
   }
 
   /**
@@ -446,66 +402,42 @@ export class FurnitureBuilder {
   }
 
   /**
-   * The cut-out material for a photograph, made once and shared.
+   * The colour pair for a photograph, read once and shared by every copy of the product.
    *
-   * The crop lives on the texture, which is shared too — every copy of the same product is
-   * the same size, so the same crop is right for all of them.
+   * The accent is the same colour darkened, not a second colour: legs and plinths in a related
+   * shade read as parts of one object, where a grey leg under a blue sofa reads as two.
    */
-  private async cutoutFor(url: string, faceAspect: number): Promise<MeshStandardMaterial | null> {
-    // Keyed by the shape of the plane as well as the photograph: the crop that fits a sofa
-    // does not fit a bedside table, and the same picture is never both.
-    const key = `${url}|${faceAspect.toFixed(2)}`
+  private paletteFor(url: string): Promise<{ body: MeshStandardMaterial, accent: MeshStandardMaterial }> {
+    const cached = this.palettes.get(url)
 
-    const ready = this.cutouts.get(key)
-
-    if (ready !== undefined) {
-      return ready
+    if (cached !== undefined) {
+      return cached
     }
 
-    const inFlight = this.pending.get(key)
-
-    if (inFlight !== undefined) {
-      return await inFlight
-    }
-
-    const request = cutOut(url).then((cut) => {
-      if (cut === null) {
-        return null
+    const request = photographColour(url).then((colour) => {
+      if (colour === null) {
+        return this.neutral
       }
 
-      const texture = cut.texture.clone()
+      const body = new Color(colour.r, colour.g, colour.b)
 
-      texture.needsUpdate = true
-      texture.wrapS = ClampToEdgeWrapping
-      texture.wrapT = ClampToEdgeWrapping
+      // A photograph's dominant colour is often near-white (the sweep bleeds in) or very dark;
+      // pulled towards a mid tone so a white sofa is still a visible object on a pale floor.
+      const hsl = { h: 0, s: 0, l: 0 }
 
-      const material = new MeshStandardMaterial({
-        map: texture,
-        color: new Color(0xffffff),
-        roughness: 1,
-        metalness: 0,
-        transparent: true,
-        /*
-         * Cut out rather than blended.
-         *
-         * `alphaTest` makes each pixel either there or not, which means the plane writes
-         * depth and can be behind and in front of things correctly. Blended transparency
-         * would need the whole scene sorted back to front, and furniture would flicker
-         * through furniture as the camera moved.
-         */
-        alphaTest: 0.5,
-        // Both faces: a cut-out is a photograph, and walking round the back of a sofa should
-        // show the sofa rather than nothing at all.
-        side: DoubleSide,
-      })
+      body.getHSL(hsl)
+      body.setHSL(hsl.h, Math.min(hsl.s, 0.6), Math.min(Math.max(hsl.l, 0.28), 0.78))
 
-      this.cutouts.set(key, material)
+      const accent = body.clone().multiplyScalar(0.55)
 
-      return material
+      return {
+        body: new MeshStandardMaterial({ color: body, roughness: 0.85, metalness: 0 }),
+        accent: new MeshStandardMaterial({ color: accent, roughness: 0.85, metalness: 0 }),
+      }
     })
 
-    this.pending.set(key, request)
+    this.palettes.set(url, request)
 
-    return await request
+    return request
   }
 }

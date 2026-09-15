@@ -77,7 +77,7 @@ export interface LayoutItem {
   width_mm: number | null
   height_mm: number | null
   depth_mm: number | null
-  /** A photograph, used on the billboard fallback when there is no model to load. */
+  /** A photograph. Its dominant colour is what the placeholder shape is drawn in. */
   image_url: string | null
   /** A glTF or GLB, when the catalogue has one. Most of it does not, yet. */
   model_url: string | null

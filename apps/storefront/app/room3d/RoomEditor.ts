@@ -1,4 +1,5 @@
 import { CollisionEngine, type CollisionState } from './CollisionEngine'
+import { ConstraintEngine } from './ConstraintEngine'
 import { DragController } from './DragController'
 import { type Measurement, MeasurementEngine, formatDistance } from './MeasurementEngine'
 import { SceneManager } from './SceneManager'
@@ -61,6 +62,9 @@ export class RoomEditor {
 
   private readonly collisions: CollisionEngine
 
+  /** Keeps every move inside the walls and out of other pieces; runs before collisions do. */
+  private readonly constraints: ConstraintEngine
+
   private readonly snaps: SnapEngine
 
   private readonly measurements: MeasurementEngine
@@ -106,6 +110,7 @@ export class RoomEditor {
   ) {
     this.scene = new SceneManager(canvas)
     this.collisions = new CollisionEngine(geometry, openings)
+    this.constraints = new ConstraintEngine(geometry, openings)
     this.snaps = new SnapEngine(geometry)
     this.measurements = new MeasurementEngine(geometry)
 
@@ -134,7 +139,25 @@ export class RoomEditor {
         this.scene.setGuides([])
         this.scene.setItems(this.items, this.states, this.selectedId)
       },
-      snap: (item, at) => this.snaps.snap(item, this.items, at),
+      /*
+       * Snap first, then hold. The snap puts the piece edge to edge with a neighbour or a
+       * wall; the constraint then refuses anything through a wall or into another piece and
+       * slides it to the nearest place it fits. The guides are shown only if the snapped
+       * position survived — a guide pointing at a position the piece is not at is a lie.
+       */
+      snap: (item, at) => {
+        const snapped = this.snaps.snap(item, this.items, at)
+        const held = this.constraints.settle(item, this.items, snapped, {
+          x: item.position_x_mm,
+          z: item.position_z_mm,
+        })
+
+        return {
+          x: held.x,
+          z: held.z,
+          guides: held.x === snapped.x && held.z === snapped.z ? snapped.guides : [],
+        }
+      },
       stateAt: (item, at) => this.collisions.stateAt(item, this.items, at),
     })
   }
@@ -146,6 +169,7 @@ export class RoomEditor {
     this.openings = openings
 
     this.collisions.setRoom(geometry, openings)
+    this.constraints.setRoom(geometry, openings)
     this.snaps.setRoom(geometry)
     this.measurements.setRoom(geometry)
 
@@ -201,8 +225,34 @@ export class RoomEditor {
    * refusing positions it would actually fit in.
    */
   rotate(id: string, deltaDeg: number): void {
-    this.edit(id, (item) => {
-      item.rotation_y_deg = (((item.rotation_y_deg + deltaDeg) % 360) + 360) % 360
+    const item = this.find(id)
+
+    if (item === undefined || item.locked) {
+      return
+    }
+
+    const rotation = (((item.rotation_y_deg + deltaDeg) % 360) + 360) % 360
+
+    /*
+     * A turned piece has a different footprint, and a sofa turned beside a wall now has one
+     * end in it. It is nudged clear if it can be; if the room has no room for it that way
+     * round, the turn does not happen — better a sofa that will not turn than one in a wall.
+     */
+    const held = this.constraints.settle(
+      item,
+      this.items,
+      { x: item.position_x_mm, z: item.position_z_mm, rotation },
+      { x: item.position_x_mm, z: item.position_z_mm },
+    )
+
+    if (!held.settled) {
+      return
+    }
+
+    this.edit(id, (piece) => {
+      piece.rotation_y_deg = rotation
+      piece.position_x_mm = held.x
+      piece.position_z_mm = held.z
     })
   }
 
@@ -213,9 +263,28 @@ export class RoomEditor {
    * left" is a thing people genuinely want once the room is nearly right.
    */
   nudge(id: string, dx: number, dz: number): void {
-    this.edit(id, (item) => {
-      item.position_x_mm += dx
-      item.position_z_mm += dz
+    const item = this.find(id)
+
+    if (item === undefined || item.locked) {
+      return
+    }
+
+    // Held like a drag is: an arrow key pressed against a wall does nothing, rather than
+    // walking the piece through it a centimetre at a time.
+    const held = this.constraints.settle(
+      item,
+      this.items,
+      { x: item.position_x_mm + dx, z: item.position_z_mm + dz },
+      { x: item.position_x_mm, z: item.position_z_mm },
+    )
+
+    if (held.x === item.position_x_mm && held.z === item.position_z_mm) {
+      return
+    }
+
+    this.edit(id, (piece) => {
+      piece.position_x_mm = held.x
+      piece.position_z_mm = held.z
     })
   }
 
