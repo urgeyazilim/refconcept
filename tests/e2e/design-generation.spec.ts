@@ -273,6 +273,46 @@ test.describe('design generation', () => {
 
       expect(entries[0].type).toBe('consume')
       expect(entries[0].description).toBe('Tasarım üretimi')
+
+      /*
+       * --- a second version, and the two held up together (K26) -------------------------
+       *
+       * Refined from the first, which makes a v2 beside v1 in the strip. Clicking v1 in the
+       * strip looks at it without making it current; "Karşılaştır" then v2 puts both on the
+       * screen side by side, from the same room and the same plate.
+       */
+      await page.getByRole('button', { name: 'Buradan devam et' }).first().click()
+      await fillStable(page, `#prompt-${version.id}`, 'Kanepeyi daha koyu yap')
+      await page.getByRole('button', { name: 'Yeni sürüm oluştur' }).click()
+
+      const strip = page.getByRole('region', { name: 'Sürümler' })
+
+      await expect(strip).toBeVisible()
+      await expect(strip.getByRole('button', { name: /^v2/ })).toBeVisible()
+      await expect.poll(async () => strip.locator('img').count(), { timeout: 120_000 }).toBe(2)
+
+      await strip.getByRole('button', { name: /^v1/ }).click()
+      await expect(page.getByText('v1', { exact: true }).first()).toBeVisible()
+
+      await strip.getByRole('button', { name: 'Karşılaştır' }).click()
+      await strip.getByRole('button', { name: /^v2/ }).click()
+
+      await expect(page.getByRole('button', { name: 'Yan yana' })).toBeVisible()
+      await expect(page.locator('figure img')).toHaveCount(2)
+
+      await page.getByRole('button', { name: 'Üst üste kaydır' }).click()
+      await expect(page.getByRole('slider')).toBeVisible()
+
+      await page.screenshot({ path: 'test-results/design-versions-compare.png', fullPage: true })
+
+      // Looking is not deciding: finishing v2 made it current, and clicking v1 in the strip
+      // to look at it did not move that back.
+      const after = await request.get(
+        `${API}/api/v1/projects/${projectId}/rooms/${roomId}/designs/${designId}`,
+        { headers: customerHeaders },
+      )
+
+      expect((await after.json()).data.current_version.version_number).toBe(2)
     } finally {
       await restore()
     }

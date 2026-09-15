@@ -32,7 +32,7 @@ yerleşimin fotogerçekçi görseli üretilir. Beğendiğini tek tıkla sepete a
 Her kural bir "her zaman" ya da "asla"dır. Kod bu listeye göre test edilir.
 
 ### Fotoğraf ve mahremiyet
-- **K1.** Tek bir fotoğraf yeterlidir. İkinci fotoğraf kaliteyi artırır, hiçbir adım için şart değildir.
+- **K1.** Tek bir fotoğraf yeterlidir. İkinci fotoğraf kaliteyi artırır, hiçbir adım için şart değildir. Odanın **bütün fotoğrafları tek oda olarak okunur** (en fazla 6; ana fotoğraf önce): dört köşeden çekilen dört kare aynı pencereyi iki kez saydırmaz. Tanıma, fotoğraflar yüklendikten kısa süre sonra kendiliğinden çalışır; fotoğraf eklenip çıkarıldığında eskir ve yeniden okutulabilir. "Boş oda" her fotoğraf için ayrı ayrı istenebilir; render ana fotoğrafın boş hâlinden başlar.
 - **K2.** Oda fotoğrafı ve ondan türeyen her görsel (plaka, render) **özel** kalır: gizli disk, rastgele anahtar, hiçbir yanıtta ham URL yok, yalnızca sahiplik kontrolünden geçen imzalı bağlantı. Dosya adı denetim kaydına bile yazılmaz.
 - **K3.** Fotoğraf hiçbir sağlayıcıya *link* olarak gitmez; bayt olarak, kendi ağımızdan okunup gönderilir.
 
@@ -173,7 +173,7 @@ her adım klavyeyle tamamlanabilir, ölçüler metin olarak okunur.
 | S2 ✅ | Render girdileri kaydı; render plakadan başlar; sadakat denetimi | Her render'ın üçlüsü sorgulanabilir; kayan duvar yakalanınca yeniden üretim — *2026-09-15: kuruldu (`render_inputs`, `fidelity`, `render_check` görevi, bir kez yeniden üretim)* |
 | S3 ✅ | İç mimar kuralları (K13) LayoutComposer'da | Her kuralın adıyla testi; kompoze oda kısıtlardan geçiyor — *2026-09-15: odak (TV → pencere), dolaşım (kapı önü 90 cm, köşe dahil; karşı duvar doluysa kanepe yüzmez), ölçek (%40 zemin, kanepe ≤ 2/3 duvar; sığmayan **nedeniyle** raporlanır), sehpa 42 cm, halı ön ayakların altında, komodinler yatağın iki yanında, TV ile kanepe aynı hatta, aplik 170 cm, perde pencerede, lambader kanepenin dirseğinde. Stil/palet/bütçe seçim kurallarıdır: DesignPlan istemi ve ürün eşleştirmede yaşar, kompozitörde değil.* |
 | S4 ✅ | Oda Stüdyosu ekranı (adım şeridi + 7 adım), mevcut ekranların içine alınması | Tarayıcı testi: fotoğraf → render → sepet tek sayfada — *2026-09-15: adım şeridi (`StudioStepper`) oda, plan ve tasarım ekranlarında; oda ekranı bölümleri adım numarasıyla; plan formu odanın ölçüsüyle açılıyor; sadakat notu render'ın altında; `tests/e2e/studio-stepper.spec.ts`. Ayrı "tek sayfa" yerine mevcut üç ekran şeritle bağlandı — §8'deki dördüncü karar sahibinde.* |
-| S5 | Versiyon şeridi, yan yana karşılaştırma, paylaşım | İki render yan yana; paylaşılan bağlantı fotoğrafı sızdırmaz |
+| S5 ✅ | Versiyon şeridi, yan yana karşılaştırma, paylaşım | İki render yan yana; paylaşılan bağlantı fotoğrafı sızdırmaz — *2026-09-15: tasarım ekranında küçük resimli sürüm şeridi (`DesignVersionStrip`; tıklamak yalnızca bakar, "Geçerli sürüm yap" karar verir), iki sürüm yan yana ya da üst üste kaydırmalı (`DesignVersionCompare`); paylaşım proje düzeyinde zaten var ve fotoğraf hiçbir yanıtta URL olarak çıkmaz (E2E: project-journey). E2E: design-generation.* |
 
 Sıra S1 → S2 → S4 → S3 → S5 olabilir: önce boş oda ve birebirlik (ürünün özü), sonra ekran.
 

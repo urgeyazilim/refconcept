@@ -31,6 +31,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   expected price and the ceiling before it queues anything, and saying plainly when the
   task is still routed to the simulator.
 
+### Added — Oda Stüdyosu: every photograph is read, and the reading is a step of its own
+
+- **All of a room's photographs go to the analysis as one room** (primary first, up to six),
+  and the model is told they are corners of the same room so a window is counted once. The
+  owner shot four corners and asked why only one was recognised: the reading only ever saw
+  the primary photograph, and only when a design was started.
+- **"Tanıma" happens on its own**, twenty seconds after the last upload — the job queued for
+  an earlier set of photographs stands down when it finds the room has moved on — and on
+  request (`POST rooms/{room}/analyse`, 202; `force` to read again). The room screen shows
+  what it found (what stands in the room, what is fixed, what it was unsure of), says when
+  the reading is stale because a photograph was added, and the step strip ticks "Tanıma"
+  from it. Reading is free of credits; a reading that cannot run never fails an upload.
+- **"Eşyaları kaldır" on every photograph**, not only the primary; the card under the gallery
+  says which plate the render starts from.
+- **The E2E suite can no longer bill anybody.** Its global setup points the tasks a test
+  triggers in the background — the reading, the plate — at the local simulator for the
+  whole run and its teardown puts the routing back; before this, every photograph a test
+  uploaded would have queued a paid reading twenty seconds after the test had passed.
+
+### Added — Oda Stüdyosu, sprint 5 (versions side by side)
+
+- **A strip of every version as a picture**, above the render. Clicking one looks at it —
+  the picture, the fidelity note and the shopping list follow — without touching the
+  design's current version; "Geçerli sürüm yap" is the decision, and the tree says which is
+  which. Versions still running or failed keep their place in the strip and say why they
+  are blank.
+- **Two versions held up together** (K26): side by side by default, or wiped over each
+  other to see that the walls did not move — both started from the same plate.
+
 ### Added — Oda Stüdyosu, sprint 3 (the interior designer's rules)
 
 - **Each of K13's rules is in `LayoutComposer` by name, with a test by name.** Odak: the

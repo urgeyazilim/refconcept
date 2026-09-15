@@ -160,6 +160,15 @@ useHead(() => ({ title: design.value?.name ?? 'Tasarım' }))
  * for the entire minute while the engine worked through every stage behind it.
  */
 const shownVersionId = computed(() => {
+  // A version the customer clicked in the strip, as long as it is still in the tree. Looking
+  // at an older version changes nothing on the server: the design's current version is a
+  // decision, and looking is not deciding.
+  const viewed = viewedVersionId.value
+
+  if (viewed !== null && design.value && flatten(design.value.tree).some(row => row.node.id === viewed)) {
+    return viewed
+  }
+
   const current = design.value?.current_version?.id
 
   if (current) {
@@ -169,6 +178,22 @@ const shownVersionId = computed(() => {
   const newest = design.value ? flatten(design.value.tree).at(-1)?.node.id : null
 
   return newest ?? null
+})
+
+/** The version the customer chose to look at, or null for the design's current one. */
+const viewedVersionId = ref<string | null>(null)
+
+/** A second version held up beside the shown one (K26), or null. */
+const compareVersionId = ref<string | null>(null)
+
+const compareVersion = computed<DesignTreeNode | null>(() => {
+  const id = compareVersionId.value
+
+  if (!design.value || id === null || id === shownVersionId.value) {
+    return null
+  }
+
+  return flatten(design.value.tree).find(row => row.node.id === id)?.node ?? null
 })
 
 async function loadShoppingList() {
@@ -482,6 +507,9 @@ async function setCurrent(node: DesignTreeNode) {
 
   try {
     await api.patch(`${base}/current`, { version_id: node.id })
+    // The decision and the view agree again.
+    viewedVersionId.value = null
+    compareVersionId.value = null
     await load()
   } catch (error) {
     actionError.value = error instanceof ApiError
@@ -700,6 +728,19 @@ const statusTone: Record<string, string> = {
         sayfayı yenileyerek son durumu görebilirsiniz.
       </RcAlert>
 
+      <!--
+        The versions as pictures, above the picture. Only once there is more than one: a strip
+        of one thumbnail is a caption with extra steps.
+      -->
+      <DesignVersionStrip
+        v-if="rows.length > 1"
+        :versions="rows.map(row => row.node)"
+        :shown-id="shownVersionId"
+        :compare-id="compareVersion?.id ?? null"
+        @show="viewedVersionId = $event"
+        @compare="compareVersionId = $event"
+      />
+
 
       <!--
         Before and after.
@@ -723,9 +764,11 @@ const statusTone: Record<string, string> = {
           <div>
             <h2 class="text-xl font-medium">Odanız</h2>
             <p class="mt-1.5 max-w-[52ch] text-sm leading-relaxed text-ink-secondary">
-              {{ shownVersion?.image_url
-                ? 'Ortadaki çubuğu sağa sola sürükleyin: solda odanızın ilk hâli, sağda önerilen ürünlerle hâli.'
-                : 'Tasarım hazır olduğunda odanızı burada karşılaştırabileceksiniz.' }}
+              {{ compareVersion?.image_url && shownVersion?.image_url
+                ? `v${shownVersion.version_number} ile v${compareVersion.version_number} yan yana. Aynı odadan, aynı boş plakadan.`
+                : shownVersion?.image_url
+                  ? 'Ortadaki çubuğu sağa sola sürükleyin: solda odanızın ilk hâli, sağda önerilen ürünlerle hâli.'
+                  : 'Tasarım hazır olduğunda odanızı burada karşılaştırabileceksiniz.' }}
             </p>
           </div>
 
@@ -735,8 +778,14 @@ const statusTone: Record<string, string> = {
         </div>
 
         <div class="px-6 pb-6 sm:px-8 sm:pb-8">
+          <DesignVersionCompare
+            v-if="compareVersion?.image_url && shownVersion?.image_url"
+            :left="{ src: shownVersion.image_url, label: `v${shownVersion.version_number}` }"
+            :right="{ src: compareVersion.image_url, label: `v${compareVersion.version_number}` }"
+          />
+
           <RcBeforeAfter
-            v-if="shownVersion?.image_url"
+            v-else-if="shownVersion?.image_url"
             :before-src="design.source_image_url"
             :after-src="shownVersion.image_url"
             @expand="zoomed = $event"
@@ -1187,7 +1236,7 @@ const statusTone: Record<string, string> = {
             v-for="row in rows"
             :key="row.node.id"
             class="rounded-md border p-4"
-            :class="row.node.is_current ? 'border-charcoal bg-bg-muted' : 'border-line'"
+            :class="row.node.id === shownVersionId ? 'border-charcoal bg-bg-muted' : 'border-line'"
             :style="{ marginLeft: `${row.depth * 24}px` }"
           >
             <div class="flex flex-wrap items-start justify-between gap-3">
@@ -1199,7 +1248,8 @@ const statusTone: Record<string, string> = {
                     :label="row.node.status_label"
                     size="sm"
                   />
-                  <span v-if="row.node.is_current" class="text-xs text-gold">Görüntülenen</span>
+                  <span v-if="row.node.id === shownVersionId" class="text-xs text-gold">Görüntülenen</span>
+                  <span v-if="row.node.is_current" class="text-xs text-muted">Geçerli sürüm</span>
                 </div>
 
                 <p v-if="row.node.user_prompt" class="mt-1.5 text-sm text-ink-secondary">
@@ -1243,7 +1293,7 @@ const statusTone: Record<string, string> = {
                   :disabled="working"
                   @click="setCurrent(row.node)"
                 >
-                  Bunu göster
+                  Geçerli sürüm yap
                 </button>
 
                 <button
