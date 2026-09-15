@@ -9,6 +9,7 @@ use App\Domains\Ai\Models\AiTaskRoute;
 use App\Domains\Ai\Providers\FakeAiProvider;
 use App\Domains\Ai\Services\AiJobDispatcher;
 use App\Domains\Ai\Services\GeneratedImageStore;
+use App\Domains\Products\Enums\ProductStatus;
 use App\Domains\Products\Jobs\GenerateProductModel;
 use App\Domains\Products\Models\ProductMedia;
 use App\Domains\Products\Services\ProductModelStorage;
@@ -508,4 +509,31 @@ it('does nothing for a product with no photograph', function (): void {
     // Nothing to convert, nothing spent, and the planner draws a box. Not an error.
     expect(FakeAiProvider::calls())->toBeEmpty()
         ->and(ProductMedia::query()->where('product_id', $this->product->getKey())->count())->toBe(0);
+});
+
+it('backfills only what is on sale: an archived listing is never sent for a model', function (): void {
+    $archived = makeProduct(
+        $this->seller,
+        makeCategory('Sehpa', 'sehpa', 'living_room'),
+        ['name' => 'Kaldırılmış sehpa', 'price_minor' => 40_000, 'width_mm' => 900],
+    );
+    $archived->forceFill(['status' => ProductStatus::Archived])->save();
+
+    ProductMedia::query()->create([
+        'product_id' => $archived->getKey(),
+        'type' => 'image',
+        'disk' => 's3-public',
+        'storage_path' => 'product-media/'.$archived->getKey().'/cover.jpg',
+        'original_name' => 'sehpa.jpg',
+        'mime_type' => 'image/jpeg',
+        'size_bytes' => 90_000,
+        'position' => 0,
+    ]);
+
+    // Priced without queueing anything: one product, the one that is still for sale.
+    $this->artisan('refconcept:product-models', ['--dry-run' => true, '--limit' => 10])
+        ->expectsOutputToContain('1 ürün')
+        ->expectsOutputToContain('Üçlü kanepe')
+        ->doesntExpectOutputToContain('Kaldırılmış sehpa')
+        ->assertExitCode(0);
 });

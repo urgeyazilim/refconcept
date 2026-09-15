@@ -6,6 +6,7 @@ namespace App\Domains\Products\Console;
 
 use App\Domains\Ai\Models\AiTaskRoute;
 use App\Domains\Products\Enums\ModerationStatus;
+use App\Domains\Products\Enums\ProductStatus;
 use App\Domains\Products\Jobs\GenerateProductModel;
 use App\Domains\Products\Models\Product;
 use App\Domains\Products\Services\ProductModelStorage;
@@ -186,9 +187,14 @@ final class GenerateProductModelsCommand extends Command
     private function candidates(bool $force): Builder
     {
         return Product::query()
-            // Approved only. A listing nobody has accepted yet may never be sold, and a mesh
-            // made for one is thirty cents spent on a product that does not exist.
+            // Approved and on sale. A listing nobody has accepted yet may never be sold, and
+            // one that was archived is not being sold any more; a mesh made for either is
+            // half a dollar spent on a product no customer can plan into a room. (The dev
+            // catalogue had sixty-two archived test products beside thirty-one real ones —
+            // a backfill that did not look at status would have cost four times what it
+            // should.)
             ->where('moderation_status', ModerationStatus::Approved)
+            ->where('status', ProductStatus::Active)
             ->whereHas('media', fn (Builder $media) => $media->where('type', 'image'))
             ->when(! $force, fn (Builder $query) => $query->whereDoesntHave(
                 'media',
