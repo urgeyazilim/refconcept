@@ -260,6 +260,14 @@ defineExpose({
       -->
       <canvas v-show="display === '3d'" ref="canvas" class="block size-full touch-none" />
 
+      <!-- Inside the room the camera is walked, not orbited, and that has to be said once. -->
+      <p
+        v-if="display === '3d' && view === 'inside'"
+        class="pointer-events-none absolute bottom-3 left-3 rounded-pill bg-charcoal/80 px-3 py-1 text-[11px] text-white"
+      >
+        Sürükleyerek etrafa bakın · W A S D ile yürüyün
+      </p>
+
       <RoomPlanSvg
         v-if="display === 'plan'"
         :geometry="geometry"

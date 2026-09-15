@@ -53,6 +53,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   with a mullion, and daylight behind it. They belong to their wall and hide with it.
 - **Environment lighting** (Three's room environment) instead of a flat ambient, so a matt
   wall has a gradient and a glossy floor has something to reflect.
+- **The inside view is walked, not orbited.** The camera stays at eye height, a drag turns
+  the head, W A S D walk — and the walls stop you, because a customer can no more walk
+  through one than their sofa can.
 - **Pictures, mirrors, wall lights and curtains hang on the nearest wall** and slide along
   it; on both sides of the wire they collide with nothing, because on the wall is not on the
   floor.

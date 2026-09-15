@@ -57,6 +57,8 @@ export class CameraManager {
 
     this.controls.minDistance = 0.6
     this.controls.maxDistance = 40
+
+    this.listenForWalking(canvas)
   }
 
   get active(): PerspectiveCamera | OrthographicCamera {
@@ -70,6 +72,10 @@ export class CameraManager {
    * planner sits still most of the time it is open.
    */
   update(): boolean {
+    if (this.mode === 'inside') {
+      return this.walkUpdate()
+    }
+
     return this.controls.update()
   }
 
@@ -77,10 +83,12 @@ export class CameraManager {
    * Stops the camera moving while somebody is dragging furniture.
    *
    * Both gestures are a pointer dragged across the canvas, and without this a sofa pulled
-   * across the room takes the room with it.
+   * across the room takes the room with it. Inside the room the same flag stops the
+   * look-around, for the same reason.
    */
   setOrbitEnabled(enabled: boolean): void {
-    this.controls.enabled = enabled
+    this.orbitWanted = enabled
+    this.controls.enabled = enabled && this.mode !== 'inside'
   }
 
   setMode(mode: ViewMode): void {
@@ -89,6 +97,142 @@ export class CameraManager {
     if (this.geometry !== null) {
       this.frame(this.geometry)
     }
+
+    // Inside, the orbit controls are off and the walk takes the pointer and the keys.
+    this.controls.enabled = this.orbitWanted && mode !== 'inside'
+    this.walk.keys.clear()
+    this.walk.looking = null
+  }
+
+  // --- walking about -----------------------------------------------------------
+
+  /**
+   * The inside view is walked, not orbited.
+   *
+   * An orbit from inside swings the camera through the wall behind you and the room turns
+   * inside out; the first version hid that with a distant target and it still never felt
+   * like standing in the room. Now the camera stays at eye height, a drag turns the head,
+   * and W A S D walk — held inside the walls, because a customer can no more walk through
+   * one than their sofa can.
+   */
+  private readonly walk = {
+    yaw: 0,
+    pitch: 0,
+    keys: new Set<string>(),
+    looking: null as { x: number, y: number, yaw: number, pitch: number } | null,
+    last: 0,
+  }
+
+  /** Whether the editor wants the camera to answer the pointer at all; false during a drag. */
+  private orbitWanted = true
+
+  /** Metres per second, on the flat. A stroll, not a sprint. */
+  private static readonly WALK_SPEED = 1.4
+
+  /** How far from a wall the walk stops. */
+  private static readonly WALL_MARGIN = 0.3
+
+  private readonly walkHandlers: Array<[EventTarget, string, EventListener]> = []
+
+  private listenForWalking(canvas: HTMLCanvasElement): void {
+    const on = (target: EventTarget, name: string, handler: EventListener): void => {
+      target.addEventListener(name, handler)
+      this.walkHandlers.push([target, name, handler])
+    }
+
+    on(canvas, 'pointerdown', ((event: PointerEvent) => {
+      if (this.mode !== 'inside' || !this.orbitWanted || event.button !== 0) {
+        return
+      }
+
+      this.walk.looking = { x: event.clientX, y: event.clientY, yaw: this.walk.yaw, pitch: this.walk.pitch }
+      canvas.setPointerCapture(event.pointerId)
+    }) as EventListener)
+
+    on(canvas, 'pointermove', ((event: PointerEvent) => {
+      const looking = this.walk.looking
+
+      if (looking === null || !this.orbitWanted) {
+        return
+      }
+
+      // Mouse-look: drag left, look left. Pitch is kept off the poles.
+      this.walk.yaw = looking.yaw - (event.clientX - looking.x) * 0.004
+      this.walk.pitch = Math.max(-1.2, Math.min(1.2, looking.pitch - (event.clientY - looking.y) * 0.004))
+      this.applyLook()
+    }) as EventListener)
+
+    const stop = ((event: PointerEvent) => {
+      this.walk.looking = null
+
+      if (canvas.hasPointerCapture(event.pointerId)) {
+        canvas.releasePointerCapture(event.pointerId)
+      }
+    }) as EventListener
+
+    on(canvas, 'pointerup', stop)
+    on(canvas, 'pointercancel', stop)
+
+    const typing = (event: KeyboardEvent): boolean => {
+      const target = event.target as HTMLElement | null
+
+      return target !== null && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)
+    }
+
+    on(window, 'keydown', ((event: KeyboardEvent) => {
+      if (this.mode !== 'inside' || typing(event)) {
+        return
+      }
+
+      const key = event.key.toLowerCase()
+
+      if (['w', 'a', 's', 'd'].includes(key)) {
+        this.walk.keys.add(key)
+        event.preventDefault()
+      }
+    }) as EventListener)
+
+    on(window, 'keyup', ((event: KeyboardEvent) => {
+      this.walk.keys.delete(event.key.toLowerCase())
+    }) as EventListener)
+  }
+
+  /** Turns the camera to the walk's yaw and pitch. */
+  private applyLook(): void {
+    this.perspective.rotation.set(this.walk.pitch, this.walk.yaw, 0, 'YXZ')
+  }
+
+  /** Moves the camera for the keys held, and says whether anything changed. */
+  private walkUpdate(): boolean {
+    const now = performance.now()
+    const dt = this.walk.last === 0 ? 0 : Math.min(0.05, (now - this.walk.last) / 1000)
+
+    this.walk.last = now
+
+    const keys = this.walk.keys
+    const ahead = (keys.has('w') ? 1 : 0) - (keys.has('s') ? 1 : 0)
+    const side = (keys.has('d') ? 1 : 0) - (keys.has('a') ? 1 : 0)
+
+    if ((ahead === 0 && side === 0) || this.geometry === null || dt === 0) {
+      return this.walk.looking !== null
+    }
+
+    // Forward on the flat is where the head is turned, ignoring how far up or down it looks.
+    const forward = { x: -Math.sin(this.walk.yaw), z: -Math.cos(this.walk.yaw) }
+    const right = { x: Math.cos(this.walk.yaw), z: -Math.sin(this.walk.yaw) }
+
+    const step = CameraManager.WALK_SPEED * dt
+    const position = this.perspective.position
+
+    position.x += (forward.x * ahead + right.x * side) * step
+    position.z += (forward.z * ahead + right.z * side) * step
+
+    const margin = CameraManager.WALL_MARGIN
+
+    position.x = Math.max(margin, Math.min(toUnits(this.geometry.width_mm) - margin, position.x))
+    position.z = Math.max(margin, Math.min(toUnits(this.geometry.length_mm) - margin, position.z))
+
+    return true
   }
 
   /**
@@ -138,6 +282,10 @@ export class CameraManager {
   }
 
   dispose(): void {
+    for (const [target, name, handler] of this.walkHandlers) {
+      target.removeEventListener(name, handler)
+    }
+
     this.controls.dispose()
   }
 
@@ -218,10 +366,14 @@ export class CameraManager {
     this.target.set(width * 0.8, eye * 0.9, length * 0.8)
 
     this.controls.object = this.perspective
-    this.controls.enableRotate = true
 
-    // Looking about, not orbiting: from inside, an orbit swings the camera through the wall
-    // behind you and the room turns inside out.
-    this.controls.maxPolarAngle = Math.PI - 0.05
+    // Facing the far corner, level. From here the walk and the look-around take over.
+    const dx = this.target.x - this.perspective.position.x
+    const dz = this.target.z - this.perspective.position.z
+
+    this.walk.yaw = Math.atan2(-dx, -dz)
+    this.walk.pitch = -0.05
+    this.walk.last = 0
+    this.applyLook()
   }
 }

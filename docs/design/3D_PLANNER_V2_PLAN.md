@@ -115,8 +115,9 @@ ring and the arrow and proves the wall stops the piece. Open: magnets for turned
 
 Done 2026-09-15: canvas-painted oak floor and plaster walls (`RoomMaterials.ts`), skirting
 broken at doorways, door casing + open leaf + swing arc, window casing + sill + glass +
-mullion + daylight sheet, environment lighting. Open: first-person walk, a floor material
-chosen from the room analysis, a quality toggle, SSAO.
+mullion + daylight sheet, environment lighting; the floor drawn as the analysis saw it (wood,
+tile, carpet); the inside view walked with W A S D and a mouse-look, held inside the walls.
+Open: a quality toggle, SSAO.
 - Openings become objects: door leaf + frame + swing arc, window frame + glass +
   sill, cut into the wall with `three-bvh-csg`; both draggable along their wall in the
   plan view.
