@@ -31,6 +31,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   expected price and the ceiling before it queues anything, and saying plainly when the
   task is still routed to the simulator.
 
+### Added — Planner v2, phase 2 (interaction)
+
+- **Handles on the selected piece.** Arrows slide it along the floor, a ring turns it about
+  the vertical; the other axes are switched off because nobody means to lift a sofa. Turns
+  snap to 15° (Shift frees them), R switches move/turn. Everything the handle does passes
+  through the same snap and constraint pipeline as a drag, so a piece pushed at a wall stops
+  at the wall with the arrow still in hand.
+- **Two turned pieces are judged by their outlines, not their boxes** — on the browser and
+  on the server, with the same numbers. A sofa on the diagonal no longer refuses the table
+  tucked into the corner its box would cover.
+- A browser test (`room-gizmo.spec.ts`) drives the ring and the arrow with a real pointer.
+
 ### Added — Planner v2, phase 1 (assets)
 
 - **A mesh post-processing sidecar** (`mesh-tools`, Node, its own container): every stored

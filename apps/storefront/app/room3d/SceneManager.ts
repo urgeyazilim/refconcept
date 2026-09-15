@@ -229,6 +229,11 @@ export class SceneManager {
     return this.layout.children
   }
 
+  /** One piece's group, for the gizmo to take hold of. */
+  pieceFor(id: string): Group | undefined {
+    return this.pieces.get(id)
+  }
+
   /**
    * Where a point on the floor plan is on the screen, in CSS pixels.
    *

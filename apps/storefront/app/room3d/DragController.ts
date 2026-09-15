@@ -27,6 +27,8 @@ export interface DragDelegate {
   onCancel: (id: string) => void
   snap: (item: LayoutItem, at: { x: number, z: number }) => { x: number, z: number, guides: SnapGuide[] }
   stateAt: (item: LayoutItem, at: { x: number, z: number }) => CollisionState
+  /** Whether the pointer is on the gizmo's handles, which then own the gesture. */
+  gizmoActive: () => boolean
 }
 
 /**
@@ -101,6 +103,12 @@ export class DragController {
   private onPointerDown(event: PointerEvent): void {
     // Secondary buttons belong to the camera and to the browser's own menu.
     if (event.button !== 0) {
+      return
+    }
+
+    // A press on an arrow or the ring is the gizmo's, and the piece under it must not also
+    // start following the pointer — two things moving one sofa by different amounts.
+    if (this.delegate.gizmoActive()) {
       return
     }
 

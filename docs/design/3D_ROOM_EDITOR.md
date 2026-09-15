@@ -113,9 +113,14 @@ height, lock, measurements on or off), and the final image produced from the pla
 
 Two differences, both deliberate:
 
-- **No translate gizmo.** Furniture is moved by dragging it and nudged with the arrow keys —
-  a centimetre a press, ten with shift. A three-arrow gizmo is a second input system to keep
-  in step with snapping and collision, for a gesture the pointer already does.
+- **A gizmo after all.** The first version had none — "a second input system to keep in step
+  with snapping and collision" — and the product owner's verdict was that it could not "turn
+  or place like professional 3D". `GizmoController.ts` wraps Three.js's TransformControls:
+  arrows along the floor, a ring about the vertical, the other axes switched off. It moves the
+  group freely and the editor reads the result back in millimetres, snaps it, holds it inside
+  the walls and off the other pieces, and writes it to the group again — so the piece stops
+  at the wall with the arrow still in the customer's hand. Turns snap to 15°; Shift frees
+  them; R switches between move and turn. Dragging the piece itself still works.
 - **Products are not hand-modelled.** See below.
 
 ## How a product is drawn

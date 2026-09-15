@@ -92,7 +92,13 @@ route, the seller-portal completeness hint.
   ten-product room.
 - Cost: ~$0.30–0.50 per product, once. The catalogue owner decides how many, and when.
 
-### Phase 2 — Interaction that feels like a planner (1.5 weeks)
+### Phase 2 — Interaction that feels like a planner (1.5 weeks) — IN PROGRESS
+
+Done 2026-09-15: move/turn gizmo (TransformControls, floor axes only, 15° steps, Shift free,
+R toggles) held by the same snap + constraint pipeline as a drag; outline (SAT) collision on
+both sides so a turned piece is judged by its outline, not its box; a browser test drives the
+ring and the arrow and proves the wall stops the piece. Open: magnets for turned pieces,
+"eşit mesafe", category rules (wall-mounted, stacking), touch gestures for the piece.
 - `TransformControls` in translate-XZ and rotate-Y modes with the storyboard's look
   (arrows on select, ring on "Döndür"); 15° rotation snapping, Shift for free.
 - Magnet-to-wall and to neighbours (exists in `SnapEngine`; extend to rotated pieces),

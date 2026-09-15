@@ -145,8 +145,13 @@ function onKeydown(event: KeyboardEvent): void {
       break
     case 'r':
     case 'R':
-      editor.value.rotate(id, 90)
+      // The turn handle, not a quarter turn: the buttons do quarter turns.
+      setTool(tool.value === 'rotate' ? 'translate' : 'rotate')
       break
+    case 'Shift':
+      // Held: the turn handle stops snapping to fifteen degrees.
+      editor.value.setFreeRotation(true)
+      return
     default:
       return
   }
@@ -154,6 +159,20 @@ function onKeydown(event: KeyboardEvent): void {
   // Only for the keys that did something: swallowing the rest would break typing in any
   // field that happens to be open beside the scene.
   event.preventDefault()
+}
+
+function onKeyup(event: KeyboardEvent): void {
+  if (event.key === 'Shift') {
+    editor.value?.setFreeRotation(false)
+  }
+}
+
+/** Which handles the selected piece shows: arrows to move it, a ring to turn it. */
+const tool = ref<'translate' | 'rotate'>('translate')
+
+function setTool(mode: 'translate' | 'rotate'): void {
+  tool.value = mode
+  editor.value?.setTool(mode)
 }
 
 onMounted(() => {
@@ -176,11 +195,19 @@ onMounted(() => {
 
   editor.value.setItems(props.items)
 
+  // A handle for the browser tests and for poking at the scene from the console. Dev only:
+  // nothing in production should reach the editor except through this component.
+  if (import.meta.dev) {
+    (window as unknown as { __rcEditor?: RoomEditor }).__rcEditor = editor.value
+  }
+
   window.addEventListener('keydown', onKeydown)
+  window.addEventListener('keyup', onKeyup)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('keyup', onKeyup)
 
   editor.value?.dispose()
   editor.value = null
@@ -366,6 +393,30 @@ defineExpose({
                 ? 'Buraya sığmıyor'
                 : state.states.get(selected.id) === 'warning' ? 'Pencerenin önünde' : 'Uygun' }}
             </span>
+          </div>
+
+          <!--
+            The handles on the piece itself: arrows to slide it along the floor, a ring to
+            turn it. The storyboard's panel 5, and what "professional 3D" meant when the first
+            editor was found not to be it. R switches; Shift frees the turn from 15° steps.
+          -->
+          <div class="mt-3 inline-flex rounded-pill border border-line p-0.5 text-xs">
+            <button
+              type="button"
+              class="rounded-pill px-3 py-1"
+              :class="tool === 'translate' ? 'bg-charcoal text-white' : 'hover:bg-bg-muted'"
+              @click="setTool('translate')"
+            >
+              Taşı
+            </button>
+            <button
+              type="button"
+              class="rounded-pill px-3 py-1"
+              :class="tool === 'rotate' ? 'bg-charcoal text-white' : 'hover:bg-bg-muted'"
+              @click="setTool('rotate')"
+            >
+              Döndür
+            </button>
           </div>
 
           <div class="mt-3 flex flex-wrap gap-2">

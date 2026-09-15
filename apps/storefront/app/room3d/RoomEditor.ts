@@ -1,11 +1,12 @@
 import { CollisionEngine, type CollisionState } from './CollisionEngine'
 import { ConstraintEngine } from './ConstraintEngine'
 import { DragController } from './DragController'
+import { GizmoController, type GizmoMode } from './GizmoController'
 import { type Measurement, MeasurementEngine, formatDistance } from './MeasurementEngine'
 import { SceneManager } from './SceneManager'
 import { SnapEngine } from './SnapEngine'
 import { againstWall, footprintOf } from './footprint'
-import type { LayoutItem, RoomGeometry, RoomOpening, ViewMode, WallName } from './types'
+import { type LayoutItem, type RoomGeometry, type RoomOpening, type ViewMode, type WallName, toMm } from './types'
 
 /** A measurement, already placed on the screen, for the HTML overlay to draw. */
 export interface OverlayLabel {
@@ -71,6 +72,17 @@ export class RoomEditor {
 
   private readonly drag: DragController
 
+  /** The move and turn handles on the selected piece. */
+  private readonly gizmo: GizmoController
+
+  /**
+   * Where the gizmo has the selected piece right now, held inside the room, before release.
+   *
+   * The gizmo moves the group freely; every change is read back, held, and written to the
+   * group again. Nothing reaches the layout until the handle is let go.
+   */
+  private gizmoPreview: { x: number, z: number, rotation: number } | null = null
+
   private items: LayoutItem[] = []
 
   private states = new Map<string, CollisionState>()
@@ -117,7 +129,16 @@ export class RoomEditor {
     this.scene.setRoom(geometry, openings)
     this.scene.onFrame(() => this.publishOverlay())
 
+    this.gizmo = new GizmoController(canvas, this.scene.scene, {
+      camera: () => this.scene.cameras.active,
+      setOrbitEnabled: enabled => this.scene.cameras.setOrbitEnabled(enabled),
+      onChange: () => this.onGizmoChange(),
+      onCommit: () => this.onGizmoCommit(),
+      invalidate: () => this.scene.invalidate(),
+    })
+
     this.drag = new DragController(canvas, {
+      gizmoActive: () => this.gizmo.isActive(),
       items: () => this.items,
       pickable: () => this.scene.pickable(),
       camera: () => this.scene.cameras.active,
@@ -195,6 +216,23 @@ export class RoomEditor {
 
   setView(mode: ViewMode): void {
     this.scene.setView(mode)
+    // The plan view is a different camera, and handles drawn for the old one point nowhere.
+    this.gizmo.syncCamera()
+  }
+
+  /** Which handles the selected piece shows: arrows to move it, a ring to turn it. */
+  setTool(mode: GizmoMode): void {
+    this.gizmo.setMode(mode)
+    this.publish()
+  }
+
+  getTool(): GizmoMode {
+    return this.gizmo.getMode()
+  }
+
+  /** Shift held: the turn handle stops snapping to fifteen degrees. */
+  setFreeRotation(free: boolean): void {
+    this.gizmo.setFreeRotation(free)
   }
 
   // --- editing ---------------------------------------------------------------
@@ -204,7 +242,101 @@ export class RoomEditor {
 
     this.scene.setGuides([])
     this.scene.setItems(this.items, this.states, this.selectedId)
+    this.syncGizmo()
+
     this.publish()
+  }
+
+  /**
+   * Handles on whichever piece is selected, unless it is pinned.
+   *
+   * Called wherever the selection or the scene's pieces may have changed — a select, an add,
+   * an undo, a removal — rather than only from select(): a piece added from the catalogue is
+   * selected without going through select(), and the first version of this attached nothing
+   * to it. A locked piece shows no handles, which is what locked means.
+   */
+  private syncGizmo(): void {
+    const selected = this.selectedId === null ? undefined : this.find(this.selectedId)
+
+    this.gizmo.attach(
+      selected === undefined || selected.locked ? null : (this.scene.pieceFor(selected.id) ?? null),
+    )
+  }
+
+  /**
+   * The gizmo moved the selected piece; hold it and draw it there.
+   *
+   * The handle put the group wherever the pointer said. That position is read back in
+   * millimetres, snapped and held exactly as a drag would be, and the group is put where it
+   * is allowed to be — so a piece pushed at a wall stops at the wall with the arrow still in
+   * the customer's hand. A turn that would put one end through a wall is nudged clear, or
+   * refused and the group turned back.
+   */
+  private onGizmoChange(): void {
+    const group = this.gizmo.attached()
+    const item = this.selectedId === null ? undefined : this.find(this.selectedId)
+
+    if (group === null || item === undefined) {
+      return
+    }
+
+    const current = this.gizmoPreview ?? {
+      x: item.position_x_mm,
+      z: item.position_z_mm,
+      rotation: item.rotation_y_deg,
+    }
+
+    if (this.gizmo.getMode() === 'rotate') {
+      // The scene turns the other way round; see FurnitureBuilder.place().
+      const degrees = Math.round((((-group.rotation.y * 180) / Math.PI) % 360 + 360) % 360)
+
+      const held = this.constraints.settle(
+        item,
+        this.items,
+        { x: current.x, z: current.z, rotation: degrees },
+        { x: current.x, z: current.z },
+      )
+
+      this.gizmoPreview = held.settled
+        ? { x: held.x, z: held.z, rotation: degrees }
+        : current
+    }
+    else {
+      const desired = { x: Math.round(toMm(group.position.x)), z: Math.round(toMm(group.position.z)) }
+
+      const snapped = this.snaps.snap(item, this.items, desired)
+      const held = this.constraints.settle(
+        item,
+        this.items,
+        { x: snapped.x, z: snapped.z, rotation: current.rotation },
+        { x: current.x, z: current.z },
+      )
+
+      this.gizmoPreview = { x: held.x, z: held.z, rotation: current.rotation }
+
+      this.scene.setGuides(held.x === snapped.x && held.z === snapped.z ? snapped.guides : [])
+    }
+
+    this.scene.previewItem(item, this.gizmoPreview, this.collisions.stateAt(item, this.items, this.gizmoPreview))
+  }
+
+  /** The handle was released: whatever the preview holds becomes the layout. */
+  private onGizmoCommit(): void {
+    const preview = this.gizmoPreview
+    const id = this.selectedId
+
+    this.gizmoPreview = null
+    this.scene.setGuides([])
+
+    if (preview === null || id === null) {
+      return
+    }
+
+    this.edit(id, (piece) => {
+      piece.position_x_mm = preview.x
+      piece.position_z_mm = preview.z
+      piece.rotation_y_deg = preview.rotation
+    })
   }
 
   /** Moves a piece, having already decided where. The drag's commit path. */
@@ -528,6 +660,7 @@ export class RoomEditor {
     this.flush()
 
     this.drag.dispose()
+    this.gizmo.dispose()
     this.scene.dispose()
   }
 
@@ -603,6 +736,7 @@ export class RoomEditor {
     this.states = this.collisions.evaluate(this.items)
 
     this.scene.setItems(this.items, this.states, this.selectedId)
+    this.syncGizmo()
     this.publish()
   }
 
