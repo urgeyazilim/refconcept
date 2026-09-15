@@ -8,8 +8,10 @@ use App\Domains\Products\Models\Product;
 use App\Domains\Products\Models\ProductDimension;
 use App\Domains\Products\Models\ProductSku;
 use App\Domains\Projects\Models\Project;
+use App\Domains\Projects\Models\RoomAnalysis;
 use App\Domains\Projects\Models\RoomConstraint;
 use App\Domains\Projects\Models\RoomGeometryVersion;
+use App\Domains\Projects\Models\RoomMedia;
 use Database\Seeders\RolesAndPermissionsSeeder;
 
 /**
@@ -301,6 +303,34 @@ it('hands the editor the room, its openings and its furniture in one request', f
         ->and($response->json('data.openings'))->toHaveCount(1)
         ->and($response->json('data.layout.items.0.width_mm'))->toBe(2_200)
         ->and($response->json('data.layout.items.0.category'))->toBe('kanepe');
+});
+
+it('tells the editor what the floor is made of, in its own three words', function (): void {
+    confirmGeometry();
+
+    $media = RoomMedia::query()->create([
+        'room_id' => $this->room->getKey(),
+        'disk' => 's3',
+        'storage_path' => 'rooms/'.$this->room->getKey().'/oda.jpg',
+        'original_name' => 'oda.jpg',
+        'mime_type' => 'image/jpeg',
+        'size_bytes' => 1_024,
+        'checksum_sha256' => hash('sha256', 'oda'),
+        'type' => 'photo',
+    ]);
+
+    // The model says "laminat parke"; the planner has boards, tiles and carpet.
+    RoomAnalysis::query()->create([
+        'room_id' => $this->room->getKey(),
+        'media_id' => $media->getKey(),
+        'payload' => [],
+        'surfaces' => ['floor' => ['material' => 'laminat parke', 'change_allowed' => false]],
+        'is_current' => true,
+    ]);
+
+    $response = $this->actingAs($this->owner)->getJson("{$this->url}/layout")->assertOk();
+
+    expect($response->json('data.geometry.floor'))->toBe('wood');
 });
 
 it('keeps a stranger out of somebody elses plan', function (): void {

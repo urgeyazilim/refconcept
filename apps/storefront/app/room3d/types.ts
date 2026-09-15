@@ -31,11 +31,16 @@ export type WallName = 'north' | 'south' | 'east' | 'west'
  * `width` runs along x and `length` along z, with the origin at the corner where the north
  * and west walls meet. Every position in a layout is measured from there.
  */
+/** What the floor is drawn as. Three textures; anything the analysis could not place is null. */
+export type FloorMaterial = 'wood' | 'tile' | 'carpet'
+
 export interface RoomGeometry {
   id: string
   width_mm: number
   length_mm: number
   height_mm: number
+  /** From the room photograph's analysis, when there was one. Boards when there was not. */
+  floor?: FloorMaterial | null
 }
 
 /**

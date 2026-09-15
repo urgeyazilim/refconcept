@@ -8,6 +8,8 @@ import {
   SRGBColorSpace,
 } from 'three'
 
+import type { FloorMaterial } from './types'
+
 /**
  * What the room is made of.
  *
@@ -20,14 +22,113 @@ import {
  * The first room was six flat colours, and the product owner's word for it was "diagram".
  */
 
-/** How much floor one repeat of the plank texture covers, in metres. */
-export const PLANK_TILE_M = 1.2
+/** How much floor one repeat of each floor texture covers, in metres. */
+export const FLOOR_TILE_M: Record<FloorMaterial, number> = {
+  wood: 1.2,
+  tile: 1.2,
+  carpet: 1.0,
+}
 
 /** How much wall one repeat of the plaster texture covers, in metres. */
 export const PLASTER_TILE_M = 1.0
 
 let planks: CanvasTexture | null = null
+let tiles: CanvasTexture | null = null
+let carpet: CanvasTexture | null = null
 let plaster: CanvasTexture | null = null
+
+function blankCanvas(size: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
+  const canvas = document.createElement('canvas')
+
+  canvas.width = size
+  canvas.height = size
+
+  const context = canvas.getContext('2d')
+
+  if (context === null) {
+    throw new Error('2D canvas is not available')
+  }
+
+  return [canvas, context]
+}
+
+function repeating(canvas: HTMLCanvasElement): CanvasTexture {
+  const texture = new CanvasTexture(canvas)
+
+  texture.wrapS = RepeatWrapping
+  texture.wrapT = RepeatWrapping
+  texture.colorSpace = SRGBColorSpace
+  texture.anisotropy = 4
+
+  return texture
+}
+
+/**
+ * Porcelain tiles, four to a tile of texture — 60 cm each — with a grout line between.
+ *
+ * Each tile its own barely different shade and a faint mottle, which is what stops a tiled
+ * floor reading as graph paper.
+ */
+function tileTexture(): CanvasTexture {
+  if (tiles !== null) {
+    return tiles
+  }
+
+  const size = 1024
+  const [canvas, context] = blankCanvas(size)
+  const random = seeded(19)
+  const across = 2
+  const cell = size / across
+
+  context.fillStyle = '#b9b3aa'
+  context.fillRect(0, 0, size, size)
+
+  for (let row = 0; row < across; row++) {
+    for (let column = 0; column < across; column++) {
+      const tone = 0.96 + random() * 0.06
+      const base = new Color('#e4e0d8').multiplyScalar(tone)
+
+      context.fillStyle = `#${base.getHexString()}`
+      context.fillRect(column * cell + 3, row * cell + 3, cell - 6, cell - 6)
+
+      for (let speck = 0; speck < 400; speck++) {
+        const shade = random() > 0.5 ? 255 : 0
+
+        context.fillStyle = `rgba(${shade}, ${shade}, ${shade}, ${0.015 + random() * 0.03})`
+        context.fillRect(column * cell + 3 + random() * (cell - 6), row * cell + 3 + random() * (cell - 6), 2 + random() * 6, 2 + random() * 6)
+      }
+    }
+  }
+
+  tiles = repeating(canvas)
+
+  return tiles
+}
+
+/** Carpet: a warm grey with a dense, fine, even nap. */
+function carpetTexture(): CanvasTexture {
+  if (carpet !== null) {
+    return carpet
+  }
+
+  const size = 512
+  const [canvas, context] = blankCanvas(size)
+  const random = seeded(23)
+
+  context.fillStyle = '#b8ad9d'
+  context.fillRect(0, 0, size, size)
+
+  for (let fibre = 0; fibre < 40_000; fibre++) {
+    const shade = random() > 0.5 ? 255 : 0
+
+    context.fillStyle = `rgba(${shade}, ${shade}, ${shade}, ${0.03 + random() * 0.05})`
+    context.fillRect(random() * size, random() * size, 1, 1 + random() * 2)
+  }
+
+  carpet = repeating(canvas)
+
+  return carpet
+}
 
 /**
  * Oak boards, eight to a tile, staggered the way a floor is laid.
@@ -42,16 +143,7 @@ function plankTexture(): CanvasTexture {
   }
 
   const size = 1024
-  const canvas = document.createElement('canvas')
-
-  canvas.width = size
-  canvas.height = size
-
-  const context = canvas.getContext('2d')
-
-  if (context === null) {
-    throw new Error('2D canvas is not available')
-  }
+  const [canvas, context] = blankCanvas(size)
 
   const random = seeded(7)
   const rows = 8
@@ -102,11 +194,7 @@ function plankTexture(): CanvasTexture {
     context.fillRect(0, row * rowHeight - 1, size, 2)
   }
 
-  planks = new CanvasTexture(canvas)
-  planks.wrapS = RepeatWrapping
-  planks.wrapT = RepeatWrapping
-  planks.colorSpace = SRGBColorSpace
-  planks.anisotropy = 4
+  planks = repeating(canvas)
 
   return planks
 }
@@ -123,16 +211,7 @@ function plasterTexture(): CanvasTexture {
   }
 
   const size = 512
-  const canvas = document.createElement('canvas')
-
-  canvas.width = size
-  canvas.height = size
-
-  const context = canvas.getContext('2d')
-
-  if (context === null) {
-    throw new Error('2D canvas is not available')
-  }
+  const [canvas, context] = blankCanvas(size)
 
   context.fillStyle = '#f1efea'
   context.fillRect(0, 0, size, size)
@@ -146,17 +225,21 @@ function plasterTexture(): CanvasTexture {
     context.fillRect(random() * size, random() * size, 1 + random() * 2, 1 + random() * 2)
   }
 
-  plaster = new CanvasTexture(canvas)
-  plaster.wrapS = RepeatWrapping
-  plaster.wrapT = RepeatWrapping
-  plaster.colorSpace = SRGBColorSpace
+  plaster = repeating(canvas)
 
   return plaster
 }
 
-/** A material per surface, sharing the two textures. */
-export function floorMaterial(): MeshStandardMaterial {
-  return new MeshStandardMaterial({ map: plankTexture(), roughness: 0.55, metalness: 0 })
+/** The floor, in whichever of the three it is made of. */
+export function floorMaterial(kind: FloorMaterial = 'wood'): MeshStandardMaterial {
+  switch (kind) {
+    case 'tile':
+      return new MeshStandardMaterial({ map: tileTexture(), roughness: 0.35, metalness: 0 })
+    case 'carpet':
+      return new MeshStandardMaterial({ map: carpetTexture(), roughness: 1, metalness: 0 })
+    default:
+      return new MeshStandardMaterial({ map: plankTexture(), roughness: 0.55, metalness: 0 })
+  }
 }
 
 export function wallMaterial(): MeshStandardMaterial {
@@ -197,8 +280,12 @@ export function skyMaterial(): MeshBasicMaterial {
 /** Release the shared textures. Called once when the last scene closes. */
 export function disposeRoomTextures(): void {
   planks?.dispose()
+  tiles?.dispose()
+  carpet?.dispose()
   plaster?.dispose()
   planks = null
+  tiles = null
+  carpet = null
   plaster = null
 }
 

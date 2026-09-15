@@ -14,7 +14,7 @@ import {
 } from 'three'
 
 import {
-  PLANK_TILE_M,
+  FLOOR_TILE_M,
   PLASTER_TILE_M,
   ceilingMaterial,
   disposeRoomTextures,
@@ -76,7 +76,8 @@ export class RoomGeometryBuilder {
 
   private readonly wallMaterial = wallMaterial()
 
-  private readonly floorMaterial = floorMaterial()
+  /** Rebuilt per room, because the room says what its floor is made of. */
+  private floorMaterial = floorMaterial()
 
   private readonly ceilingMaterial = ceilingMaterial()
 
@@ -138,11 +139,17 @@ export class RoomGeometryBuilder {
     const length = toUnits(geometry.length_mm)
     const thickness = toUnits(RoomGeometryBuilder.WALL_THICKNESS_MM)
 
+    // Whatever the photograph said the floor was: boards, tiles or carpet. Boards otherwise.
+    const kind = geometry.floor ?? 'wood'
+
+    this.floorMaterial.dispose()
+    this.floorMaterial = floorMaterial(kind)
+
     const mesh = new Mesh(new BoxGeometry(width, thickness, length), this.floorMaterial)
 
     // The boards repeat at their real size, however big the room is: a plank tile stretched
     // to fit a five-metre floor is a floor of five-metre planks.
-    this.floorMaterial.map?.repeat.set(width / PLANK_TILE_M, length / PLANK_TILE_M)
+    this.floorMaterial.map?.repeat.set(width / FLOOR_TILE_M[kind], length / FLOOR_TILE_M[kind])
 
     // Its top face sits at y = 0, so a sofa at position_y_mm = 0 stands *on* the floor
     // rather than half inside it.

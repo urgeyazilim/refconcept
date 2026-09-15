@@ -148,6 +148,34 @@ walls, openings and furniture positions come from it. A weaker instrument than
 depth-conditioned generation, which needs a third provider, and the strongest one available
 without changing the AI stack.
 
+### 3D_PLANNER_V2 — IN PROGRESS (2026-09-15)
+
+```text
+UPDATED_AT: 2026-09-15
+COMMIT_OR_SNAPSHOT: planner-v2
+PHASE: Post-Phase-9 — the planner rebuilt against the storyboard
+TASK: docs/design/3D_PLANNER_V2_PLAN.md, phases 0–5
+STATUS: phases 0, 1 (bar the owner's verdict), 2 (core) and 3 (materials, fixtures, light) done
+FILES_CHANGED:
+  apps/storefront/app/room3d/{ConstraintEngine,PlaceholderShapes,GizmoController,RoomMaterials}.ts,
+  apps/storefront/app/room3d/{footprint,CollisionEngine,DragController,RoomEditor,SceneManager,RoomGeometryBuilder,FurnitureBuilder}.ts,
+  apps/storefront/app/components/Room3DScene.vue, apps/storefront/app/pages/lab/model-bakeoff.vue,
+  apps/api/app/Domains/Projects/Services/LayoutGeometry.php, apps/api/app/Domains/Projects/Models/DesignLayoutItem.php,
+  apps/api/app/Domains/Ai/Providers/FalAiProvider.php, apps/api/app/Domains/Ai/Services/{AiGateway,AiJobDispatcher}.php,
+  apps/api/app/Domains/Products/Services/{MeshOptimiser,GlbInspector,ProductModelStorage}.php,
+  apps/api/app/Domains/Products/Console/ModelBakeoffCommand.php, apps/seller-portal/app/components/ProductModelManager.vue,
+  infra/docker/mesh-tools/*, docker-compose.yml (mesh-tools), tests/e2e/room-gizmo.spec.ts
+TESTS_RUN: vitest (34) · php artisan test (1005+) · phpstan · pint · eslint · vue-tsc · playwright room-plan + room-gizmo
+BLOCKERS: the owner's verdict on the 10-product bake-off (/lab/model-bakeoff) before the route is repointed
+NEXT_ACTION: floor material from the analysis; first-person walk; Phase 4 (non-rectangular rooms, openings on the plan); Phase 5 storyboard side-by-side
+```
+
+**The owner's verdict on the first planner was the brief.** "Odanın dışına çıkabiliyor,
+duvarların içine girebiliyor; ben bu şekilde istemedim." Everything in this block answers
+one panel of the storyboard: constraint before collision, shapes instead of pictures, handles
+instead of buttons, outlines instead of boxes, a room instead of a diagram. Assets are the
+one part money can buy, and the bake-off decides which generator earns the routing table.
+
 ### PRODUCT_3D_MODELS — DONE (2026-09-12)
 
 ```text

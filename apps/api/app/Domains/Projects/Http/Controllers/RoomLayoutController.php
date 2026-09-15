@@ -77,7 +77,7 @@ final class RoomLayoutController
 
         return response()->json([
             'data' => [
-                'geometry' => $geometry === null ? null : $this->geometry($geometry),
+                'geometry' => $geometry === null ? null : $this->geometry($geometry, $this->floorMaterial($room)),
                 // Proposals waiting to be confirmed or corrected. The screen asks "bu ölçüler
                 // doğru mu?" about the newest one.
                 'pending_geometry' => $this->pendingGeometry($room),
@@ -723,7 +723,7 @@ final class RoomLayoutController
     /**
      * @return array<string, mixed>
      */
-    private function geometry(RoomGeometryVersion $version): array
+    private function geometry(RoomGeometryVersion $version, ?string $floor = null): array
     {
         return [
             'id' => $version->id,
@@ -736,7 +736,41 @@ final class RoomLayoutController
             'confidence_percent' => $version->confidencePercent(),
             'is_confirmed' => $version->is_confirmed,
             'confirmed_at' => $version->confirmed_at?->toIso8601String(),
+            // What the floor is made of, as far as the photograph said: the planner draws
+            // boards, tiles or carpet accordingly. Null when nothing said, and it draws boards.
+            'floor' => $floor,
         ];
+    }
+
+    /**
+     * The floor material the analysis saw, in the planner's three words.
+     *
+     * The model describes a floor in whatever words it likes — "parquet", "laminat",
+     * "porcelain tile", "wall-to-wall carpet" — and the planner has three textures. Anything
+     * it cannot place is null, and the planner draws its default rather than guessing.
+     */
+    private function floorMaterial(Room $room): ?string
+    {
+        $analysis = RoomAnalysis::query()
+            ->where('room_id', $room->getKey())
+            ->where('is_current', true)
+            ->latest('created_at')
+            ->first();
+
+        $material = $analysis?->surfaces['floor']['material'] ?? null;
+
+        if (! is_string($material)) {
+            return null;
+        }
+
+        $word = mb_strtolower($material);
+
+        return match (true) {
+            (bool) preg_match('/wood|parquet|parke|ahşap|laminat|timber|oak|meşe/u', $word) => 'wood',
+            (bool) preg_match('/tile|ceramic|seramik|fayans|porcelain|marble|mermer|stone|taş|granit/u', $word) => 'tile',
+            (bool) preg_match('/carpet|halı|hali|rug|moquette|moket/u', $word) => 'carpet',
+            default => null,
+        };
     }
 
     /**

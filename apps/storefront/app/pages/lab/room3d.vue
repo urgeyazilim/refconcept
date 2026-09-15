@@ -21,6 +21,8 @@ const geometry = ref<RoomGeometry>({
   width_mm: 4_850,
   length_mm: 5_200,
   height_mm: 2_720,
+  // `?floor=tile` on the URL, so a screenshot can ask for each floor in turn.
+  floor: (['wood', 'tile', 'carpet'] as const).find(kind => kind === useRoute().query.floor) ?? 'wood',
 })
 
 /**
@@ -138,7 +140,15 @@ function onSave(next: LayoutItem[]): void {
         Son kaydedilecek yerleşim: {{ saved }}
       </p>
 
-      <div class="grid gap-4 sm:grid-cols-3">
+      <div class="grid gap-4 sm:grid-cols-4">
+        <label class="block">
+          <span class="mb-1.5 block text-sm font-medium">zemin</span>
+          <select v-model="geometry.floor" class="w-full rounded-sm border border-line bg-surface px-3 py-2 text-sm">
+            <option value="wood">parke</option>
+            <option value="tile">fayans</option>
+            <option value="carpet">halı</option>
+          </select>
+        </label>
         <label v-for="axis in (['width_mm', 'length_mm', 'height_mm'] as const)" :key="axis" class="block">
           <span class="mb-1.5 block text-sm font-medium">{{ axis.replace('_mm', '') }} (mm)</span>
           <input
