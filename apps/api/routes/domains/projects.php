@@ -53,6 +53,8 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, EnsureEmailIsVerif
         // --- rooms ----------------------------------------------------------
         Route::post('{project}/rooms', [RoomController::class, 'store'])->name('rooms.store');
         Route::get('{project}/rooms/{room}', [RoomController::class, 'show'])->name('rooms.show');
+        // Reads the room from every photograph it has, in the background; 202 while it runs.
+        Route::post('{project}/rooms/{room}/analyse', [RoomController::class, 'analyse'])->name('rooms.analyse');
         Route::patch('{project}/rooms/{room}', [RoomController::class, 'update'])->name('rooms.update');
         Route::delete('{project}/rooms/{room}', [RoomController::class, 'destroy'])->name('rooms.destroy');
         Route::get('{project}/rooms/{room}/programme', [RoomController::class, 'programme'])

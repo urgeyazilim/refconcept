@@ -6,52 +6,118 @@ namespace App\Domains\Projects\Services;
 
 use App\Domains\Ai\Enums\AiJobStatus;
 use App\Domains\Ai\Enums\AiTask;
+use App\Domains\Ai\Exceptions\AiJobRefused;
 use App\Domains\Ai\Services\AiJobDispatcher;
 use App\Domains\Projects\Exceptions\DesignGenerationFailed;
 use App\Domains\Projects\Models\Room;
 use App\Domains\Projects\Models\RoomAnalysis;
+use App\Domains\Projects\Models\RoomMedia;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Reads a room photograph into something the planner can work with.
+ * Reads a room's photographs into something the planner can work with.
+ *
+ * All of them, the primary one first. A customer who walks round their room and photographs
+ * it from every corner has told us more than one picture can, and an analysis that only
+ * looked at the first was answering a different question than the one they asked. The model
+ * is told they are views of the same room, so a window seen twice is one window.
  *
  * The first step of every generation, and the one most worth not repeating. A room does
  * not change because somebody tried a second style, so an analysis is cached against the
- * photograph rather than the design — the second render of the same room reuses the first
- * reading, which is one fewer provider call and one fewer thing to go wrong.
+ * set of photographs it read rather than the design — the second render of the same room
+ * reuses the first reading, and a new photograph makes it read again.
  *
- * The photograph itself never enters a prompt as text. It travels as an attachment on the
- * job, because a URL written into a prompt is a URL a model can repeat back inside an
- * answer somebody else reads, and this one points at the inside of a customer's home.
+ * The photographs never enter a prompt as text. They travel as attachments on the job,
+ * because a URL written into a prompt is a URL a model can repeat back inside an answer
+ * somebody else reads, and these point at the inside of a customer's home.
  */
 final class RoomAnalyser
 {
+    /** How many photographs go to the model. Beyond this, more views add cost, not walls. */
+    public const MAX_PHOTOS = 6;
+
     public function __construct(
         private readonly AiJobDispatcher $dispatcher,
         private readonly RoomGeometryProposer $proposer,
     ) {}
 
     /**
-     * The current analysis for a room, reading it first if there is not one.
+     * The photographs an analysis reads, primary first, then in gallery order.
      *
-     * @throws DesignGenerationFailed
+     * @return list<RoomMedia>
+     */
+    public function photographs(Room $room): array
+    {
+        $photos = $room->media()
+            ->where('type', 'photo')
+            ->orderBy('position')
+            ->get()
+            ->sortBy(fn (RoomMedia $media): int => $media->getKey() === $room->primary_media_id ? 0 : 1)
+            ->values()
+            ->take(self::MAX_PHOTOS);
+
+        return $photos->all();
+    }
+
+    /**
+     * The ids of the photographs an analysis would read now.
+     *
+     * @return list<string>
+     */
+    public function photoIds(Room $room): array
+    {
+        return array_map(static fn (RoomMedia $media): string => (string) $media->getKey(), $this->photographs($room));
+    }
+
+    /** The current analysis, if it read the photographs the room has now. */
+    public function currentFor(Room $room): ?RoomAnalysis
+    {
+        $analysis = RoomAnalysis::query()
+            ->where('room_id', $room->getKey())
+            ->current()
+            ->first();
+
+        if ($analysis === null) {
+            return null;
+        }
+
+        return $this->readPhotoIds($analysis) === $this->photoIds($room) ? $analysis : null;
+    }
+
+    /**
+     * What an analysis read, as recorded on it.
+     *
+     * Older analyses recorded only the primary photograph; they count as having read that.
+     *
+     * @return list<string>
+     */
+    public function readPhotoIds(RoomAnalysis $analysis): array
+    {
+        $ids = $analysis->payload['photo_ids'] ?? null;
+
+        if (is_array($ids) && $ids !== []) {
+            return array_values(array_map('strval', $ids));
+        }
+
+        return [(string) $analysis->media_id];
+    }
+
+    /**
+     * The current analysis for a room, reading it first if there is not one for its photographs.
+     *
+     * @throws DesignGenerationFailed when there is no photograph or the reading failed
+     * @throws AiJobRefused when the task cannot run at all — no route, no credential
      */
     public function forRoom(Room $room, bool $refresh = false): RoomAnalysis
     {
-        $room->loadMissing('primaryMedia');
+        $photos = $this->photographs($room);
 
-        $media = $room->primaryMedia;
-
-        if ($media === null) {
+        if ($photos === []) {
             throw DesignGenerationFailed::roomHasNoPhotograph();
         }
 
         if (! $refresh) {
-            $existing = RoomAnalysis::query()
-                ->where('room_id', $room->getKey())
-                ->where('media_id', $media->getKey())
-                ->current()
-                ->first();
+            $existing = $this->currentFor($room);
 
             if ($existing !== null) {
                 return $existing;
@@ -59,14 +125,17 @@ final class RoomAnalyser
         }
 
         /*
-         * A reference to the object, not a link to it.
+         * References to the objects, not links to them.
          *
          * The gateway reads the bytes off the disk and sends them inline. A signed URL was
          * the original design and it was wrong twice: a link to somebody's room photograph
          * must not leave this system, and the provider cannot fetch one from our network
          * regardless.
          */
-        $imageSource = ['disk' => $media->disk, 'path' => $media->storage_path];
+        $sources = array_map(
+            static fn (RoomMedia $media): array => ['disk' => $media->disk, 'path' => $media->storage_path],
+            $photos,
+        );
 
         $ran = $this->dispatcher->runInline(
             task: AiTask::RoomAnalysis,
@@ -78,7 +147,11 @@ final class RoomAnalyser
                     'length_mm' => $room->length_mm,
                     'height_mm' => $room->height_mm,
                 ]),
-                'image_sources' => [$imageSource],
+                'photo_count' => count($photos),
+                'photo_note' => count($photos) === 1
+                    ? 'Tek fotoğraf var.'
+                    : sprintf('Aynı odanın %d fotoğrafı var; ilki ana fotoğraftır. Hepsini birleştirerek tek bir oda tanımı çıkar: aynı pencereyi ya da kapıyı iki kez sayma; regions yalnızca ilk fotoğraf için ver.', count($photos)),
+                'image_sources' => $sources,
             ],
             subject: $room,
             // Billed to the design version that asked for it, not separately. A customer
@@ -92,7 +165,15 @@ final class RoomAnalyser
             );
         }
 
-        return $this->store($room, $media->getKey(), (string) $ran->getKey(), (array) ($ran->output['structured'] ?? []));
+        $primary = $photos[0];
+
+        return $this->store(
+            $room,
+            (string) $primary->getKey(),
+            (string) $ran->getKey(),
+            (array) ($ran->output['structured'] ?? []),
+            array_map(static fn (RoomMedia $media): string => (string) $media->getKey(), $photos),
+        );
     }
 
     /**
@@ -103,10 +184,11 @@ final class RoomAnalyser
      * the insert fails, and the room would be left with no current reading at all.
      *
      * @param  array<string, mixed>  $structured
+     * @param  list<string>  $photoIds  what was read, so a new photograph is noticed
      */
-    public function store(Room $room, string $mediaId, ?string $jobId, array $structured): RoomAnalysis
+    public function store(Room $room, string $mediaId, ?string $jobId, array $structured, array $photoIds = []): RoomAnalysis
     {
-        return DB::transaction(function () use ($room, $mediaId, $jobId, $structured): RoomAnalysis {
+        return DB::transaction(function () use ($room, $mediaId, $jobId, $structured, $photoIds): RoomAnalysis {
             RoomAnalysis::query()
                 ->where('room_id', $room->getKey())
                 ->where('is_current', true)
@@ -121,7 +203,7 @@ final class RoomAnalyser
                 // is how the price becomes a float.
                 'confidence_bps' => $this->confidenceToBps($structured['confidence'] ?? null),
                 'measurement_quality' => $this->stringOrNull($structured['measurement_quality'] ?? null),
-                'payload' => $structured,
+                'payload' => $structured + ['photo_ids' => $photoIds === [] ? [$mediaId] : $photoIds],
                 'fixed_elements' => $this->arrayOrNull($structured['fixed_elements'] ?? null),
                 'surfaces' => $this->arrayOrNull($structured['surfaces'] ?? null),
                 'warnings' => $this->arrayOrNull($structured['warnings'] ?? null),

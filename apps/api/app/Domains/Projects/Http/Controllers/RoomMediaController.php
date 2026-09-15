@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Domains\Projects\Http\Controllers;
 
 use App\Domains\Audit\Services\AuditLogger;
+use App\Domains\Projects\Jobs\AnalyseRoom;
 use App\Domains\Projects\Jobs\ClearRoomPhotograph;
 use App\Domains\Projects\Models\DesignAsset;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\Room;
 use App\Domains\Projects\Models\RoomMedia;
+use App\Domains\Projects\Services\RoomAnalyser;
 use App\Domains\Projects\Services\RoomPhotoStorage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,6 +36,7 @@ final class RoomMediaController
     public function __construct(
         private readonly RoomPhotoStorage $storage,
         private readonly AuditLogger $audit,
+        private readonly RoomAnalyser $analyser,
     ) {}
 
     public function index(Request $request, Project $project, Room $room): JsonResponse
@@ -86,6 +89,18 @@ final class RoomMediaController
 
         if ($shouldSetPrimary) {
             $room->forceFill(['primary_media_id' => $media->getKey()])->save();
+        }
+
+        /*
+         * Read the room once the photographs have settled. Delayed rather than immediate,
+         * because four corners arrive in four requests a few seconds apart and the job
+         * queued for the first set stands down when it finds the room has moved on.
+         */
+        if ($media->type === 'photo') {
+            $fresh = $room->fresh() ?? $room;
+
+            AnalyseRoom::dispatch((string) $fresh->getKey(), $this->analyser->photoIds($fresh))
+                ->delay(now()->addSeconds(20));
         }
 
         $this->audit->record(

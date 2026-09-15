@@ -236,6 +236,24 @@ onBeforeUnmount(() => {
             Bunu kullan
           </button>
 
+          <!--
+            Every photograph can be emptied, not only the primary one: a customer who shot
+            four corners wants to see all four without the furniture. The render still
+            starts from the primary photograph's plate, and the card below says so.
+          -->
+          <button
+            v-if="item.type === 'photo' && !plateOf(item)"
+            type="button"
+            class="rounded-sm border border-line px-2.5 py-1.5 text-[11px] text-ink-secondary transition-colors hover:bg-bg-muted disabled:opacity-40"
+            :disabled="clearing !== null"
+            @click="clear(item)"
+          >
+            {{ clearing === item.id ? 'Boşaltılıyor…' : 'Eşyaları kaldır' }}
+          </button>
+          <span v-else-if="item.type === 'photo'" class="rounded-sm bg-bg-muted px-2.5 py-1.5 text-[11px] text-ink-secondary">
+            Boş oda ✓
+          </span>
+
           <button
             type="button"
             class="ml-auto rounded-sm px-2.5 py-1.5 text-[11px] text-danger transition-colors hover:bg-danger-subtle disabled:opacity-40"
@@ -261,7 +279,8 @@ onBeforeUnmount(() => {
           <h3 class="text-sm font-medium">Boş oda</h3>
           <p class="mt-1 max-w-[60ch] text-xs leading-relaxed text-ink-secondary">
             Tasarım, odanızın eşyaları kaldırılmış haline yapılır: duvarlar, zemin, pencere ve
-            kapı sizin; mobilya yalnızca seçtikleriniz.
+            kapı sizin; mobilya yalnızca seçtikleriniz. Render, etiketli ana fotoğrafın boş
+            hâlinden başlar; diğer fotoğrafları da kendi kartlarından boşaltabilirsiniz.
           </p>
         </div>
 

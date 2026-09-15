@@ -204,10 +204,11 @@ const walls = [
  */
 const hasPhoto = computed(() => media.value.some(item => item.type === 'photo'))
 const hasPlate = computed(() => media.value.some(item => item.type === 'plate'))
+const recognised = computed(() => (room.value?.analysis !== null && room.value?.analysis.is_stale === false) || (room.value?.width_mm ?? null) !== null)
 
 const studioDone = computed(() => ({
   photo: hasPhoto.value,
-  recognise: (room.value?.width_mm ?? null) !== null,
+  recognise: recognised.value,
   plate: hasPlate.value,
   propose: designs.value.length > 0,
   render: designs.value.some(design => design.status === 'ready'),
@@ -215,11 +216,67 @@ const studioDone = computed(() => ({
 
 const studioCurrent = computed<'photo' | 'recognise' | 'plate' | 'propose'>(() => {
   if (!hasPhoto.value) return 'photo'
-  if ((room.value?.width_mm ?? null) === null) return 'recognise'
+  if (!recognised.value) return 'recognise'
   if (!hasPlate.value) return 'plate'
 
   return 'propose'
 })
+
+/**
+ * Reading the room from its photographs (step 2).
+ *
+ * Queued on the server after every upload, and here on request; the page reloads the room
+ * until the reading appears, and stops asking after a couple of minutes rather than forever.
+ */
+const analysing = ref(false)
+let analysingTimer: ReturnType<typeof setInterval> | null = null
+let analysingSince = 0
+
+function stopWatchingAnalysis() {
+  analysing.value = false
+
+  if (analysingTimer !== null) {
+    clearInterval(analysingTimer)
+    analysingTimer = null
+  }
+}
+
+async function analyse(force = false) {
+  actionError.value = null
+  const before = room.value?.analysis?.id ?? null
+
+  try {
+    const response = await api.post<{ data: { status: 'queued' | 'ready' } }>(`${base}/analyse`, force ? { force: true } : {})
+
+    if (response.data.status === 'ready') {
+      await load()
+
+      return
+    }
+  }
+  catch (error) {
+    actionError.value = error instanceof ApiError
+      ? (error.fieldError('photos') ?? error.message)
+      : 'Tanıma başlatılamadı.'
+
+    return
+  }
+
+  analysing.value = true
+  analysingSince = Date.now()
+
+  analysingTimer = setInterval(async () => {
+    await load()
+
+    const now = room.value?.analysis
+
+    if ((now !== null && now !== undefined && now.id !== before && !now.is_stale) || Date.now() - analysingSince > 180_000) {
+      stopWatchingAnalysis()
+    }
+  }, 4_000)
+}
+
+onBeforeUnmount(stopWatchingAnalysis)
 </script>
 
 <template>
@@ -364,6 +421,57 @@ const studioCurrent = computed<'photo' | 'recognise' | 'plate' | 'propose'>(() =
         >
           Planı aç
         </NuxtLink>
+      </section>
+
+      <!--
+        What the reading found (step 2). Every photograph of the room is read as one room;
+        the boxes on the picture are on the plan screen, the words are here.
+      -->
+      <section id="tanima" class="rc-card p-6 sm:p-8">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p class="text-xs text-muted">Adım 2</p>
+            <h2 class="mt-1 text-lg font-medium">Tanıma</h2>
+            <p class="mt-1.5 max-w-[62ch] text-sm leading-relaxed text-ink-secondary">
+              <template v-if="!hasPhoto">Fotoğraf yüklendiğinde oda otomatik olarak okunur.</template>
+              <template v-else-if="analysing">Fotoğraflar okunuyor; yaklaşık bir dakika sürer, sayfada kalabilirsiniz.</template>
+              <template v-else-if="room.analysis === null">Fotoğraflar yüklendikten kısa süre sonra okunur. Beklemek istemezseniz şimdi başlatın.</template>
+              <template v-else-if="room.analysis.is_stale">Fotoğraflar değişti; okuma {{ room.analysis.photo_count }} fotoğraf üzerinden yapılmıştı. Yeniden okutabilirsiniz.</template>
+              <template v-else>{{ room.analysis.photo_count }} fotoğraf tek oda olarak okundu. Ölçüler ve açıklıklar plan ekranında onayınızı bekler.</template>
+            </p>
+          </div>
+
+          <button
+            v-if="canEdit && hasPhoto && !analysing"
+            type="button"
+            class="rounded-pill px-4 py-2 text-sm"
+            :class="room.analysis === null || room.analysis.is_stale ? 'bg-charcoal text-white' : 'border border-line text-ink-secondary hover:bg-bg-muted'"
+            @click="analyse(room.analysis !== null)"
+          >
+            {{ room.analysis === null ? 'Odayı tanı' : 'Yeniden tanı' }}
+          </button>
+          <span v-else-if="analysing" class="text-sm text-muted">Okunuyor…</span>
+        </div>
+
+        <div v-if="room.analysis !== null" class="mt-5 grid gap-4 sm:grid-cols-2">
+          <div>
+            <h3 class="text-xs font-medium uppercase tracking-wide text-muted">Odada bulunanlar</h3>
+            <p v-if="room.analysis.movable_objects.length === 0" class="mt-1.5 text-sm text-muted">Taşınabilir eşya bulunmadı.</p>
+            <ul v-else class="mt-1.5 flex flex-wrap gap-1.5">
+              <li v-for="(name, at) in room.analysis.movable_objects" :key="`m-${at}`" class="rounded-pill bg-bg-muted px-2.5 py-1 text-xs text-ink-secondary">{{ name }}</li>
+            </ul>
+          </div>
+          <div>
+            <h3 class="text-xs font-medium uppercase tracking-wide text-muted">Sabit öğeler</h3>
+            <p v-if="room.analysis.fixed_elements.length === 0" class="mt-1.5 text-sm text-muted">Sabit öğe bulunmadı.</p>
+            <ul v-else class="mt-1.5 flex flex-wrap gap-1.5">
+              <li v-for="(name, at) in room.analysis.fixed_elements" :key="`f-${at}`" class="rounded-pill border border-line px-2.5 py-1 text-xs text-ink-secondary">{{ name }}</li>
+            </ul>
+          </div>
+          <p v-if="room.analysis.warnings.length > 0" class="text-xs leading-relaxed text-warning sm:col-span-2">
+            {{ room.analysis.warnings.join(' · ') }}
+          </p>
+        </div>
       </section>
 
       <!-- Measurements -->

@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { restoreBackgroundTasks } from './ai-routes'
 
 const run = promisify(execFile)
 
@@ -22,6 +23,15 @@ const run = promisify(execFile)
  * suite red over housekeeping, and the next run's purge picks up whatever this one left.
  */
 export default async function globalTeardown(): Promise<void> {
+  // The routing first, so a failure in the purge below cannot leave the simulator in place.
+  try {
+    await restoreBackgroundTasks()
+  } catch (error) {
+    process.stdout.write(
+      `\n[teardown] AI yönlendirmesi geri alınamadı: ${error instanceof Error ? error.message : String(error)}\n`,
+    )
+  }
+
   try {
     const { stdout } = await run(
       'docker',

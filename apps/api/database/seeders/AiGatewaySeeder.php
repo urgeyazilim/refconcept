@@ -575,9 +575,12 @@ final class AiGatewaySeeder extends Seeder
                         .'sunma; emin olmadığın alanları warnings içinde belirt.',
                     'template' => "Oda türü ipucu: {{ room_type }}\n"
                         ."Kullanıcı notu: {{ notes }}\n"
-                        ."Bildirilen ölçüler (mm): {{ dimensions }}\n\n"
-                        .'Fotoğraftaki sabit öğeleri (pencere, kapı, radyatör, kolon), taşınabilir '
-                        .'eşyaları ve yüzeyleri çıkar.',
+                        ."Bildirilen ölçüler (mm): {{ dimensions }}\n"
+                        ."Fotoğraf sayısı: {{ photo_count }} — {{ photo_note }}\n\n"
+                        .'Fotoğraflardaki sabit öğeleri (pencere, kapı, radyatör, kolon), taşınabilir '
+                        .'eşyaları ve yüzeyleri çıkar. Birden çok fotoğraf varsa aynı odanın farklı '
+                        .'köşelerinden çekilmiştir: her öğeyi bir kez say, hangi duvarda olduğunu '
+                        .'ana fotoğrafa göre ver.',
                     'schema' => [
                         'required' => ['room_type', 'fixed_elements', 'surfaces'],
                         'properties' => [

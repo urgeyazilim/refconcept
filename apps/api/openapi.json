@@ -5650,6 +5650,55 @@
                 ]
             }
         },
+        "/api/v1/projects/{project}/rooms/{room}/analyse": {
+            "post": {
+                "tags": [
+                    "projects"
+                ],
+                "summary": "RoomController::analyse",
+                "operationId": "v1.projects.rooms.analyse",
+                "responses": {
+                    "200": {
+                        "description": "Başarılı."
+                    },
+                    "401": {
+                        "description": "Kimlik doğrulanmadı."
+                    },
+                    "403": {
+                        "description": "Yetki yok."
+                    },
+                    "422": {
+                        "description": "Doğrulama hatası."
+                    },
+                    "429": {
+                        "description": "Hız sınırı aşıldı."
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "project",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "room",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/projects/{project}/rooms/{room}/constraints": {
             "post": {
                 "tags": [

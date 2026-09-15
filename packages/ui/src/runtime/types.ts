@@ -622,6 +622,22 @@ export interface RoomDetail {
   photo_count: number
   design_count: number
   constraints: RoomConstraintItem[]
+  /** What the reading of the photographs found; null until the room has been read. */
+  analysis: RoomAnalysisSummary | null
+}
+
+export interface RoomAnalysisSummary {
+  id: string
+  photo_ids: string[]
+  photo_count: number
+  /** A photograph was added or removed since the reading. */
+  is_stale: boolean
+  detected_room_type: string | null
+  confidence_bps: number | null
+  fixed_elements: string[]
+  movable_objects: string[]
+  warnings: string[]
+  created_at: string | null
 }
 
 /**

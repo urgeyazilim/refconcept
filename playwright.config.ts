@@ -43,6 +43,9 @@ export default defineConfig({
    * The suite lists real products and never took them down again. See the file itself for
    * what that cost — briefly: the design matcher ended up recommending test furniture.
    */
+  // Background AI tasks (room reading, plates) go to the simulator for the whole run and
+  // come back afterwards — a test must never bill the owner for a photograph it uploaded.
+  globalSetup: './tests/e2e/support/setup.ts',
   globalTeardown: './tests/e2e/support/teardown.ts',
 
   projects: [

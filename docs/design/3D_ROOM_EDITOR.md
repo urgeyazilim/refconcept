@@ -66,7 +66,11 @@ mm along the south wall then lands 720 mm from the opposite corner, which looks 
 model rather than an arithmetic mistake and survives a screenshot review easily.
 
 **Rotation is clockwise seen from above**, which is how anybody describes turning a sofa.
-Three.js turns the other way, so `FurnitureBuilder` negates it.
+Three.js turns the other way, so `FurnitureBuilder` negates it. Every model's front is +z, so
+0 faces south, 180 north, **90 faces west and 270 faces east** — a piece against the west wall
+looking into the room is at 270. Both wall-to-rotation maps (`LayoutComposer::onWall` and
+`footprint.ts againstWall`) had this the other way round until 2026-09-15; symmetric boxes hid
+it, a coffee table "in front of" an east-wall sofa did not.
 
 **Two copies of the collision rules, and they have to agree.** The browser's answer has to
 arrive while somebody is dragging; the server's is the one that decides, because nothing

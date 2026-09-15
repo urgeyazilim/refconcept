@@ -7,14 +7,18 @@ namespace App\Domains\Projects\Http\Controllers;
 use App\Domains\Catalog\Enums\RoomType;
 use App\Domains\Projects\Enums\ConstraintType;
 use App\Domains\Projects\Enums\MeasurementQuality;
+use App\Domains\Projects\Jobs\AnalyseRoom;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\Room;
+use App\Domains\Projects\Models\RoomAnalysis;
 use App\Domains\Projects\Models\RoomConstraint;
+use App\Domains\Projects\Services\RoomAnalyser;
 use App\Domains\Projects\Services\RoomProgrammeReader;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Validator as ValidatorInstance;
 
 /**
@@ -26,7 +30,44 @@ use Illuminate\Validation\Validator as ValidatorInstance;
  */
 final class RoomController
 {
-    public function __construct(private readonly RoomProgrammeReader $programmes) {}
+    public function __construct(
+        private readonly RoomProgrammeReader $programmes,
+        private readonly RoomAnalyser $analyser,
+    ) {}
+
+    /**
+     * Asks for the room to be read from its photographs — all of them.
+     *
+     * Queued and answered with 202, like the plate: a reading takes the model a while and
+     * nobody should wait on a spinner for it. Answered with 200 and no queueing when the
+     * photographs the room has now were already read, unless the customer asks again on
+     * purpose (`force`), which is how "yeniden tanı" works.
+     */
+    public function analyse(Request $request, Project $project, Room $room): JsonResponse
+    {
+        $this->authorizeProject($request, $project);
+        $this->assertBelongs($room, $project);
+
+        $validated = $request->validate([
+            'force' => ['sometimes', 'boolean'],
+        ]);
+
+        $photoIds = $this->analyser->photoIds($room);
+
+        if ($photoIds === []) {
+            throw ValidationException::withMessages(['photos' => ['Tanıma için önce bir fotoğraf yükleyin.']]);
+        }
+
+        $force = ($validated['force'] ?? null) === true;
+
+        if (! $force && $this->analyser->currentFor($room) !== null) {
+            return response()->json(['data' => ['status' => 'ready']]);
+        }
+
+        AnalyseRoom::dispatch((string) $room->getKey(), $photoIds, $force);
+
+        return response()->json(['data' => ['status' => 'queued', 'photo_count' => count($photoIds)]], 202);
+    }
 
     public function store(Request $request, Project $project): JsonResponse
     {
@@ -267,7 +308,77 @@ final class RoomController
             'photo_count' => $room->media->count(),
             'design_count' => $room->designs->count(),
             'constraints' => $room->constraints->map(fn (RoomConstraint $c): array => $this->constraint($c))->all(),
+            /*
+             * What the reading found, in words the room screen can show: which photographs
+             * it read, what stands in the room, what is fixed, what it was unsure of. The
+             * boxes drawn on the photograph belong to the plan screen; this is the summary.
+             */
+            'analysis' => $this->analysis($room),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function analysis(Room $room): ?array
+    {
+        $analysis = RoomAnalysis::query()
+            ->where('room_id', $room->getKey())
+            ->current()
+            ->first();
+
+        if ($analysis === null) {
+            return null;
+        }
+
+        $read = $this->analyser->readPhotoIds($analysis);
+
+        return [
+            'id' => $analysis->id,
+            'photo_ids' => $read,
+            'photo_count' => count($read),
+            // Whether a photograph was added or removed since: the reading is of a room
+            // that no longer quite exists, and the screen offers to read it again.
+            'is_stale' => $read !== $this->analyser->photoIds($room),
+            'detected_room_type' => $analysis->detected_room_type,
+            'confidence_bps' => $analysis->confidence_bps,
+            'fixed_elements' => $this->names($analysis->payload['fixed_elements'] ?? null),
+            'movable_objects' => $this->names($analysis->payload['movable_objects'] ?? null),
+            'warnings' => array_values(array_filter((array) ($analysis->warnings ?? []), 'is_string')),
+            'created_at' => $analysis->created_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * The things a model listed, as names — whether it answered with strings or objects.
+     *
+     * @return list<string>
+     */
+    private function names(mixed $items): array
+    {
+        if (! is_array($items)) {
+            return [];
+        }
+
+        $names = [];
+
+        foreach ($items as $item) {
+            if (is_string($item) && $item !== '') {
+                $names[] = $item;
+
+                continue;
+            }
+
+            if (is_array($item)) {
+                $name = $item['label'] ?? $item['name'] ?? $item['type'] ?? null;
+
+                if (is_string($name) && $name !== '') {
+                    $names[] = $name;
+                }
+            }
+        }
+
+        return $names;
     }
 
     /**
