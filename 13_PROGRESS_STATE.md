@@ -155,7 +155,7 @@ UPDATED_AT: 2026-09-15
 COMMIT_OR_SNAPSHOT: planner-v2
 PHASE: Post-Phase-9 — the planner rebuilt against the storyboard
 TASK: docs/design/3D_PLANNER_V2_PLAN.md, phases 0–5
-STATUS: phases 0, 1 (bar the owner's verdict), 2 (core) and 3 (materials, fixtures, light) done
+STATUS: phases 0–3 done, 4 mostly done (openings on the plan; non-rectangular rooms open); Oda Stüdyosu S1, S2, S4 done (see docs/product/ODA_STUDYOSU_KURALLARI.md §6)
 FILES_CHANGED:
   apps/storefront/app/room3d/{ConstraintEngine,PlaceholderShapes,GizmoController,RoomMaterials}.ts,
   apps/storefront/app/room3d/{footprint,CollisionEngine,DragController,RoomEditor,SceneManager,RoomGeometryBuilder,FurnitureBuilder}.ts,

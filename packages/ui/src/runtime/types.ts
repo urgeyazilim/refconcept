@@ -661,6 +661,15 @@ export interface DesignTreeNode {
   is_current: boolean
   /** The render itself, signed and short-lived. Null while generating, or after a failure. */
   image_url: string | null
+  /** What the check said about the picture; null until a render was checked. */
+  fidelity: {
+    checked: boolean
+    faithful: boolean | null
+    issues: string[]
+    attempts: number
+  } | null
+  /** What the picture was painted onto: the emptied room, or the photograph itself. */
+  render_base: 'plate' | 'photo' | null
   created_at: string | null
   children: DesignTreeNode[]
 }

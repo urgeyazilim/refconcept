@@ -29,6 +29,20 @@ const loadError = ref<string | null>(null)
 const actionError = ref<string | null>(null)
 const working = ref(false)
 
+/**
+ * A design screen is the last step of the studio; everything before it is behind us, and
+ * the render is done when the version on screen is ready.
+ */
+const studioDone = computed(() => ({
+  photo: true,
+  recognise: true,
+  confirm: true,
+  plate: shownVersion.value?.render_base === 'plate',
+  propose: true,
+  edit: (shownVersion.value?.user_prompt ?? '').includes('Oda planındaki yerleşimi'),
+  render: shownVersion.value?.status === 'ready',
+}))
+
 const branchingFrom = ref<DesignTreeNode | null>(null)
 const branchPrompt = ref('')
 const branchQuality = ref<'draft' | 'premium'>('draft')
@@ -644,6 +658,8 @@ const statusTone: Record<string, string> = {
     <RcAlert v-if="loadError" tone="danger">{{ loadError }}</RcAlert>
 
     <template v-else-if="design">
+      <StudioStepper :project-id="projectId" :room-id="roomId" current="render" :done="studioDone" />
+
       <header>
         <NuxtLink
           :to="`/projects/${projectId}/rooms/${roomId}`"
@@ -758,6 +774,25 @@ const statusTone: Record<string, string> = {
           <p v-if="shownVersion?.image_url" class="mt-3 text-xs leading-relaxed text-muted">
             Aşağıdaki listedeki ürünler odanıza yerleştirildi. Görseldeki küçük dekoratif
             objeler temsilîdir, satışta değildir.
+          </p>
+
+          <!--
+            What the check said (K24). A picture that was made twice says so; one that still
+            does not match the room says that too, rather than being handed over as if it did.
+          -->
+          <p
+            v-if="shownVersion?.image_url && shownVersion.fidelity?.checked"
+            class="mt-2 text-xs leading-relaxed"
+            :class="shownVersion.fidelity.faithful === false ? 'text-warning' : 'text-muted'"
+          >
+            <template v-if="shownVersion.fidelity.faithful === false">
+              Denetim: görsel odanıza tam uymadı{{ shownVersion.fidelity.issues.length > 0 ? ` (${shownVersion.fidelity.issues.join(', ')})` : '' }}.
+              Yeniden render alabilir ya da planı düzenleyebilirsiniz.
+            </template>
+            <template v-else>
+              Denetim: görsel odanızla karşılaştırıldı, uyumlu{{ shownVersion.fidelity.attempts > 1 ? ' — ilk deneme uymadığı için yeniden yapıldı' : '' }}.
+              {{ shownVersion.render_base === 'plate' ? 'Boşaltılmış oda üzerine çizildi.' : '' }}
+            </template>
           </p>
 
           <!--

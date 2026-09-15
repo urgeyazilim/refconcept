@@ -168,6 +168,11 @@
 | E3D-T013 | — | BACKEND_AGENT | E3D-T011 | DONE | four views instead of one | product_media.view + multi-view endpoint at the same price; one photograph per side |
 | E3D-T014 | — | AI_AGENT | E3D-T013 | DONE | view classification | Allowed to say "I don't know" under 0.7; never overrules a seller; the simulator labels nothing |
 | E3D-T015 | — | FRONTEND_AGENT | E3D-T013 | DONE | seller labels the sides | Per-photograph selector in the portal, optional, with the reason stated |
+| STU-S1 | — | AI_AGENT | E3D-T015 | DONE | the plate (K8–K10) | room_clear task, plate on the private disk, before/after slider, render starts from it |
+| STU-S2 | — | BACKEND_AGENT | STU-S1 | DONE | render inputs + fidelity check (K23–K24) | render_inputs, fidelity, render_check task, one re-render on a failed check |
+| STU-S4 | — | FRONTEND_AGENT | STU-S2 | DONE | the step strip (§5) | StudioStepper on room, plan, design; plan prefilled from the room; fidelity note under the render; studio-stepper E2E |
+| STU-S3 | — | AI_AGENT | STU-S2 | TODO | interior-design rules (K11–K13) in LayoutComposer | named tests per rule |
+| STU-S5 | — | FRONTEND_AGENT | STU-S4 | TODO | version strip, compare, share (K26) | — |
 
 ## Scope notes
 

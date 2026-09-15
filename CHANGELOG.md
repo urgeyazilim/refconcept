@@ -31,6 +31,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   expected price and the ceiling before it queues anything, and saying plainly when the
   task is still routed to the simulator.
 
+### Added — Oda Stüdyosu, sprint 4 (the step strip)
+
+- **One strip, seven steps, every room screen.** Fotoğraf · Tanıma · Onay · Boş oda · Öneri ·
+  Düzenle · Render, at the top of the room, the plan and the design. A done step carries a
+  tick and stays a link, the current step is lit, the ones ahead are visible and quiet, and
+  the strip names what comes next. The room screen's sections are labelled with the step
+  they belong to.
+- **The plan opens with the size the customer already typed.** The layout endpoint now hands
+  the plan the room's own measurements and photo count; the confirmation form was opening
+  empty on a room that had been measured a minute earlier.
+- **The fidelity verdict is on the version tree** (`fidelity`, `render_base`), so the design
+  screen can say "odaya uymadı, yeniden yapıldı" — or that the picture was painted onto the
+  emptied room — under the render itself.
+
 ### Added — Oda Stüdyosu, sprints 1–2
 
 - **The product contract**, `docs/product/ODA_STUDYOSU_KURALLARI.md`: the seven-step journey

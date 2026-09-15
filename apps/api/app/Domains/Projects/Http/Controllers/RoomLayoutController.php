@@ -87,6 +87,20 @@ final class RoomLayoutController
                 // belong in it rather than the whole catalogue.
                 'room_type' => $room->room_type->value,
                 /*
+                 * What the room itself says about its size, and whether it has a picture.
+                 *
+                 * The measurements a customer typed on the room screen are the best first
+                 * answer the plan can offer when no geometry has been proposed yet — asking
+                 * for three numbers they gave a minute ago is asking twice. The photo count
+                 * lets the step strip say the photograph step is behind them.
+                 */
+                'room' => [
+                    'width_mm' => $room->width_mm,
+                    'length_mm' => $room->length_mm,
+                    'height_mm' => $room->height_mm,
+                    'photo_count' => $room->media->count(),
+                ],
+                /*
                  * The design a final image would be made from, if there is one.
                  *
                  * Named here so the plan screen can offer "produce the final image" without a

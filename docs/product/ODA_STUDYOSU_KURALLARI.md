@@ -172,7 +172,7 @@ her adım klavyeyle tamamlanabilir, ölçüler metin olarak okunur.
 | S1 ✅ | RoomClear görevi + plaka + önce/sonra ekranı | Test odası fotoğrafında eşyalar gidiyor, kapı/pencere yerinde; plaka gizli diskte; testler simülatörle — *2026-09-15: kuruldu; gerçek fotoğrafta deneme ürün sahibinin onayını bekliyor* |
 | S2 ✅ | Render girdileri kaydı; render plakadan başlar; sadakat denetimi | Her render'ın üçlüsü sorgulanabilir; kayan duvar yakalanınca yeniden üretim — *2026-09-15: kuruldu (`render_inputs`, `fidelity`, `render_check` görevi, bir kez yeniden üretim)* |
 | S3 | İç mimar kuralları (K13) LayoutComposer'da | Her kuralın adıyla testi; kompoze oda kısıtlardan geçiyor |
-| S4 | Oda Stüdyosu ekranı (adım şeridi + 7 adım), mevcut ekranların içine alınması | Tarayıcı testi: fotoğraf → render → sepet tek sayfada |
+| S4 ✅ | Oda Stüdyosu ekranı (adım şeridi + 7 adım), mevcut ekranların içine alınması | Tarayıcı testi: fotoğraf → render → sepet tek sayfada — *2026-09-15: adım şeridi (`StudioStepper`) oda, plan ve tasarım ekranlarında; oda ekranı bölümleri adım numarasıyla; plan formu odanın ölçüsüyle açılıyor; sadakat notu render'ın altında; `tests/e2e/studio-stepper.spec.ts`. Ayrı "tek sayfa" yerine mevcut üç ekran şeritle bağlandı — §8'deki dördüncü karar sahibinde.* |
 | S5 | Versiyon şeridi, yan yana karşılaştırma, paylaşım | İki render yan yana; paylaşılan bağlantı fotoğrafı sızdırmaz |
 
 Sıra S1 → S2 → S4 → S3 → S5 olabilir: önce boş oda ve birebirlik (ürünün özü), sonra ekran.

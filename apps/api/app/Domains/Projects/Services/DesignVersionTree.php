@@ -234,6 +234,18 @@ final class DesignVersionTree
                      * imagine, and the product's promise is exactly that you can see it.
                      */
                     'image_url' => $this->assetUrl($version),
+                    /*
+                     * Whether the picture was checked against the room, and what it was
+                     * made from. The studio says "odaya uymadı, yeniden yapıldı" beside a
+                     * render and shows which step (emptied room or photograph) it stands on.
+                     */
+                    'fidelity' => $version->fidelity === null ? null : [
+                        'checked' => (bool) ($version->fidelity['checked'] ?? false),
+                        'faithful' => $version->fidelity['faithful'] ?? null,
+                        'issues' => array_values((array) ($version->fidelity['issues'] ?? [])),
+                        'attempts' => (int) ($version->fidelity['attempts'] ?? 1),
+                    ],
+                    'render_base' => $version->render_inputs['base']['kind'] ?? null,
                     'created_at' => $version->created_at?->toIso8601String(),
                     'children' => $build((string) $version->id),
                 ];

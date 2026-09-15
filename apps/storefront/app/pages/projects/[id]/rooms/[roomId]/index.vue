@@ -194,6 +194,32 @@ const walls = [
   { value: 'south', label: 'Güney duvarı' },
   { value: 'west', label: 'Batı duvarı' },
 ]
+
+/**
+ * Where this room is in the studio's seven steps, from what the screen already knows.
+ *
+ * A photograph makes step 1 done; measurements on the room make 2; a plate makes 4; a
+ * design makes 5; a ready design makes 7. Confirmation and editing live on the plan screen
+ * and are counted there.
+ */
+const hasPhoto = computed(() => media.value.some(item => item.type === 'photo'))
+const hasPlate = computed(() => media.value.some(item => item.type === 'plate'))
+
+const studioDone = computed(() => ({
+  photo: hasPhoto.value,
+  recognise: (room.value?.width_mm ?? null) !== null,
+  plate: hasPlate.value,
+  propose: designs.value.length > 0,
+  render: designs.value.some(design => design.status === 'ready'),
+}))
+
+const studioCurrent = computed<'photo' | 'recognise' | 'plate' | 'propose'>(() => {
+  if (!hasPhoto.value) return 'photo'
+  if ((room.value?.width_mm ?? null) === null) return 'recognise'
+  if (!hasPlate.value) return 'plate'
+
+  return 'propose'
+})
 </script>
 
 <template>
@@ -223,6 +249,8 @@ const walls = [
           </RcButton>
         </div>
       </header>
+
+      <StudioStepper :project-id="projectId" :room-id="roomId" :current="studioCurrent" :done="studioDone" />
 
       <RcAlert v-if="actionError" tone="danger">{{ actionError }}</RcAlert>
 
@@ -280,8 +308,9 @@ const walls = [
       </section>
 
       <!-- Designs -->
-      <section v-if="designs.length > 0">
-        <h2 class="text-lg font-medium">Tasarımlar</h2>
+      <section v-if="designs.length > 0" id="tasarim">
+        <p class="text-xs text-muted">Adım 5 ve 7</p>
+        <h2 class="mt-1 text-lg font-medium">Tasarımlar</h2>
 
         <div class="mt-5 grid gap-4 sm:grid-cols-2">
           <NuxtLink
@@ -307,23 +336,26 @@ const walls = [
         </div>
       </section>
 
-      <RoomPhotoGallery
-        :project-id="projectId"
-        :room-id="roomId"
-        :media="media"
-        :can-edit="canEdit"
-        @changed="load"
-      />
+      <div id="fotograf">
+        <RoomPhotoGallery
+          :project-id="projectId"
+          :room-id="roomId"
+          :media="media"
+          :can-edit="canEdit"
+          @changed="load"
+        />
+      </div>
 
       <!--
-        The plan. Separate from the measurements below it on purpose: those are a form, and
-        this is a room somebody walks around in.
+        Confirming and editing happen on the plan screen: the analysis proposes, the plan
+        asks "bu ölçüler doğru mu?", and the room is furnished there. This card is the way in.
       -->
       <section class="rc-card p-6 sm:p-8">
-        <h2 class="text-lg font-medium">3B plan</h2>
+        <p class="text-xs text-muted">Adım 3 ve 6</p>
+        <h2 class="mt-1 text-lg font-medium">Onay ve düzenleme</h2>
         <p class="mt-1.5 max-w-[62ch] text-sm leading-relaxed text-ink-secondary">
-          Odayı üç boyutlu görün, ürünleri sürükleyerek yerleştirin. Bir şeyin kapının
-          önüne geldiğini ya da geçiş için yer kalmadığını taşırken söyler.
+          Fotoğraftan okunan ölçüleri onaylayın, odayı üç boyutlu görün, ürünleri oklarla
+          taşıyıp halkayla döndürün. Bir şey duvara giremez, kapının önüne konamaz.
         </p>
 
         <NuxtLink
@@ -335,8 +367,9 @@ const walls = [
       </section>
 
       <!-- Measurements -->
-      <section class="rc-card p-6 sm:p-8">
-        <h2 class="text-lg font-medium">Ölçüler</h2>
+      <section id="olculer" class="rc-card p-6 sm:p-8">
+        <p class="text-xs text-muted">Adım 2</p>
+        <h2 class="mt-1 text-lg font-medium">Ölçüler</h2>
         <p class="mt-1.5 max-w-[62ch] text-sm leading-relaxed text-ink-secondary">
           Ölçü girmek zorunlu değil, ama tasarımın gerçekten odanıza sığan mobilyalar
           önermesini sağlayan şey bu. Santimetre cinsinden yazın.

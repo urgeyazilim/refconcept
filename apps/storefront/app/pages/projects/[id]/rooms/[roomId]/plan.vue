@@ -65,6 +65,21 @@ const loadError = ref<string | null>(null)
 const saveError = ref<string | null>(null)
 const confirming = ref(false)
 
+/** What the room itself says: its typed size and whether it has a photograph. */
+const roomFacts = ref<{ width_mm: number | null, length_mm: number | null, height_mm: number | null, photo_count: number } | null>(null)
+
+/**
+ * Where this screen sits in the studio's steps: confirming the room until the geometry is
+ * confirmed, editing once it is.
+ */
+const studioCurrent = computed<'confirm' | 'edit'>(() => (confirmed.value === null ? 'confirm' : 'edit'))
+const studioDone = computed(() => ({
+  photo: (roomFacts.value?.photo_count ?? 0) > 0,
+  recognise: confirmed.value !== null || pending.value.length > 0 || (roomFacts.value?.width_mm ?? null) !== null,
+  confirm: confirmed.value !== null,
+  edit: liveItems.value.length > 0,
+}))
+
 /** The 3D scene, for the picture the renderer works from and for adding products to. */
 const scene = ref<{
   snapshot: () => string | null
@@ -286,6 +301,7 @@ async function load(): Promise<void> {
         openings: RoomOpening[]
         layout: LayoutPayload | null
         room_type: string | null
+        room: { width_mm: number | null, length_mm: number | null, height_mm: number | null, photo_count: number }
         design: { design_id: string, version_id: string, version_number: number } | null
         detected: Detection | null
       }
@@ -296,6 +312,7 @@ async function load(): Promise<void> {
     openings.value = response.data.openings
     items.value = response.data.layout?.items ?? []
     roomType.value = response.data.room_type
+    roomFacts.value = response.data.room
     design.value = response.data.design
     detected.value = response.data.detected
 
@@ -321,9 +338,11 @@ async function load(): Promise<void> {
       }
     }
 
-    const source = response.data.geometry ?? response.data.pending_geometry[0]
+    // The confirmed geometry, else the newest proposal, else what the customer typed on the
+    // room screen — the form should never open empty when the room already has a size.
+    const source = response.data.geometry ?? response.data.pending_geometry[0] ?? response.data.room
 
-    if (source !== undefined) {
+    if (source !== undefined && source.width_mm !== null && source.length_mm !== null && source.height_mm !== null) {
       correction.width = String(Math.round(source.width_mm / 10))
       correction.length = String(Math.round(source.length_mm / 10))
       correction.height = String(Math.round(source.height_mm / 10))
@@ -786,6 +805,8 @@ onMounted(async () => {
 
 <template>
   <div class="mx-auto max-w-5xl space-y-6 p-6">
+    <StudioStepper :project-id="projectId" :room-id="roomId" :current="studioCurrent" :done="studioDone" />
+
     <header class="flex items-center justify-between gap-4">
       <div>
         <h1 class="text-xl font-medium">

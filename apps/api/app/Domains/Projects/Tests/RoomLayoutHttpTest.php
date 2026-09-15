@@ -333,6 +333,20 @@ it('tells the editor what the floor is made of, in its own three words', functio
     expect($response->json('data.geometry.floor'))->toBe('wood');
 });
 
+it('hands the plan the size the customer typed on the room, before any geometry exists', function (): void {
+    $this->room->update(['width_mm' => 4_200, 'length_mm' => 5_600, 'height_mm' => 2_700]);
+
+    $response = $this->actingAs($this->owner)->getJson("{$this->url}/layout")->assertOk();
+
+    expect($response->json('data.geometry'))->toBeNull()
+        ->and($response->json('data.room'))->toBe([
+            'width_mm' => 4_200,
+            'length_mm' => 5_600,
+            'height_mm' => 2_700,
+            'photo_count' => 0,
+        ]);
+});
+
 it('keeps a stranger out of somebody elses plan', function (): void {
     confirmGeometry();
 

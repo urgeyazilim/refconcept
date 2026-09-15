@@ -162,7 +162,9 @@ test.describe('project journey', () => {
     await page.getByRole('button', { name: 'Başlat' }).click()
 
     await expect(page.getByRole('heading', { name: /Salon tasarımı/ })).toBeVisible()
-    await expect(page.getByText('v1')).toBeVisible()
+    // Named twice on the screen — under the picture and as a row of the tree — so the
+    // assertion names the tree, which is what "the version exists" means here.
+    await expect(page.locator('ul').getByText('v1')).toBeVisible()
 
     /*
      * The engine is live from Phase 8, and this suite deliberately does not wait for it —
