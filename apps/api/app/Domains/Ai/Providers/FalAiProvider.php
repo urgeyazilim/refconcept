@@ -71,9 +71,11 @@ final class FalAiProvider implements AiProvider
      *
      * Nobody is watching: this runs in a queue after a listing is approved. A timeout that
      * fires while a mesh is being written is a listing with no model and a seller wondering
-     * why, which costs more than a worker sitting still for two minutes.
+     * why — and a bill for a mesh nobody received. Tripo takes a minute; Rodin at its regular
+     * tier can take four. Nine minutes is longer than any of them and shorter than the AI
+     * worker's own limit.
      */
-    private const TIMEOUT_SECONDS = 180;
+    private const TIMEOUT_SECONDS = 540;
 
     public function __construct(private readonly GeneratedImageStore $files) {}
 
