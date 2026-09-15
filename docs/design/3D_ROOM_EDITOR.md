@@ -123,6 +123,21 @@ Two differences, both deliberate:
   them; R switches between move and turn. Dragging the piece itself still works.
 - **Products are not hand-modelled.** See below.
 
+## How the room is drawn
+
+`RoomGeometryBuilder.ts` extrudes each wall from a 2D outline with the openings punched out,
+then dresses it: skirting along the foot (broken at doorways), a casing round every opening,
+a leaf standing 30° open with its swing arc on the floor for a door, and a sill, glass, a
+mullion and a wall-sized daylight sheet outside for a window. Every fixture is a child of its
+wall, built in the wall's own 2D space (x along the wall, y up, z through it), so it goes
+where the wall goes and hides when the wall hides. `inward` and `innerZ` say which way the
+room is from each wall's local frame — the four walls are placed with only two orientations
+so an offset always runs the same way as its world axis, which is what the server assumes.
+
+`RoomMaterials.ts` paints the oak boards and the plaster on a canvas at load time — nothing
+to fetch, nothing to 404 — and `SceneManager` lights the room with Three's room environment
+plus one sun.
+
 ## How a product is drawn
 
 Four ways, in order of preference, each falling back to the next:

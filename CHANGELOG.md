@@ -31,6 +31,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   expected price and the ceiling before it queues anything, and saying plainly when the
   task is still routed to the simulator.
 
+### Added — Planner v2, phase 3 (a room that looks like a room)
+
+- **Materials painted on a canvas, not loaded from files:** oak boards laid in staggered
+  rows with grain and seams, plaster with a little noise in it. They ship with the code, so
+  they cannot 404 or arrive a second after the room did.
+- **Skirting along every wall, broken at the doorways.** The cheapest thing that makes a box
+  read as a room.
+- **Doors and windows are things, not holes.** A door has a casing and a leaf standing open
+  30° into the room with its swing drawn on the floor; a window has a casing, a sill, glass
+  with a mullion, and daylight behind it. They belong to their wall and hide with it.
+- **Environment lighting** (Three's room environment) instead of a flat ambient, so a matt
+  wall has a gradient and a glossy floor has something to reflect.
+- **Pictures, mirrors, wall lights and curtains hang on the nearest wall** and slide along
+  it; on both sides of the wire they collide with nothing, because on the wall is not on the
+  floor.
+
 ### Added — Planner v2, phase 2 (interaction)
 
 - **Handles on the selected piece.** Arrows slide it along the floor, a ring turns it about

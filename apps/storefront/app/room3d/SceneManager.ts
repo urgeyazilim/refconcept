@@ -9,11 +9,13 @@ import {
   Line,
   LineBasicMaterial,
   PCFSoftShadowMap,
+  PMREMGenerator,
   Scene,
   SRGBColorSpace,
   Vector3,
   WebGLRenderer,
 } from 'three'
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 
 import { CameraManager } from './CameraManager'
 import type { CollisionState } from './CollisionEngine'
@@ -381,7 +383,18 @@ export class SceneManager {
      * let somebody judge whether a sideboard fits beside a door, which needs legible edges
      * and honest shadows rather than a lighting rig.
      */
-    this.scene.add(new AmbientLight(0xffffff, 1.4))
+    this.scene.add(new AmbientLight(0xffffff, 0.55))
+
+    /*
+     * An environment map, for the light that comes from everywhere.
+     *
+     * Three's own room environment — a lit interior, baked to a reflection map. It is what
+     * gives a glossy floor something to reflect and a matt wall a gradient instead of a flat
+     * fill, and it does the job the ambient light used to do, but with direction. Without it
+     * the room was lit like a diagram.
+     */
+    this.scene.environment = new PMREMGenerator(this.renderer).fromScene(new RoomEnvironment(), 0.04).texture
+    this.scene.environmentIntensity = 0.85
 
     const sun = new DirectionalLight(0xfff4e6, 2.2)
     sun.position.set(toUnits(6000), toUnits(5000), toUnits(4000))
