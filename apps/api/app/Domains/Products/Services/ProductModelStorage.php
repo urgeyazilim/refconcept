@@ -31,6 +31,11 @@ use RuntimeException;
  */
 final class ProductModelStorage
 {
+    /** What a bake-off candidate may weigh. See storeCandidate(). */
+    public const MAX_CANDIDATE_BYTES = 64 * 1024 * 1024;
+
+    public function __construct(private readonly MeshOptimiser $optimiser) {}
+
     /**
      * What a seller may upload.
      *
@@ -64,13 +69,19 @@ final class ProductModelStorage
             throw new RuntimeException('Yüklenen model okunamadı.');
         }
 
-        return $this->put($product, $bytes, 'seller', $file->getClientOriginalName(), $uploader->getKey());
+        return $this->put($product, $this->optimiser->optimise($bytes)['bytes'], 'seller', $file->getClientOriginalName(), $uploader->getKey());
     }
 
-    /** A mesh made from the product's own photograph. */
+    /**
+     * A mesh made from the product's own photograph.
+     *
+     * Passed through the optimiser first, like an upload: what a generator sends is a hundred
+     * thousand faces and a 4K texture, and what a room with ten products in it can afford is
+     * a fifth of that. Stored raw if the optimiser is unreachable — heavier, still a model.
+     */
     public function storeGenerated(Product $product, string $bytes): ProductMedia
     {
-        return $this->put($product, $bytes, 'ai', 'uretilen-model.glb', null);
+        return $this->put($product, $this->optimiser->optimise($bytes)['bytes'], 'ai', 'uretilen-model.glb', null);
     }
 
     /**
@@ -119,8 +130,11 @@ final class ProductModelStorage
      */
     public function storeCandidate(Product $product, string $bytes, string $label): string
     {
-        if (strlen($bytes) > self::MAX_SIZE_BYTES) {
-            throw new RuntimeException('3B model 20 MB sınırını aşıyor.');
+        // Looser than the catalogue's limit on purpose: the point is to see what a generator
+        // sends, and Rodin's first answer was 26 MB of geometry and PNG. Nothing here is
+        // served to a customer.
+        if (strlen($bytes) > self::MAX_CANDIDATE_BYTES) {
+            throw new RuntimeException('Aday model 64 MB sınırını aşıyor.');
         }
 
         $path = self::candidatePath($product, $label);

@@ -12,6 +12,7 @@ import {
   type Object3D,
 } from 'three'
 
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 import type { CollisionState } from './CollisionEngine'
@@ -96,8 +97,14 @@ export class FurnitureBuilder {
     accent: new MeshStandardMaterial({ color: 0x6b5d4f, roughness: 0.85, metalness: 0 }),
   }
 
-  /** Loads the glTF binaries the catalogue has, when it has them. */
-  private readonly models = new GLTFLoader()
+  /**
+   * Loads the glTF binaries the catalogue has, when it has them.
+   *
+   * With the meshopt decoder, because stored models are meshopt-compressed by the mesh-tools
+   * sidecar — a fifth of the bytes for the same sofa. The decoder is plain WebAssembly inlined
+   * in the module, so there is no decoder file to serve and nothing to go missing on a CDN.
+   */
+  private readonly models = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder)
 
   private readonly edgeMaterial = new LineBasicMaterial({ color: 0x3d3733 })
 

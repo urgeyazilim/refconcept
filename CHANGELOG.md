@@ -31,6 +31,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   expected price and the ceiling before it queues anything, and saying plainly when the
   task is still routed to the simulator.
 
+### Added — Planner v2, phase 1 (assets)
+
+- **A mesh post-processing sidecar** (`mesh-tools`, Node, its own container): every stored
+  model is welded, decimated towards 20k faces, meshopt-compressed, its textures resized to
+  1024 px and re-encoded as WebP. The first real armchair went from 101k triangles and 3.3 MB
+  to 20k and 262 KB in under a second, and looks the same across a room. The API stores the
+  raw mesh if the sidecar is unreachable — heavier, still a model.
+- **Sellers can upload their own GLB** from the product page. A manufacturer's file is the
+  shape of the thing; it outranks anything generated and is never re-reviewed.
+- **A bake-off across every generator fal hosts** — Tripo 2.5, Tripo H3.1, Rodin Gen-2.5,
+  Hunyuan3D v3 — on ten of our own products, with a comparison page (`/lab/model-bakeoff`)
+  whose four cameras are locked together. The routing table changes only when our own
+  furniture says so.
+
 ### Changed — Planner v2, phase 0
 
 - **Furniture can no longer leave the room or enter another piece.** The first editor only

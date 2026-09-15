@@ -62,4 +62,12 @@ return [
         'key' => env('FAL_API_KEY'),
     ],
 
+    /*
+     * The mesh post-processing sidecar (infra/docker/mesh-tools). Optional: with no URL the
+     * raw mesh is stored as the generator sent it, which is heavier and still a model.
+     */
+    'mesh_tools' => [
+        'url' => env('MESH_TOOLS_URL'),
+    ],
+
 ];

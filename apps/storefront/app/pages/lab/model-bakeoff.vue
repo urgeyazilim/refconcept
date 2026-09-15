@@ -28,6 +28,7 @@ import {
 } from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 definePageMeta({ layout: false })
@@ -129,7 +130,6 @@ interface Viewer {
 
 const canvases = ref<HTMLCanvasElement[]>([])
 const viewers: Viewer[] = []
-let environment: ReturnType<PMREMGenerator['fromScene']> | null = null
 let syncing = false
 let frame = 0
 
@@ -144,11 +144,10 @@ function makeViewer(label: string, canvas: HTMLCanvasElement): Viewer {
 
   scene.background = new Color(0xf3efe8)
 
-  if (environment === null) {
-    environment = new PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04)
-  }
-
-  scene.environment = environment.texture
+  // Per renderer, not shared: a PMREM texture belongs to the GL context that made it, and
+  // handed to a second canvas it lights nothing — the first bench had one bright mesh and
+  // three dim ones, which is exactly the false comparison this page exists to avoid.
+  scene.environment = new PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture
 
   const sun = new DirectionalLight(0xffffff, 1.6)
 
@@ -196,7 +195,7 @@ function makeViewer(label: string, canvas: HTMLCanvasElement): Viewer {
   return { label, canvas, renderer, scene, camera, controls, holder }
 }
 
-const loader = new GLTFLoader()
+const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder)
 
 async function show(viewer: Viewer, outcome: Outcome | null, item: BakeoffProduct): Promise<void> {
   viewer.holder.clear()

@@ -523,6 +523,13 @@ async function setStatus(status: 'active' | 'archived') {
             @updated="onChildUpdate"
           />
 
+          <ProductModelManager
+            :product-id="productId"
+            :model="product.model ?? null"
+            :disabled="isLocked"
+            @updated="onChildUpdate"
+          />
+
           <ProductSkuEditor
             :product-id="productId"
             :skus="product.skus ?? []"

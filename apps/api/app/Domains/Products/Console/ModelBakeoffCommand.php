@@ -8,11 +8,14 @@ use App\Domains\Ai\Models\AiModel;
 use App\Domains\Products\Enums\ModerationStatus;
 use App\Domains\Products\Jobs\GenerateProductModel;
 use App\Domains\Products\Models\Product;
+use App\Domains\Products\Services\GlbInspector;
 use App\Domains\Products\Services\ProductModelStorage;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Throwable;
 
 /**
  * The same products through every generator, side by side, so the choice is made on our own
@@ -104,11 +107,24 @@ final class ModelBakeoffCommand extends Command
             foreach ($models as $model) {
                 $label = $this->labelFor($model->code);
 
-                $job = new GenerateProductModel((string) $product->getKey(), $model->code, $label);
+                /*
+                 * Already made in an earlier run: read the file rather than pay for it again.
+                 * A run that died on the twelfth generation should resume at the twelfth,
+                 * not start over at forty cents a step.
+                 */
+                $outcome = $this->kept($product, $label);
 
-                app()->call([$job, 'handle']);
+                if ($outcome === null) {
+                    $job = new GenerateProductModel((string) $product->getKey(), $model->code, $label);
 
-                $outcome = $job->outcome;
+                    try {
+                        app()->call([$job, 'handle']);
+                        $outcome = $job->outcome;
+                    } catch (Throwable $e) {
+                        // One generator's tantrum must not end the run for the other three.
+                        $outcome = ['url' => null, 'bytes' => 0, 'triangles' => null, 'textures' => 0, 'seconds' => 0.0, 'failure' => $e->getMessage()];
+                    }
+                }
 
                 $results[(string) $product->getKey()][$label] = $outcome;
 
@@ -238,5 +254,33 @@ final class ModelBakeoffCommand extends Command
     private function labelFor(string $code): string
     {
         return self::LABELS[$code] ?? Str::slug($code);
+    }
+
+    /**
+     * A candidate an earlier run already stored, inspected from the file.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function kept(Product $product, string $label): ?array
+    {
+        $disk = Storage::disk((string) config('refconcept.storage.public_disk', config('filesystems.default')));
+        $path = ProductModelStorage::candidatePath($product, $label);
+
+        if (! $disk->exists($path)) {
+            return null;
+        }
+
+        $bytes = (string) $disk->get($path);
+        $inspected = GlbInspector::inspect($bytes);
+
+        return [
+            'url' => $disk->url($path),
+            'bytes' => strlen($bytes),
+            'triangles' => $inspected['triangles'] ?? null,
+            'textures' => $inspected['textures'] ?? 0,
+            'seconds' => 0.0,
+            'failure' => null,
+            'kept' => true,
+        ];
     }
 }

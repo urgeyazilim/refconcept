@@ -235,9 +235,19 @@ final class GenerateProductModel implements ShouldQueue
             return;
         }
 
-        $url = $this->keepAs === null
-            ? $models->storeGenerated($product, $bytes)->url()
-            : $models->storeCandidate($product, $bytes, $this->keepAs);
+        try {
+            $url = $this->keepAs === null
+                ? $models->storeGenerated($product, $bytes)->url()
+                : $models->storeCandidate($product, $bytes, $this->keepAs);
+        } catch (Throwable $e) {
+            // Too big, or a disk that would not take it. The scratch copy is left where it is:
+            // the job succeeded at the provider, and a retry under the same key finds the
+            // bytes here rather than paying for them again.
+            Log::warning('3B model kaydedilemedi.', ['product' => $this->productId, 'reason' => $e->getMessage()]);
+            $this->outcome = self::failed($e->getMessage(), $started);
+
+            return;
+        }
 
         $inspected = GlbInspector::inspect($bytes);
 

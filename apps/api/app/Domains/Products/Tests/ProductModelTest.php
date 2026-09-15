@@ -400,6 +400,30 @@ it('waits on the AI worker, which lets a generation take the minute it takes', f
         ->and($job->timeout)->toBeGreaterThan(180);
 });
 
+it('stores the mesh the optimiser hands back, and the raw one when it cannot', function (): void {
+    config()->set('services.mesh_tools.url', 'http://mesh-tools:8080');
+
+    /*
+     * What a generator sends is a hundred thousand faces and a 4K texture; what a room with
+     * ten products can afford is a fifth of that. The sidecar decimates and compresses it —
+     * and when the sidecar is down, the raw mesh is stored rather than nothing, because a
+     * heavy model is worse than a light one and better than no model at all.
+     */
+    Http::fake([
+        'mesh-tools:8080/optimise*' => Http::sequence()
+            ->push(glb('o'), 200, ['Content-Type' => 'model/gltf-binary', 'X-Triangles-Before' => '101440', 'X-Triangles-After' => '19980'])
+            ->push(['error' => 'boom'], 500),
+    ]);
+
+    $optimised = $this->models->storeGenerated($this->product, glb('r'));
+
+    expect(Storage::disk('s3-public')->get((string) $optimised->storage_path))->toBe(glb('o'));
+
+    $raw = $this->models->storeGenerated($this->product, glb('r'));
+
+    expect(Storage::disk('s3-public')->get((string) $raw->storage_path))->toBe(glb('r'));
+});
+
 it('leaves a seller their own file', function (): void {
     $this->models->storeGenerated($this->product, glb('a'));
 

@@ -128,6 +128,20 @@ services:
         condition: service_healthy
     networks: [refconcept]
 
+  # Decimates and compresses generated product meshes before they are stored. Node, because
+  # the tooling is; its own container, because the API image is PHP and stays that way. The
+  # API degrades gracefully without it — the raw mesh is stored — so it is not a dependency.
+  mesh-tools:
+    build: ./infra/docker/mesh-tools
+    container_name: refconcept-mesh-tools
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [refconcept]
+
   nginx:
     image: nginx:1.27-alpine
     container_name: refconcept-nginx

@@ -70,7 +70,13 @@ editor full of photograph cut-outs is still cut-outs.
   billboard again.
 - Unit tests for both, mirrored server-side in `LayoutGeometry`.
 
-### Phase 1 — Every product a real mesh (1 week + asset budget)
+### Phase 1 — Every product a real mesh (1 week + asset budget) — IN PROGRESS
+
+Done 2026-09-15: seller GLB upload screen; `mesh-tools` sidecar (gltf-transform + meshopt:
+101k → 20k faces, 3.3 MB → 262 KB on the first armchair); the adapter speaks Tripo 2.5/H3.1,
+Rodin 2.5 and Hunyuan3D v3; `refconcept:model-bakeoff` and `/lab/model-bakeoff`. Bake-off
+running (10 products × 4 generators ≈ $15.25). Open: the owner's verdict, repointing the
+route, the seller-portal completeness hint.
 - **Seller upload first**: the GLB upload API exists; add the seller-portal screen and
   make it a completeness item ("3B model yükleyin veya biz üretelim").
 - **Generation for the rest**, on approval, through the existing gateway. Tripo 2.5 works
