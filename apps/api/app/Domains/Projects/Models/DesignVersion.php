@@ -37,6 +37,8 @@ use Illuminate\Support\Carbon;
  * @property RenderQuality $render_quality
  * @property string|null $user_prompt
  * @property string|null $ai_job_id
+ * @property array<string, mixed>|null $render_inputs
+ * @property array<string, mixed>|null $fidelity
  * @property int $credit_cost
  * @property string|null $credit_reservation_id
  * @property string|null $failure_reason
@@ -70,6 +72,8 @@ class DesignVersion extends Model
         'user_prompt',
         'credit_cost',
         'created_by',
+        'render_inputs',
+        'fidelity',
     ];
 
     /**
@@ -83,6 +87,8 @@ class DesignVersion extends Model
             'version_number' => 'integer',
             'credit_cost' => 'integer',
             'completed_at' => 'datetime',
+            'render_inputs' => 'array',
+            'fidelity' => 'array',
         ];
     }
 

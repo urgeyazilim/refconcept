@@ -17,6 +17,7 @@ use App\Domains\Matching\Services\ShoppingListBuilder;
 use App\Domains\Projects\Enums\GenerationStage;
 use App\Domains\Projects\Enums\RenderQuality;
 use App\Domains\Projects\Exceptions\DesignGenerationFailed;
+use App\Domains\Projects\Models\DesignAsset;
 use App\Domains\Projects\Models\DesignLayout;
 use App\Domains\Projects\Models\DesignPlan;
 use App\Domains\Projects\Models\DesignVersion;
@@ -403,6 +404,89 @@ final class DesignGenerationPipeline
             throw DesignGenerationFailed::nothingToPlace();
         }
 
+        /*
+         * What this picture is made from, written down before it is made.
+         *
+         * Rule K23 of the studio contract: a render has three inputs — the room (the plate,
+         * or the photograph when there is no plate), the layout snapshot, the product
+         * photographs — and which three can be shown afterwards. Written before the call
+         * so that a render that fails still says what it was attempting.
+         */
+        $currentLayout = $this->currentLayout($room);
+
+        $version->forceFill([
+            'render_inputs' => [
+                'base' => ['media_id' => $base->getKey(), 'kind' => $base->isPlate() ? 'plate' : 'photograph'],
+                'photograph_media_id' => $photograph->getKey(),
+                'layout' => $currentLayout === null ? null : [
+                    'id' => $currentLayout->getKey(),
+                    'version' => $currentLayout->version,
+                    'snapshot' => $layout !== null,
+                ],
+                'product_count' => count($purchasable),
+            ],
+        ])->save();
+
+        /*
+         * Made, checked, and made again once if the check says it is not the room.
+         *
+         * Rule K24: no invented furniture, no moved wall, no lost door. A vision call
+         * compares the picture with the plan it was made from; a picture that fails is
+         * removed and the render runs a second time. Not a third: the second attempt is
+         * shown with its verdict beside it, because "this is the best we could do" is a
+         * better answer than another minute and another charge.
+         */
+        foreach (range(1, self::RENDER_ATTEMPTS) as $attempt) {
+            [$ran, $asset] = $this->renderOnce($version, $room, $analysis, $plan, $matches, $quality, $purchasable, $images, $layout !== null);
+
+            $verdict = $this->check($version, $asset, $layout, $purchasable, $analysis);
+
+            $version->forceFill([
+                'ai_job_id' => $ran->getKey(),
+                'fidelity' => $verdict === null ? ['checked' => false, 'attempts' => $attempt] : [...$verdict, 'checked' => true, 'attempts' => $attempt],
+            ])->save();
+
+            if ($verdict === null || $verdict['faithful'] !== false || $attempt === self::RENDER_ATTEMPTS) {
+                break;
+            }
+
+            $this->event($version, GenerationStage::Render, 'started', 'Görsel odaya uymadı, yeniden üretiliyor…');
+
+            $this->storage->purge($asset->disk, $asset->storage_path);
+            $asset->delete();
+        }
+
+        $this->event(
+            $version,
+            GenerationStage::Render,
+            'succeeded',
+            'Görsel üretildi.',
+            $this->elapsed($started),
+        );
+    }
+
+    /** How many times a picture may be made before the best one is shown as it is. */
+    private const RENDER_ATTEMPTS = 2;
+
+    /**
+     * One call to the renderer and one file on the private disk.
+     *
+     * @param  Collection<int, DesignMatch>  $matches
+     * @param  array<int, array<string, mixed>>  $purchasable
+     * @param  array<int, array{disk: string, path: string}>  $images
+     * @return array{0: AiJob, 1: DesignAsset}
+     */
+    private function renderOnce(
+        DesignVersion $version,
+        Room $room,
+        RoomAnalysis $analysis,
+        DesignPlan $plan,
+        Collection $matches,
+        RenderQuality $quality,
+        array $purchasable,
+        array $images,
+        bool $hasLayout,
+    ): array {
         $ran = $this->dispatcher->runInline(
             task: $quality->task(),
             input: [
@@ -449,7 +533,7 @@ final class DesignGenerationPipeline
                 'instruction' => $version->user_prompt,
                 // What each supplied image is. Unlabelled, a model has no way to tell the
                 // room it must preserve from the furniture it must place into it.
-                'image_roles' => $this->imageRoles($matches, $layout !== null),
+                'image_roles' => $this->imageRoles($matches, $hasLayout),
                 'image_sources' => $images,
             ],
             subject: $version,
@@ -482,24 +566,115 @@ final class DesignGenerationPipeline
              * Only a provider that hands back a link — and whose link expires — makes us
              * go over the network for it.
              */
-            if ($refs !== []) {
-                $this->storage->storeRenderFromRef((string) $version->getKey(), $refs[0]);
-            } else {
-                $this->storage->storeRenderFromUrl((string) $version->getKey(), $urls[0]);
-            }
+            $asset = $refs !== []
+                ? $this->storage->storeRenderFromRef((string) $version->getKey(), $refs[0])
+                : $this->storage->storeRenderFromUrl((string) $version->getKey(), $urls[0]);
         } catch (Throwable $e) {
             throw DesignGenerationFailed::renderCouldNotBeSaved($e->getMessage());
         }
 
-        $version->forceFill(['ai_job_id' => $ran->getKey()])->save();
+        return [$ran, $asset];
+    }
 
-        $this->event(
-            $version,
-            GenerationStage::Render,
-            'succeeded',
-            'Görsel üretildi.',
-            $this->elapsed($started),
-        );
+    /**
+     * Asks a vision model whether the picture is the room it was meant to be.
+     *
+     * Null when it could not ask — the task is unrouted, paused or failed — and a picture
+     * that could not be checked is kept, marked unchecked. A missing check is not a failed
+     * check.
+     *
+     * @param  array{disk: string, path: string}|null  $layout
+     * @param  array<int, array<string, mixed>>  $purchasable
+     * @return array{faithful: bool, furniture_count: int|null, issues: list<string>, confidence: float}|null
+     */
+    private function check(
+        DesignVersion $version,
+        DesignAsset $asset,
+        ?array $layout,
+        array $purchasable,
+        RoomAnalysis $analysis,
+    ): ?array {
+        $expected = [];
+
+        foreach ($purchasable as $placement) {
+            $name = $placement['product_name'] ?? $placement['category'] ?? null;
+
+            if (is_string($name) && $name !== '') {
+                $expected[] = $name;
+            }
+        }
+
+        $sources = [['disk' => $asset->disk, 'path' => $asset->storage_path]];
+        $roles = ['0: the render to check'];
+
+        if ($layout !== null) {
+            $sources[] = $layout;
+            $roles[] = '1: the plan the render was made from';
+        }
+
+        try {
+            $ran = $this->dispatcher->runInline(
+                task: AiTask::RenderCheck,
+                input: [
+                    'room_type' => $analysis->detected_room_type ?? 'room',
+                    'expected' => $expected === [] ? 'nothing in particular' : implode(', ', $expected),
+                    'openings' => implode(', ', $analysis->preservedElements()) ?: 'none recorded',
+                    'image_roles' => $roles,
+                    'image_sources' => $sources,
+                ],
+                subject: $version,
+                creditCostOverride: 0,
+            );
+        } catch (Throwable $e) {
+            Log::info('Render denetimi yapılamadı.', ['version' => $version->getKey(), 'reason' => $e->getMessage()]);
+
+            return null;
+        }
+
+        if ($ran->status !== AiJobStatus::Succeeded) {
+            return null;
+        }
+
+        $structured = (array) ($ran->output['structured'] ?? []);
+
+        if (! array_key_exists('faithful', $structured)) {
+            return null;
+        }
+
+        $issues = [];
+
+        foreach ((array) ($structured['issues'] ?? []) as $issue) {
+            if (is_string($issue) && $issue !== '') {
+                $issues[] = $issue;
+            }
+        }
+
+        return [
+            'faithful' => (bool) $structured['faithful'],
+            'furniture_count' => is_int($structured['furniture_count'] ?? null) ? $structured['furniture_count'] : null,
+            'issues' => $issues,
+            'confidence' => is_numeric($structured['confidence'] ?? null) ? (float) $structured['confidence'] : 0.0,
+        ];
+    }
+
+    /** The layout the renderer draws from: the newest with furniture on the confirmed geometry. */
+    private function currentLayout(Room $room): ?DesignLayout
+    {
+        $geometry = RoomGeometryVersion::query()
+            ->where('room_id', $room->getKey())
+            ->where('is_confirmed', true)
+            ->first();
+
+        if ($geometry === null) {
+            return null;
+        }
+
+        return DesignLayout::query()
+            ->where('room_id', $room->getKey())
+            ->where('geometry_version_id', $geometry->getKey())
+            ->whereHas('items')
+            ->latest('version')
+            ->first();
     }
 
     /**

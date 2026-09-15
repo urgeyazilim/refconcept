@@ -31,6 +31,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   expected price and the ceiling before it queues anything, and saying plainly when the
   task is still routed to the simulator.
 
+### Added — Oda Stüdyosu, sprints 1–2
+
+- **The product contract**, `docs/product/ODA_STUDYOSU_KURALLARI.md`: the seven-step journey
+  and thirty rules (K1–K30) the owner described — one photograph, the analysis proposes and
+  the customer decides, the furniture is taken out, real products only, one layout the
+  picture, the 3D scene and the render all read, and a render that invents nothing.
+- **The plate** (K8–K10): the room photograph with its furniture removed, made once per
+  photograph in the background by an image-editing task told by name what the analysis saw
+  standing there; kept on the private disk beside the photograph, pointing at it; every render
+  starts from it when it exists. The gallery shows it as a before/after slider.
+- **What a render was made from** (K23): the base, the layout and the product count are
+  written on the version before the picture is made.
+- **The fidelity check** (K24): a vision call compares the picture with the plan it was made
+  from; a picture that invented furniture or moved an opening is removed and the render runs
+  once more, and the verdict is shown beside the version.
+
 ### Added — Planner v2, phase 4 (the plan itself)
 
 - **Doors and windows corrected by hand.** On the plan view a door or window drags along its

@@ -42,6 +42,15 @@ enum AiTask: string
     case RoomClear = 'room_clear';
 
     /**
+     * Look at a finished render and say whether it is the room it was meant to be.
+     *
+     * Rule K24: no invented furniture, no moved wall, no lost door. A vision call that
+     * counts what stands in the picture against what the layout said and reports the
+     * differences, so a bad picture is made again rather than shown.
+     */
+    case RenderCheck = 'render_check';
+
+    /**
      * A short film of the finished room, from the render.
      *
      * The camera may only move within what the customer's photograph already showed. A
@@ -98,6 +107,7 @@ enum AiTask: string
             self::ImageRenderPremium => 'Görsel üretimi (yüksek kalite)',
             self::ImageEdit => 'Görsel düzenleme',
             self::RoomClear => 'Oda boşaltma',
+            self::RenderCheck => 'Render sadakat denetimi',
             self::VideoTour => 'Oda videosu',
             self::ProductModel => 'Ürün 3B modeli',
             self::ProductViewTagging => 'Ürün görsel yönü',
@@ -116,7 +126,7 @@ enum AiTask: string
     public function modality(): AiModality
     {
         return match ($this) {
-            self::RoomAnalysis, self::ObjectExtraction, self::ProductTagging => AiModality::Vision,
+            self::RoomAnalysis, self::ObjectExtraction, self::ProductTagging, self::RenderCheck => AiModality::Vision,
             self::TextEmbedding => AiModality::Embedding,
             self::ImageRenderDraft, self::ImageRenderPremium, self::ImageEdit, self::RoomClear => AiModality::Image,
             self::VideoTour => AiModality::Video,
@@ -139,7 +149,7 @@ enum AiTask: string
         return match ($this) {
             self::RoomAnalysis, self::DesignPlan, self::ObjectExtraction,
             self::ProductTagging, self::ProductMatchRerank, self::BudgetOptimize,
-            self::ProductViewTagging => true,
+            self::ProductViewTagging, self::RenderCheck => true,
             default => false,
         };
     }

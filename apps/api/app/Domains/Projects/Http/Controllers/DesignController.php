@@ -235,6 +235,20 @@ final class DesignController
                 'user_prompt' => $version->user_prompt,
                 'credit_cost' => $version->credit_cost,
                 'failure_reason' => $version->failure_reason,
+                /*
+                 * What the check said about the picture, and how many times it was made.
+                 *
+                 * A customer who sees "odaya uymadı, ikinci deneme" beside a render knows
+                 * why it took longer and what to look at. The inputs themselves stay on the
+                 * server: they name private files.
+                 */
+                'fidelity' => $version->fidelity === null ? null : [
+                    'checked' => (bool) ($version->fidelity['checked'] ?? false),
+                    'faithful' => $version->fidelity['faithful'] ?? null,
+                    'issues' => array_values((array) ($version->fidelity['issues'] ?? [])),
+                    'attempts' => (int) ($version->fidelity['attempts'] ?? 1),
+                ],
+                'render_base' => $version->render_inputs['base']['kind'] ?? null,
 
                 /*
                  * The layout, not only the picture. This is what a customer reads when

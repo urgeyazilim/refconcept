@@ -169,8 +169,8 @@ her adım klavyeyle tamamlanabilir, ölçüler metin olarak okunur.
 
 | Sprint | İş | Kabul ölçütü |
 |---|---|---|
-| S1 | RoomClear görevi + plaka + önce/sonra ekranı | Test odası fotoğrafında eşyalar gidiyor, kapı/pencere yerinde; plaka gizli diskte; testler simülatörle |
-| S2 | Render girdileri kaydı; render plakadan başlar; sadakat denetimi | Her render'ın üçlüsü sorgulanabilir; kayan duvar yakalanınca yeniden üretim |
+| S1 ✅ | RoomClear görevi + plaka + önce/sonra ekranı | Test odası fotoğrafında eşyalar gidiyor, kapı/pencere yerinde; plaka gizli diskte; testler simülatörle — *2026-09-15: kuruldu; gerçek fotoğrafta deneme ürün sahibinin onayını bekliyor* |
+| S2 ✅ | Render girdileri kaydı; render plakadan başlar; sadakat denetimi | Her render'ın üçlüsü sorgulanabilir; kayan duvar yakalanınca yeniden üretim — *2026-09-15: kuruldu (`render_inputs`, `fidelity`, `render_check` görevi, bir kez yeniden üretim)* |
 | S3 | İç mimar kuralları (K13) LayoutComposer'da | Her kuralın adıyla testi; kompoze oda kısıtlardan geçiyor |
 | S4 | Oda Stüdyosu ekranı (adım şeridi + 7 adım), mevcut ekranların içine alınması | Tarayıcı testi: fotoğraf → render → sepet tek sayfada |
 | S5 | Versiyon şeridi, yan yana karşılaştırma, paylaşım | İki render yan yana; paylaşılan bağlantı fotoğrafı sızdırmaz |

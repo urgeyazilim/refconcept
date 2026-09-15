@@ -802,6 +802,45 @@ final class AiGatewaySeeder extends Seeder
                 ],
             ],
 
+            AiTask::RenderCheck->value => [
+                'primary' => 'gemini-text',
+                'fallback' => 'fake-vision',
+                // Nobody is charged for being checked.
+                'credits' => 0,
+                // A cent or two against a pessimistic estimate of eight; see ProductViewTagging.
+                'max_cost_micros' => 120_000,
+                'concurrency' => 3,
+                'timeout' => 90,
+                'attempts' => 1,
+                'temperature_bps' => 0,
+                'description' => 'Bir render\'ın yerleşime ve odaya sadık olup olmadığını söyler.',
+                'prompt' => [
+                    'system' => implode(' ', [
+                        'You check a rendered picture of a furnished room against the plan it was made from.',
+                        'Image 0 is the render. Image 1, if present, is a drawing of the room with every piece of furniture at its intended place and size.',
+                        'Decide whether the render is faithful: the same walls, windows and doors as the room; every piece of furniture in the list present, roughly where the plan puts it; and nothing that is not in the list.',
+                        'Be strict about invented furniture and moved openings; be lenient about style, colour and small offsets.',
+                        'Answer only JSON.',
+                    ]),
+                    'template' => implode("\n", [
+                        'Room type: {{ room_type }}.',
+                        'Furniture that must be in the picture, and nothing else: {{ expected }}.',
+                        'Openings that must stay where they are: {{ openings }}.',
+                        'Reply as {"faithful": boolean, "furniture_count": integer, "issues": [string], "confidence": number between 0 and 1}.',
+                    ]),
+                    'schema' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'faithful' => ['type' => 'boolean'],
+                            'furniture_count' => ['type' => 'integer'],
+                            'issues' => ['type' => 'array', 'items' => ['type' => 'string']],
+                            'confidence' => ['type' => 'number'],
+                        ],
+                        'required' => ['faithful', 'issues', 'confidence'],
+                    ],
+                ],
+            ],
+
             AiTask::RoomClear->value => [
                 'primary' => 'gemini-image',
                 'fallback' => 'fake-image',

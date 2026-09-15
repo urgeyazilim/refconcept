@@ -43,6 +43,13 @@ final class FakeAiProvider implements AiProvider
      */
     private static array $scripted = [];
 
+    /**
+     * Structured answers queued per task.
+     *
+     * @var array<string, list<array<string, mixed>>>
+     */
+    private static array $scriptedByTask = [];
+
     /** Matches the width of the pgvector column; see the matching migration. */
     private const VECTOR_DIMENSIONS = 768;
 
@@ -85,6 +92,21 @@ final class FakeAiProvider implements AiProvider
             return array_shift(self::$scripted);
         }
 
+        // Answers scripted for this task alone, whatever else the pipeline calls between.
+        $forTask = self::$scriptedByTask[$call->task->value] ?? [];
+
+        if ($forTask !== []) {
+            $structured = array_shift($forTask);
+            self::$scriptedByTask[$call->task->value] = $forTask;
+
+            return AiResult::success(
+                text: json_encode($structured, JSON_UNESCAPED_UNICODE) ?: '{}',
+                structured: $structured,
+                inputTokens: $this->tokensFor($call->prompt),
+                outputTokens: 120,
+            );
+        }
+
         return $call->expectsStructuredOutput()
             ? $this->structuredAnswer($call)
             : $this->plainAnswer($call);
@@ -96,6 +118,20 @@ final class FakeAiProvider implements AiProvider
     public static function script(AiResult ...$results): void
     {
         self::$scripted = [...self::$scripted, ...$results];
+    }
+
+    /**
+     * Queues structured answers for one task, in order, leaving every other task to its
+     * deterministic answer.
+     *
+     * For a pipeline that makes several kinds of call: "the render check says no, then
+     * yes" without having to script the analysis, the plan and the renders around it.
+     *
+     * @param  array<string, mixed>  ...$answers
+     */
+    public static function scriptFor(AiTask $task, array ...$answers): void
+    {
+        self::$scriptedByTask[$task->value] = [...(self::$scriptedByTask[$task->value] ?? []), ...$answers];
     }
 
     public static function scriptFailure(AiFailureKind $kind, string $message = 'Simulated failure.'): void
@@ -122,6 +158,7 @@ final class FakeAiProvider implements AiProvider
     public static function reset(): void
     {
         self::$scripted = [];
+        self::$scriptedByTask = [];
         self::$calls = [];
         self::$simulatedLatencyMs = 0;
     }
@@ -308,6 +345,10 @@ final class FakeAiProvider implements AiProvider
              * fronts. The shape is real; the list is empty.
              */
             AiTask::ProductViewTagging => ['views' => []],
+
+            // The simulator's render is always the room it was meant to be. A test that
+            // wants the other answer scripts it.
+            AiTask::RenderCheck => ['faithful' => true, 'furniture_count' => 0, 'issues' => [], 'confidence' => 0.9],
 
             AiTask::ProductMatchRerank => [
                 'ranking' => [

@@ -936,3 +936,50 @@ it('says nothing about a plan when there is no plan', function (): void {
     expect(implode(' ', (array) $render->input['image_roles']))->not->toContain('3B yerleşim şeması')
         ->and($render->input['image_sources'])->toHaveCount(1);
 });
+
+it('writes down what the render was made from and what the check said', function (): void {
+    makeAiRoute(AiTask::RenderCheck, ['credit_cost' => 0]);
+
+    $version = $this->launcher->launch($this->design, null, $this->owner);
+
+    $finished = $version->fresh();
+
+    /*
+     * Rule K23: the room, the layout, the products — recorded before the picture is made.
+     * No plate and no layout in this room, so the base is the photograph and the layout is
+     * null, and both are said rather than left blank.
+     */
+    expect($finished?->render_inputs['base']['kind'])->toBe('photograph')
+        ->and($finished?->render_inputs['layout'])->toBeNull()
+        ->and($finished?->render_inputs['product_count'])->toBeGreaterThan(0)
+        // Rule K24: checked, found faithful, made once.
+        ->and($finished?->fidelity['checked'])->toBeTrue()
+        ->and($finished?->fidelity['faithful'])->toBeTrue()
+        ->and($finished?->fidelity['attempts'])->toBe(1);
+});
+
+it('makes the picture again, once, when the check says it is not the room', function (): void {
+    makeAiRoute(AiTask::RenderCheck, ['credit_cost' => 0]);
+
+    /*
+     * The first picture invented a sideboard; the second is faithful. The failed picture is
+     * removed and the render runs a second time — not a third, whatever the second check
+     * says: "this is the best we could do" beats another minute and another charge.
+     */
+    $unfaithful = ['faithful' => false, 'furniture_count' => 3, 'issues' => ['Konsol yerleşimde yok.'], 'confidence' => 0.9];
+    $faithful = ['faithful' => true, 'furniture_count' => 2, 'issues' => [], 'confidence' => 0.9];
+
+    FakeAiProvider::scriptFor(AiTask::RenderCheck, $unfaithful, $faithful);
+
+    $version = $this->launcher->launch($this->design, null, $this->owner);
+
+    $finished = $version->fresh();
+
+    expect($finished?->status)->toBe(DesignVersionStatus::Ready)
+        ->and(AiJob::query()->where('task', AiTask::ImageRenderDraft->value)->count())->toBe(2)
+        ->and(AiJob::query()->where('task', AiTask::RenderCheck->value)->count())->toBe(2)
+        ->and($finished?->fidelity['attempts'])->toBe(2)
+        ->and($finished?->fidelity['faithful'])->toBeTrue()
+        // One picture, not two: the unfaithful one is gone.
+        ->and($finished?->assets()->where('type', 'render')->count())->toBe(1);
+});
