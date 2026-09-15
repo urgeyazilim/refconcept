@@ -31,6 +31,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   expected price and the ceiling before it queues anything, and saying plainly when the
   task is still routed to the simulator.
 
+### Added — Oda Stüdyosu, sprint 3 (the interior designer's rules)
+
+- **Each of K13's rules is in `LayoutComposer` by name, with a test by name.** Odak: the
+  seating faces the television, else the widest window, and the television goes across from
+  the window. Dolaşım: the 900 mm in front of a door stays empty, round the corner too, and a
+  sofa floats off its wall only when what faces it leaves room to walk past. Ölçek: standing
+  furniture covers at most 40 % of the floor and a sofa at most two thirds of its wall — past
+  either, the piece is reported *with the rule that stopped it* rather than squeezed in. Halı:
+  the rug goes down after the seating, its back edge under the front legs. Simetri: the bed and
+  the television take the middle of their walls, bedside tables go either side, the sofa lines
+  up with the screen. Yükseklik: sconces at 1.7 m, curtains on the window. Aydınlatma: the
+  floor lamp stands at the sofa's elbow.
+- **A piece against the east or west wall now faces the room.** It was turned into the wall
+  (90/270 swapped against the scene's convention), which nobody noticed while every piece was
+  a symmetric box; a coffee table placed "in front of" it would have gone into the wall.
+- `refconcept:product-models` backfills only products that are on sale; the dev catalogue's
+  sixty-two archived test products had made the job look four times its size.
+
 ### Added — Oda Stüdyosu, sprint 4 (the step strip)
 
 - **One strip, seven steps, every room screen.** Fotoğraf · Tanıma · Onay · Boş oda · Öneri ·

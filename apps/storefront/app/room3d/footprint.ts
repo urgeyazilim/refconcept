@@ -331,7 +331,10 @@ export function againstWall(
   geometry: RoomGeometry,
   gapMm: number,
 ): { position_x_mm: number, position_z_mm: number, rotation_y_deg: number } {
-  const rotation = { north: 0, south: 180, west: 90, east: 270 }[wall]
+  // Rotation is clockwise seen from above, from facing +z (south): the scene turns a piece
+  // by −rotation about y and every model's front is +z, so 270 faces east and 90 faces west.
+  // A piece against a wall looks into the room.
+  const rotation = { north: 0, south: 180, west: 270, east: 90 }[wall]
 
   const turned = footprintOf(item, rotation)
 

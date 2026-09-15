@@ -496,7 +496,10 @@ async function composeLayout(replace = false): Promise<void> {
   try {
     const response = await api.post<{
       data: LayoutPayload
-      meta: { unplaced: Array<{ category: string | null }>, unmeasured: Array<{ category: string | null }> }
+      meta: {
+        unplaced: Array<{ category: string | null, reason?: 'scale' | 'doorway' | 'no_room' }>
+        unmeasured: Array<{ category: string | null, reason?: undefined }>
+      }
     }>(`${base}/layout/compose`, {
       ...(replace ? { replace: true } : {}),
       // Which design to arrange. Set when somebody came here from a render they were
@@ -511,11 +514,18 @@ async function composeLayout(replace = false): Promise<void> {
     const missed = [...response.meta.unplaced, ...response.meta.unmeasured]
 
     if (missed.length > 0) {
-      // Said rather than hidden. A layout that quietly drops a product the customer chose is
-      // a layout that lies about the shopping list beside it.
-      const names = missed.map(entry => entry.category ?? 'ürün').join(', ')
+      // Said rather than hidden, with the rule that stopped it. A layout that quietly drops
+      // a product the customer chose is a layout that lies about the shopping list beside it.
+      const why: Record<string, string> = {
+        scale: 'oda için fazla büyük',
+        doorway: 'kapının önüne denk geliyor',
+        no_room: 'boş duvar kalmadı',
+      }
+      const names = missed
+        .map(entry => `${entry.category ?? 'ürün'}${entry.reason && why[entry.reason] ? ` (${why[entry.reason]})` : ''}`)
+        .join(', ')
 
-      composeNotice.value = `Şunlar yerleştirilemedi: ${names}. Daha dar bir ürün seçebilir ya da kendiniz yerleştirebilirsiniz.`
+      composeNotice.value = `Şunlar yerleştirilemedi: ${names}. Daha küçük bir ürün seçebilir ya da kendiniz yerleştirebilirsiniz.`
     }
   }
   catch (error) {

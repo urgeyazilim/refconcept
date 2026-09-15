@@ -109,7 +109,7 @@ it('floats the seating off the wall when the room can afford it', function (): v
 
 it('puts the seating against the wall in a room that cannot spare the space', function (): void {
     $small = new RoomGeometryVersion;
-    $small->forceFill(['width_mm' => 3_000, 'length_mm' => 3_400, 'height_mm' => 2_600]);
+    $small->forceFill(['width_mm' => 3_400, 'length_mm' => 3_000, 'height_mm' => 2_600]);
 
     $result = $this->composer->compose($small, [], [piece('kanepe', 2_200, 900, 'north')]);
 
@@ -135,21 +135,176 @@ it('puts the coffee table in front of the sofa rather than against a wall', func
         ->and($table['position_z_mm'])->toBe($sofa['position_z_mm'] + 420 + 450 + 450);
 });
 
-it('lays the rug down first, in the middle', function (): void {
+it('lays the rug in the middle when there is nothing to lay it under', function (): void {
     $result = $this->composer->compose($this->geometry, [], [
-        piece('sehpa', 900, 900, null),
         piece('hali', 2_400, 1_700, null),
     ]);
 
     $rug = find($result['items'], 'hali');
 
-    /*
-     * First in the list of placements regardless of the order it arrived in. Everything else
-     * stands on or beside it, and a rug placed last is a rug squeezed between things.
-     */
-    expect($result['items'][0]['category'])->toBe('hali')
-        ->and($rug['position_x_mm'])->toBe(2_425)
+    expect($rug['position_x_mm'])->toBe(2_425)
         ->and($rug['position_z_mm'])->toBe(2_600);
+});
+
+it('halı kuralı: lays the rug under the front legs of the seating', function (): void {
+    $result = $this->composer->compose($this->geometry, [], [
+        piece('hali', 2_400, 1_700, null),
+        piece('kanepe', 2_200, 900, 'north'),
+    ]);
+
+    $sofa = find($result['items'], 'kanepe');
+    $rug = find($result['items'], 'hali');
+
+    /*
+     * Centred on the sofa, and reaching 200 mm under its front edge: the front legs stand on
+     * the rug, the back ones need not. A small rug floating in the middle of the floor with
+     * the sofa behind it is the mistake this rule exists for.
+     */
+    $sofaFront = $sofa['position_z_mm'] + 450;
+    $rugBack = $rug['position_z_mm'] - 850;
+
+    expect($rug['position_x_mm'])->toBe($sofa['position_x_mm'])
+        ->and($sofaFront - $rugBack)->toBe(200);
+});
+
+it('odak: seats the sofa across from the widest window, facing it', function (): void {
+    $result = $this->composer->compose($this->geometry, [
+        opening('window', 'south', 1_500, 1_800),
+    ], [piece('kanepe', 2_200, 900, null)]);
+
+    $sofa = find($result['items'], 'kanepe');
+
+    // No wall was asked for, so the sofa goes to the north wall and looks south at the
+    // window, rather than to whichever wall happened to have the most room.
+    expect($sofa['rotation_y_deg'])->toBe(0)
+        ->and($sofa['position_z_mm'])->toBeLessThan(1_000);
+});
+
+it('odak: the television is the focal point when there is one, and it faces the seating', function (): void {
+    $result = $this->composer->compose($this->geometry, [
+        opening('window', 'west', 200, 1_000),
+    ], [
+        piece('tv-unitesi', 1_600, 450, null),
+        piece('kanepe', 2_200, 900, null),
+    ]);
+
+    $television = find($result['items'], 'tv-unitesi');
+    $sofa = find($result['items'], 'kanepe');
+
+    /*
+     * The television goes across from the window so nobody watches it against the light —
+     * the east wall — and the sofa goes across from the television, on the west wall under the
+     * window, looking east. Simetri: both are centred on their walls, so they share a line.
+     */
+    expect($television['rotation_y_deg'])->toBe(90)
+        ->and($sofa['rotation_y_deg'])->toBe(270)
+        ->and($sofa['position_z_mm'])->toBe($television['position_z_mm']);
+});
+
+it('dolaşım: keeps the floor in front of the door empty, round the corner too', function (): void {
+    // A door in the north-west corner, opening into the room.
+    $result = $this->composer->compose($this->geometry, [
+        opening('door', 'north', 100, 900),
+    ], [
+        piece('gardirop', 1_200, 600, 'west'),
+    ]);
+
+    $wardrobe = find($result['items'], 'gardirop');
+
+    // The wardrobe asked for the west wall and gets it — but not the first 900 mm of it,
+    // which is where somebody coming through the door is standing.
+    expect($wardrobe['position_z_mm'] - 600)->toBeGreaterThanOrEqual(900);
+});
+
+it('dolaşım: does not float the sofa when what faces it leaves no room to walk past', function (): void {
+    $result = $this->composer->compose($this->geometry, [], [
+        piece('kitaplik', 2_000, 1_800, 'south'),
+        piece('kanepe', 2_200, 900, 'north'),
+    ]);
+
+    $sofa = find($result['items'], 'kanepe');
+
+    // 5200 deep, less a 1800 mm deep bookcase on the far wall, is 3340 — under the 3800 the
+    // float needs. The sofa goes to the wall so the walkway survives.
+    expect($sofa['position_z_mm'])->toBe(510);
+});
+
+it('ölçek: stops when standing furniture would cover more than 40 % of the floor', function (): void {
+    $narrow = new RoomGeometryVersion;
+    $narrow->forceFill(['width_mm' => 3_000, 'length_mm' => 3_000, 'height_mm' => 2_500]);
+
+    // 9 m² of floor; 40 % is 3.6 m². Two 1.4 m² pieces fit, the third would not.
+    $result = $this->composer->compose($narrow, [], [
+        piece('gardirop', 2_000, 700, 'north'),
+        piece('kitaplik', 2_000, 700, 'south'),
+        piece('konsol', 2_000, 700, 'east'),
+    ]);
+
+    expect($result['items'])->toHaveCount(2)
+        ->and($result['unplaced'])->toHaveCount(1)
+        ->and($result['unplaced'][0]['reason'])->toBe('scale');
+});
+
+it('ölçek: refuses a sofa longer than two thirds of its wall', function (): void {
+    $result = $this->composer->compose($this->geometry, [], [
+        piece('kanepe', 3_400, 900, 'north'),
+    ]);
+
+    // 3400 on a 4850 wall is 70 %. The wall becomes a sofa, and the customer is told to pick
+    // a shorter one rather than handed a room with no way round it.
+    expect($result['items'])->toBeEmpty()
+        ->and($result['unplaced'][0]['reason'])->toBe('scale');
+});
+
+it('simetri ve çift: stands the bedside tables either side of the bed', function (): void {
+    $result = $this->composer->compose($this->geometry, [], [
+        piece('yatak', 1_800, 2_100, 'north'),
+        piece('komodin', 500, 450, null),
+        piece('komodin', 500, 450, null),
+    ]);
+
+    $bed = find($result['items'], 'yatak');
+    $tables = array_values(array_filter($result['items'], static fn (array $item): bool => $item['category'] === 'komodin'));
+
+    // The bed takes the middle of its wall so there is a side for each table; one goes each
+    // side, 80 mm off the bed, backs to the same wall as the headboard.
+    expect($bed['position_x_mm'])->toBe(2_425)
+        ->and($tables)->toHaveCount(2)
+        ->and($tables[0]['position_x_mm'])->toBe($bed['position_x_mm'] + 900 + 80 + 250)
+        ->and($tables[1]['position_x_mm'])->toBe($bed['position_x_mm'] - 900 - 80 - 250)
+        ->and($tables[0]['position_z_mm'] - 225)->toBe($bed['position_z_mm'] - 1_050);
+});
+
+it('aydınlatma: stands the floor lamp at the elbow of the sofa', function (): void {
+    $result = $this->composer->compose($this->geometry, [], [
+        piece('kanepe', 2_200, 900, 'north'),
+        piece('lambader', 400, 400, null),
+    ]);
+
+    $sofa = find($result['items'], 'kanepe');
+    $lamp = find($result['items'], 'lambader');
+
+    expect(abs($lamp['position_x_mm'] - $sofa['position_x_mm']))->toBe(1_100 + 80 + 200)
+        ->and($lamp['position_z_mm'] - 200)->toBe($sofa['position_z_mm'] - 450);
+});
+
+it('yükseklik: hangs a sconce at 1.7 m and a curtain on the window', function (): void {
+    $result = $this->composer->compose($this->geometry, [
+        opening('window', 'south', 1_500, 1_800),
+    ], [
+        piece('duvar-aydinlatma', 200, 100, 'east'),
+        piece('perde', 2_200, 60, null),
+    ]);
+
+    $sconce = find($result['items'], 'duvar-aydinlatma');
+    $curtain = find($result['items'], 'perde');
+
+    expect($sconce['position_y_mm'])->toBe(1_700)
+        // Centred on the glass — 1500 + 900 — and hanging on the south wall, so the plate,
+        // the scene and the render all put it where the window is.
+        ->and($curtain['position_x_mm'])->toBe(2_400)
+        ->and($curtain['position_z_mm'])->toBeGreaterThan(5_100)
+        ->and($curtain['rotation_y_deg'])->toBe(180);
 });
 
 it('hangs a picture above the widest piece on its wall, off the floor', function (): void {

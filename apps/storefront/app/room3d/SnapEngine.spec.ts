@@ -151,7 +151,9 @@ describe('againstWall', () => {
      * by the width it had before the turn would put half of it through the wall — a position
      * the collision rules then refuse, on an alignment the customer asked for by name.
      */
-    expect(east.rotation_y_deg).toBe(270)
+    // Turned to face west — into the room from the east wall — which is 90 in the scene's
+    // clockwise-from-south convention.
+    expect(east.rotation_y_deg).toBe(90)
     expect(east.position_x_mm).toBe(4_850 - 450 - 60)
   })
 

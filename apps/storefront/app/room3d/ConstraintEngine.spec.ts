@@ -154,12 +154,12 @@ describe('constraintEngine', () => {
     // Dropped near the west wall: flush to it, facing east, level with the pointer.
     const west = engine().settle(picture, [sofa, picture], { x: 300, z: 2000 })
 
-    expect(west).toEqual({ x: 15, z: 2000, rotation: 90, settled: true })
+    expect(west).toEqual({ x: 15, z: 2000, rotation: 270, settled: true })
 
     // Dragged to the far end of that wall: it stops at the corner rather than leaving it.
     const corner = engine().settle(picture, [sofa, picture], { x: 100, z: 5000 })
 
-    expect(corner).toEqual({ x: 15, z: 5200 - 400, rotation: 90, settled: true })
+    expect(corner).toEqual({ x: 15, z: 5200 - 400, rotation: 270, settled: true })
 
     // Over the sofa, nearer the south wall: it goes on the south wall, not into the sofa.
     const south = engine().settle(picture, [sofa, picture], { x: 2400, z: 4900 })

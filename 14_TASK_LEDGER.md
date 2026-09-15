@@ -171,7 +171,7 @@
 | STU-S1 | — | AI_AGENT | E3D-T015 | DONE | the plate (K8–K10) | room_clear task, plate on the private disk, before/after slider, render starts from it |
 | STU-S2 | — | BACKEND_AGENT | STU-S1 | DONE | render inputs + fidelity check (K23–K24) | render_inputs, fidelity, render_check task, one re-render on a failed check |
 | STU-S4 | — | FRONTEND_AGENT | STU-S2 | DONE | the step strip (§5) | StudioStepper on room, plan, design; plan prefilled from the room; fidelity note under the render; studio-stepper E2E |
-| STU-S3 | — | AI_AGENT | STU-S2 | TODO | interior-design rules (K11–K13) in LayoutComposer | named tests per rule |
+| STU-S3 | — | AI_AGENT | STU-S2 | DONE | interior-design rules (K11–K13) in LayoutComposer | odak, dolaşım, ölçek, sehpa, halı, simetri, yükseklik, aydınlatma — each a named test; unplaced pieces carry a reason |
 | STU-S5 | — | FRONTEND_AGENT | STU-S4 | TODO | version strip, compare, share (K26) | — |
 
 ## Scope notes
