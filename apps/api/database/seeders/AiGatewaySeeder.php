@@ -939,15 +939,21 @@ final class AiGatewaySeeder extends Seeder
             ],
 
             AiTask::ProductModel->value => [
-                'primary' => 'tripo',
+                /*
+                 * Hunyuan3D v3, by the bake-off: ten of our own products through four
+                 * generators, and the product owner chose it for all ten. The most
+                 * expensive of the four at 53 cents with PBR materials, and the one whose
+                 * furniture looked like the photograph.
+                 */
+                'primary' => 'hunyuan3',
                 'fallback' => 'fake-model',
                 // Nobody is charged: this is a catalogue cost, like the photograph itself.
                 // Charging one customer to furnish the shop would be charging them for an
                 // asset every other customer then uses.
                 'credits' => 0,
-                // Thirty cents expected; the cap leaves room for a price change and stops a
-                // misrouted model from quietly costing ten times that per product.
-                'max_cost_micros' => 600_000,
+                // Fifty-three cents expected; the cap leaves room for a price change and
+                // stops a misrouted model from quietly costing more per product.
+                'max_cost_micros' => 700_000,
                 // One at a time. There is no hurry — nobody is waiting — and a catalogue
                 // import that approved four hundred listings at once should trickle rather
                 // than spend a hundred and twenty dollars in a minute.

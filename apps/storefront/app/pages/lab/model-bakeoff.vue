@@ -344,19 +344,35 @@ onBeforeUnmount(() => {
     <template v-if="index && product">
       <section class="mt-6 flex flex-wrap items-center gap-4">
         <button type="button" class="rounded-sm border border-line px-3 py-1.5 text-sm" :disabled="current === 0" @click="current--">← Önceki</button>
-        <div class="flex items-center gap-3">
-          <img v-if="product.image_url" :src="product.image_url" alt="" class="size-16 rounded-sm object-cover">
-          <div>
-            <p class="font-medium">{{ current + 1 }} / {{ index.products.length }} · {{ product.name }}</p>
-            <p class="text-xs text-muted">
-              {{ product.category ?? '-' }} · {{ product.width_mm ?? '?' }} × {{ product.depth_mm ?? '?' }} × {{ product.height_mm ?? '?' }} mm
-            </p>
-          </div>
+        <div>
+          <p class="font-medium">{{ current + 1 }} / {{ index.products.length }} · {{ product.name }}</p>
+          <p class="text-xs text-muted">
+            {{ product.category ?? '-' }} · {{ product.width_mm ?? '?' }} × {{ product.depth_mm ?? '?' }} × {{ product.height_mm ?? '?' }} mm
+          </p>
         </div>
         <button type="button" class="rounded-sm border border-line px-3 py-1.5 text-sm" :disabled="current >= index.products.length - 1" @click="current++">Sonraki →</button>
       </section>
 
-      <section class="mt-4 grid gap-4" :style="{ gridTemplateColumns: `repeat(${index.models.length}, minmax(0, 1fr))` }">
+      <section class="mt-4 grid gap-4" :style="{ gridTemplateColumns: `repeat(${index.models.length + 1}, minmax(0, 1fr))` }">
+        <!--
+          The photograph the generators were given, the same size as their answers and in the
+          first column: the comparison is "which of these is that", and that has to be on the
+          same row as these.
+        -->
+        <figure class="rc-card overflow-hidden">
+          <div class="flex aspect-[4/3] w-full items-center justify-center bg-white">
+            <img v-if="product.image_url" :src="product.image_url" :alt="product.name" class="max-h-full max-w-full object-contain">
+            <span v-else class="text-xs text-muted">fotoğraf yok</span>
+          </div>
+          <figcaption class="space-y-1 p-3 text-xs">
+            <div class="flex items-center justify-between">
+              <span class="font-medium">Ürün fotoğrafı</span>
+              <span class="text-muted">girdi</span>
+            </div>
+            <p class="text-muted">Üreticilere verilen görsel; modeller bununla karşılaştırılır.</p>
+          </figcaption>
+        </figure>
+
         <figure v-for="model in index.models" :key="model.label" class="rc-card overflow-hidden">
           <canvas ref="canvases" class="block aspect-[4/3] w-full" />
           <figcaption class="space-y-1 p-3 text-xs">

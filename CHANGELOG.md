@@ -83,8 +83,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   shape of the thing; it outranks anything generated and is never re-reviewed.
 - **A bake-off across every generator fal hosts** — Tripo 2.5, Tripo H3.1, Rodin Gen-2.5,
   Hunyuan3D v3 — on ten of our own products, with a comparison page (`/lab/model-bakeoff`)
-  whose four cameras are locked together. The routing table changes only when our own
-  furniture says so.
+  showing the product photograph beside the four meshes, cameras locked together. The
+  product owner voted Hunyuan3D v3 for all ten; the routing table and the seeder now name it.
 
 ### Changed — Planner v2, phase 0
 
