@@ -115,7 +115,61 @@ const typeLabels: Record<string, string> = {
   floor_plan: 'Kat planı',
   inspiration: 'İlham görseli',
   document: 'Belge',
+  plate: 'Boş oda',
 }
+
+// --- the plate: the photograph with its furniture taken out --------------------------
+
+/**
+ * Plates are not gallery tiles. They belong to a photograph, and the gallery shows them
+ * under it as before/after — the whole point of one is that everything but the furniture
+ * is the same picture.
+ */
+const tiles = computed(() => props.media.filter(item => item.type !== 'plate'))
+
+const plateOf = (photo: RoomMediaItem): RoomMediaItem | undefined =>
+  props.media.find(item => item.type === 'plate' && item.source_media_id === photo.id)
+
+/** The photograph a design is made from — the one whose plate matters. */
+const primary = computed(() => props.media.find(item => item.is_primary && item.type === 'photo') ?? tiles.value.find(item => item.type === 'photo'))
+
+/** Which photograph is being emptied right now, while the queue works on it. */
+const clearing = ref<string | null>(null)
+let clearingTimer: ReturnType<typeof setInterval> | null = null
+
+async function clear(item: RoomMediaItem) {
+  error.value = null
+  clearing.value = item.id
+
+  try {
+    await api.post(`${base.value}/${item.id}/clear`)
+  } catch (caught) {
+    clearing.value = null
+    error.value = caught instanceof ApiError ? caught.message : 'Oda boşaltılamadı.'
+
+    return
+  }
+
+  // A minute of a model's time. The parent reloads the list until the plate appears.
+  clearingTimer = setInterval(() => emit('changed'), 4_000)
+}
+
+watch(() => props.media, () => {
+  if (clearing.value !== null && props.media.some(item => item.type === 'plate' && item.source_media_id === clearing.value)) {
+    clearing.value = null
+
+    if (clearingTimer !== null) {
+      clearInterval(clearingTimer)
+      clearingTimer = null
+    }
+  }
+})
+
+onBeforeUnmount(() => {
+  if (clearingTimer !== null) {
+    clearInterval(clearingTimer)
+  }
+})
 </script>
 
 <template>
@@ -135,9 +189,9 @@ const typeLabels: Record<string, string> = {
 
     <RcAlert v-if="error" tone="danger" class="mt-5">{{ error }}</RcAlert>
 
-    <div v-if="media.length > 0" class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div v-if="tiles.length > 0" class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <figure
-        v-for="item in media"
+        v-for="item in tiles"
         :key="item.id"
         class="overflow-hidden rounded-md border border-line bg-surface"
         :class="{ 'opacity-60': busyId === item.id }"
@@ -192,6 +246,55 @@ const typeLabels: Record<string, string> = {
           </button>
         </figcaption>
       </figure>
+    </div>
+
+    <!--
+      The emptied room.
+
+      Every render starts from the plate: the customer's own walls, floor, windows and
+      doors with nothing standing in front of them. Made once per photograph, in the
+      background, at no charge; shown as before/after because the point is what stayed.
+    -->
+    <div v-if="primary" class="mt-6 rounded-md border border-line p-4">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 class="text-sm font-medium">Boş oda</h3>
+          <p class="mt-1 max-w-[60ch] text-xs leading-relaxed text-ink-secondary">
+            Tasarım, odanızın eşyaları kaldırılmış haline yapılır: duvarlar, zemin, pencere ve
+            kapı sizin; mobilya yalnızca seçtikleriniz.
+          </p>
+        </div>
+
+        <button
+          v-if="canEdit && !plateOf(primary)"
+          type="button"
+          class="rounded-pill bg-charcoal px-4 py-2 text-sm text-white disabled:opacity-50"
+          :disabled="clearing !== null"
+          @click="clear(primary)"
+        >
+          <span v-if="clearing === primary.id">Eşyalar kaldırılıyor…</span>
+          <span v-else>Eşyaları kaldır</span>
+        </button>
+        <button
+          v-else-if="canEdit && plateOf(primary)"
+          type="button"
+          class="rounded-sm border border-line px-3 py-1.5 text-xs text-ink-secondary hover:bg-bg-muted disabled:opacity-40"
+          :disabled="busyId !== null"
+          @click="remove(plateOf(primary)!)"
+        >
+          Boş odayı kaldır
+        </button>
+      </div>
+
+      <RoomPlateCompare
+        v-if="plateOf(primary) && links[primary.id] && links[plateOf(primary)!.id]"
+        class="mt-4"
+        :before="links[primary.id]!"
+        :after="links[plateOf(primary)!.id]!"
+      />
+      <p v-else-if="clearing === primary.id" class="mt-3 text-xs text-muted">
+        Yaklaşık bir dakika sürer; bu sırada sayfada kalabilirsiniz.
+      </p>
     </div>
 
     <div v-if="canEdit" class="mt-6">

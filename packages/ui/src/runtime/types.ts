@@ -632,7 +632,9 @@ export interface RoomDetail {
  */
 export interface RoomMediaItem {
   id: string
-  type: 'photo' | 'floor_plan' | 'inspiration' | 'document'
+  /** `plate` is a photograph with its furniture taken out; `source_media_id` says which. */
+  type: 'photo' | 'floor_plan' | 'inspiration' | 'document' | 'plate'
+  source_media_id: string | null
   original_name: string
   mime_type: string
   size_bytes: number
