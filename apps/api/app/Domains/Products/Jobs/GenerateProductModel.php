@@ -11,6 +11,7 @@ use App\Domains\Ai\Services\AiJobDispatcher;
 use App\Domains\Ai\Services\GeneratedImageStore;
 use App\Domains\Products\Models\Product;
 use App\Domains\Products\Models\ProductMedia;
+use App\Domains\Products\Services\GlbInspector;
 use App\Domains\Products\Services\ProductModelStorage;
 use App\Domains\Products\Services\ProductViewTagger;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -61,8 +62,25 @@ final class GenerateProductModel implements ShouldQueue
      */
     public int $timeout = 600;
 
-    public function __construct(public readonly string $productId)
-    {
+    /**
+     * What happened, for a caller running this inline rather than on a worker.
+     *
+     * The bake-off command wants to know whether a generator answered, how big the answer
+     * was, and how long it took — none of which a queued job has anybody to tell.
+     *
+     * @var array{url: string|null, bytes: int, triangles: int|null, textures: int, seconds: float, failure: string|null}|null
+     */
+    public ?array $outcome = null;
+
+    /**
+     * @param  string|null  $modelCode  a generator other than the one the route names — the bake-off, nothing else
+     * @param  string|null  $keepAs  keep the result as a comparison candidate under this label rather than as the product's model
+     */
+    public function __construct(
+        public readonly string $productId,
+        public readonly ?string $modelCode = null,
+        public readonly ?string $keepAs = null,
+    ) {
         // The AI worker: one process, a long timeout, and no payment callback waiting behind it.
         $this->onQueue('ai');
     }
@@ -119,11 +137,16 @@ final class GenerateProductModel implements ShouldQueue
          */
         $front = $labelled['front'] ?? self::reachable($photograph);
 
+        $started = microtime(true);
+
         try {
             $ran = $dispatcher->runInline(
                 task: AiTask::ProductModel,
                 input: [
                     'product_id' => (string) $product->getKey(),
+                    // Only the bake-off sets this, and only a job with no customer behind it
+                    // is allowed to: the dispatcher strips it from anything a person queued.
+                    ...($this->modelCode === null ? [] : ['model_override' => $this->modelCode]),
                     // The shop photograph, inline — see reachable(). Room photographs are never
                     // in reach of this task.
                     'image_urls' => [$front],
@@ -137,17 +160,21 @@ final class GenerateProductModel implements ShouldQueue
                 ],
                 subject: $product,
                 // Idempotent per photograph: a listing approved twice, or a worker that lost
-                // its connection after the provider answered, does not pay twice.
-                idempotencyKey: 'product-model:'.$photograph->getKey(),
+                // its connection after the provider answered, does not pay twice. Per
+                // generator too, or the bake-off's second generator would be handed the
+                // first one's answer.
+                idempotencyKey: ($this->modelCode === null ? 'product-model:' : 'bakeoff:'.$this->modelCode.':').$photograph->getKey(),
                 creditCostOverride: 0,
             );
         } catch (AiJobRefused $e) {
             // The task is paused or unrouted — an operator's decision, not a fault.
             Log::info('3B model üretimi atlandı.', ['product' => $this->productId, 'reason' => $e->getMessage()]);
+            $this->outcome = self::failed($e->getMessage(), $started);
 
             return;
         } catch (Throwable $e) {
             Log::warning('3B model üretimi başarısız.', ['product' => $this->productId, 'reason' => $e->getMessage()]);
+            $this->outcome = self::failed($e->getMessage(), $started);
 
             return;
         }
@@ -157,6 +184,7 @@ final class GenerateProductModel implements ShouldQueue
                 'product' => $this->productId,
                 'reason' => $ran->failure_kind?->value,
             ]);
+            $this->outcome = self::failed(($ran->failure_kind->value ?? 'failed').': '.(string) ($ran->failure_reason ?? ''), $started);
 
             return;
         }
@@ -202,13 +230,41 @@ final class GenerateProductModel implements ShouldQueue
         }
 
         if (! is_string($bytes) || $bytes === '') {
+            $this->outcome = self::failed('Boş dosya.', $started);
+
             return;
         }
 
-        $models->storeGenerated($product, $bytes);
+        $url = $this->keepAs === null
+            ? $models->storeGenerated($product, $bytes)->url()
+            : $models->storeCandidate($product, $bytes, $this->keepAs);
+
+        $inspected = GlbInspector::inspect($bytes);
+
+        $this->outcome = [
+            'url' => $url,
+            'bytes' => strlen($bytes),
+            'triangles' => $inspected['triangles'] ?? null,
+            'textures' => $inspected['textures'] ?? 0,
+            'seconds' => round(microtime(true) - $started, 1),
+            'failure' => null,
+        ];
 
         // Scratch space nobody empties becomes an archive of every mesh ever made.
         $files->discard($reference);
+    }
+
+    /** @return array{url: null, bytes: int, triangles: null, textures: int, seconds: float, failure: string} */
+    private static function failed(string $reason, float $started): array
+    {
+        return [
+            'url' => null,
+            'bytes' => 0,
+            'triangles' => null,
+            'textures' => 0,
+            'seconds' => round(microtime(true) - $started, 1),
+            'failure' => $reason,
+        ];
     }
 
     /**

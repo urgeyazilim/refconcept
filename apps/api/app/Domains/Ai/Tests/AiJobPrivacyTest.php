@@ -256,6 +256,20 @@ it('leaves a job that is genuinely still running alone', function (): void {
     expect($second->getKey())->toBe($first->getKey());
 });
 
+it('never lets a person choose the model', function (): void {
+    $dispatcher = app(AiJobDispatcher::class);
+
+    // Whatever a client sends, the routing table decides. Only a system job — the bake-off,
+    // with no user behind it — may name a generator.
+    $job = $dispatcher->dispatch(
+        AiTask::RoomAnalysis,
+        ['room_type' => 'salon', 'model_override' => 'gpt-5-pro-expensive'],
+        $this->owner,
+    );
+
+    expect($job->input)->not->toHaveKey('model_override');
+});
+
 it('never re-runs a key whose failure had already been billed', function (): void {
     $dispatcher = app(AiJobDispatcher::class);
 

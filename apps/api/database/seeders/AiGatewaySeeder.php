@@ -170,6 +170,24 @@ final class AiGatewaySeeder extends Seeder
         $this->rate($models['tripo'], inputPerMillion: 0, outputPerMillion: 0, perRequest: 300_000);
 
         /*
+         * The other generators fal hosts, for the bake-off and for whichever of them wins it.
+         *
+         * All behind the one key, all priced per request, none routed to by default: the
+         * routing table names Tripo 2.5 until ten of our own products, run through each of
+         * these, say otherwise. The codes are fal's own paths, which is how the adapter knows
+         * which request shape each one wants.
+         */
+        $models['tripo-h31'] = $this->model($fal, 'tripo3d/h3.1/image-to-3d', 'Tripo H3.1 image-to-3D', AiModality::Model3d, imageInput: true, maxOutputTokens: null);
+        $this->rate($models['tripo-h31'], inputPerMillion: 0, outputPerMillion: 0, perRequest: 300_000);
+
+        $models['rodin'] = $this->model($fal, 'fal-ai/hyper3d/rodin/v2.5', 'Hyper3D Rodin Gen-2.5', AiModality::Model3d, imageInput: true, maxOutputTokens: null);
+        $this->rate($models['rodin'], inputPerMillion: 0, outputPerMillion: 0, perRequest: 400_000);
+
+        // $0.375 a generation, plus PBR materials, which the adapter asks for.
+        $models['hunyuan3'] = $this->model($fal, 'fal-ai/hunyuan3d-v3/image-to-3d', 'Hunyuan3D v3', AiModality::Model3d, imageInput: true, maxOutputTokens: null);
+        $this->rate($models['hunyuan3'], inputPerMillion: 0, outputPerMillion: 0, perRequest: 525_000);
+
+        /*
          * With no key on file a provider's models exist but cannot be called, so routing
          * to them would ship a build whose every AI feature fails on first use. Whatever
          * the plan names that cannot be reached is skipped, and the simulator — which needs

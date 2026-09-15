@@ -139,6 +139,12 @@ final class AiJobDispatcher
             );
         }
 
+        // Choosing the model is the routing table's job. A system job may name one — the
+        // bake-off does — but nothing queued on behalf of a person may, whatever it sends.
+        if ($user !== null) {
+            unset($input['model_override']);
+        }
+
         $job = new AiJob([
             'task' => $task,
             'input' => $input,

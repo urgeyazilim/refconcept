@@ -82,6 +82,38 @@ final class AiGateway
 
         $models = $route->candidateModels();
 
+        /*
+         * A generator named by the job rather than by the route.
+         *
+         * For the bake-off only: the same ten products through each of the generators fal
+         * hosts, so the routing table can be pointed at the one that actually earns it.
+         * Narrow on purpose — the named model must be active, of the task's own modality,
+         * and reachable with a key — and it runs under the route's cost ceiling and attempt
+         * count like anything else. The dispatcher strips the field from any job a customer
+         * queued, so nothing that arrives over HTTP can choose its own model.
+         */
+        $override = $job->input['model_override'] ?? null;
+
+        if (is_string($override) && $override !== '') {
+            $named = AiModel::query()
+                ->with('provider.credentials')
+                ->where('code', $override)
+                ->where('modality', $job->task->modality()->value)
+                ->where('is_active', true)
+                ->first();
+
+            if ($named === null || $named->provider?->activeCredential() === null) {
+                return $this->fail(
+                    $job,
+                    AiFailureKind::NoRouteConfigured,
+                    sprintf('"%s" modeli bu görev için kullanılamıyor.', $override),
+                    attempt: 0,
+                );
+            }
+
+            $models = [$named];
+        }
+
         if ($models === []) {
             return $this->fail(
                 $job,

@@ -159,32 +159,9 @@ final class FalAiProvider implements AiProvider
             );
         }
 
-        $multiview = count($views) > 1;
+        $faceLimit = (int) ($call->options['face_limit'] ?? 20_000);
 
-        $path = $multiview ? self::MULTIVIEW_PATH : self::SINGLE_PATH;
-
-        $body = $multiview
-            ? [
-                'front_image_url' => $views['front'] ?? $image,
-                ...(isset($views['left']) ? ['left_image_url' => $views['left']] : []),
-                ...(isset($views['back']) ? ['back_image_url' => $views['back']] : []),
-                ...(isset($views['right']) ? ['right_image_url' => $views['right']] : []),
-            ]
-            : ['image_url' => $image];
-
-        $body = [
-            ...$body,
-            // Standard textures. HD costs a third more per model and the difference is
-            // invisible on a sofa seen across a room, which is the only place these are shown.
-            'texture' => 'standard',
-            /*
-             * `auto_size` is left off on purpose: it asks the model to guess real-world
-             * dimensions, and the catalogue already knows them because a seller measured the
-             * thing. A mesh scaled to a guess is the "beautiful model at the wrong size" that
-             * makes a planner worse than a box.
-             */
-            'face_limit' => (int) ($call->options['face_limit'] ?? 20_000),
-        ];
+        ['path' => $path, 'body' => $body] = $this->requestFor($call->model->code, $image, $views, $faceLimit);
 
         try {
             $response = Http::withHeaders([
@@ -208,9 +185,9 @@ final class FalAiProvider implements AiProvider
             );
         }
 
-        $url = $response->json('model_mesh.url');
+        $url = $this->meshUrlFrom((array) $response->json());
 
-        if (! is_string($url) || $url === '') {
+        if ($url === null) {
             return AiResult::failure(
                 AiFailureKind::MalformedOutput,
                 'fal.ai bir mesh döndürmedi.',
@@ -248,6 +225,125 @@ final class FalAiProvider implements AiProvider
             imageCount: 1,
             httpStatus: $response->status(),
         );
+    }
+
+    /**
+     * The endpoint and the body, for whichever generator the routing table named.
+     *
+     * The model's code *is* its fal path — `tripo3d/tripo/v2.5/image-to-3d`,
+     * `fal-ai/hyper3d/rodin/v2.5` — and each family has its own idea of how to be handed a
+     * photograph: one field, four named fields, or a list. What every family gets asked for is
+     * the same: a textured mesh, about twenty thousand faces, and no guess at its real size.
+     *
+     * Four views when four views are known. Given the back, none of them invents one, and none
+     * charges more for it — which is the whole reason the catalogue labels its photographs.
+     *
+     * @param  array<string, string>  $views  front/left/back/right, whichever are known
+     * @return array{path: string, body: array<string, mixed>}
+     */
+    private function requestFor(string $code, string $front, array $views, int $faceLimit): array
+    {
+        $ordered = array_values(array_filter([
+            $views['front'] ?? $front,
+            $views['left'] ?? null,
+            $views['back'] ?? null,
+            $views['right'] ?? null,
+        ]));
+
+        $multiview = count($ordered) > 1;
+
+        // Tripo 2.5: two endpoints, four named fields on the second.
+        if (str_starts_with($code, 'tripo3d/tripo/')) {
+            return [
+                'path' => $multiview ? self::MULTIVIEW_PATH : self::SINGLE_PATH,
+                'body' => [
+                    ...($multiview
+                        ? [
+                            'front_image_url' => $views['front'] ?? $front,
+                            ...(isset($views['left']) ? ['left_image_url' => $views['left']] : []),
+                            ...(isset($views['back']) ? ['back_image_url' => $views['back']] : []),
+                            ...(isset($views['right']) ? ['right_image_url' => $views['right']] : []),
+                        ]
+                        : ['image_url' => $front]),
+                    // Standard textures. HD costs a third more per model and the difference is
+                    // invisible on a sofa seen across a room, which is the only place these are shown.
+                    'texture' => 'standard',
+                    /*
+                     * `auto_size` is left off on purpose: it asks the model to guess real-world
+                     * dimensions, and the catalogue already knows them because a seller measured
+                     * the thing. A mesh scaled to a guess is the "beautiful model at the wrong
+                     * size" that makes a planner worse than a box.
+                     */
+                    'face_limit' => $faceLimit,
+                ],
+            ];
+        }
+
+        // Tripo H3.1: the same two endpoints, but the multiview one takes a list of 2–4.
+        if (str_starts_with($code, 'tripo3d/h3.1/')) {
+            $base = 'tripo3d/h3.1';
+
+            return [
+                'path' => $multiview ? $base.'/multiview-to-3d' : $base.'/image-to-3d',
+                'body' => [
+                    ...($multiview ? ['image_urls' => $ordered] : ['image_url' => $front]),
+                    'texture' => true,
+                    'pbr' => true,
+                    'texture_quality' => 'standard',
+                    'face_limit' => $faceLimit,
+                ],
+            ];
+        }
+
+        // Rodin: one endpoint, a list of up to five images, any angles.
+        if (str_starts_with($code, 'fal-ai/hyper3d/rodin')) {
+            return [
+                'path' => $code,
+                'body' => [
+                    'image_urls' => $ordered,
+                    'geometry_file_format' => 'glb',
+                    'material' => 'PBR',
+                ],
+            ];
+        }
+
+        // Hunyuan3D v3: one endpoint, the front named and the other three optional.
+        if (str_starts_with($code, 'fal-ai/hunyuan3d-v3/')) {
+            return [
+                'path' => $code,
+                'body' => [
+                    'input_image_url' => $views['front'] ?? $front,
+                    ...(isset($views['back']) ? ['back_image_url' => $views['back']] : []),
+                    ...(isset($views['left']) ? ['left_image_url' => $views['left']] : []),
+                    ...(isset($views['right']) ? ['right_image_url' => $views['right']] : []),
+                    'enable_pbr' => true,
+                    'face_count' => $faceLimit,
+                ],
+            ];
+        }
+
+        // Anything else on fal that takes a single `image_url` and answers with a mesh.
+        return ['path' => $code, 'body' => ['image_url' => $front]];
+    }
+
+    /**
+     * Where the mesh is, in whichever field this family puts it.
+     *
+     * @param  array<string, mixed>  $json
+     */
+    private function meshUrlFrom(array $json): ?string
+    {
+        foreach (['model_mesh', 'model_glb', 'model_glb_pbr'] as $field) {
+            $url = $json[$field]['url'] ?? null;
+
+            if (is_string($url) && $url !== '') {
+                return $url;
+            }
+        }
+
+        $url = $json['model_urls']['glb']['url'] ?? null;
+
+        return is_string($url) && $url !== '' ? $url : null;
     }
 
     /**

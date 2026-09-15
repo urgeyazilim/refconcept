@@ -107,6 +107,57 @@ final class ProductModelStorage
             });
     }
 
+    /**
+     * A mesh kept for comparison rather than for the catalogue.
+     *
+     * The bake-off runs the same ten products through several generators, and each result
+     * has to survive the next one. These are files and not media rows: nothing in the shop or
+     * the planner ever sees them, the one-per-source index does not apply, and throwing the
+     * lot away afterwards is deleting a folder.
+     *
+     * @return string the file's public URL
+     */
+    public function storeCandidate(Product $product, string $bytes, string $label): string
+    {
+        if (strlen($bytes) > self::MAX_SIZE_BYTES) {
+            throw new RuntimeException('3B model 20 MB sınırını aşıyor.');
+        }
+
+        $path = self::candidatePath($product, $label);
+
+        Storage::disk($this->disk())->put($path, $bytes, [
+            'visibility' => 'public',
+            'ContentType' => 'model/gltf-binary',
+        ]);
+
+        return Storage::disk($this->disk())->url($path);
+    }
+
+    /** Where a candidate goes: one folder per generator, one file per product. */
+    public static function candidatePath(Product $product, string $label): string
+    {
+        return sprintf('product-models/bakeoff/%s/%s.glb', Str::slug($label), $product->getKey());
+    }
+
+    /**
+     * Writes the bake-off's own index, the file the comparison page reads.
+     *
+     * @param  array<string, mixed>  $index
+     * @return string the index's public URL
+     */
+    public function storeCandidateIndex(array $index): string
+    {
+        $path = 'product-models/bakeoff/index.json';
+
+        Storage::disk($this->disk())->put($path, json_encode($index, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}', [
+            'visibility' => 'public',
+            'ContentType' => 'application/json',
+            'CacheControl' => 'no-cache',
+        ]);
+
+        return Storage::disk($this->disk())->url($path);
+    }
+
     // --- internals -------------------------------------------------------------
 
     private function put(

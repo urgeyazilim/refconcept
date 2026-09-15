@@ -25,6 +25,7 @@ use App\Domains\Payments\Console\ExpireCheckoutSessionsCommand;
 use App\Domains\Payments\Exceptions\CheckoutRefused;
 use App\Domains\Payments\Exceptions\GatewayUnavailable;
 use App\Domains\Products\Console\GenerateProductModelsCommand;
+use App\Domains\Products\Console\ModelBakeoffCommand;
 use App\Domains\Sellers\Exceptions\TeamRefused;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -53,6 +54,7 @@ return Application::configure(basePath: dirname(__DIR__))
         VerifyAiModelsCommand::class,
         EnsureStorageBucketsCommand::class,
         GenerateProductModelsCommand::class,
+        ModelBakeoffCommand::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         // The three Nuxt clients are separate origins; CORS is configured in config/cors.php.

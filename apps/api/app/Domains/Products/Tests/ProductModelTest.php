@@ -79,9 +79,13 @@ function glb(string $tail = 'x'): string
  * Everything below this line is about the behaviour a key buys, so the test has to buy one —
  * and faking the provider's HTTP rather than the adapter means the adapter is under test too.
  */
-function realProvider(bool $fakeHttp = true): void
+function realProvider(bool $fakeHttp = true, string $code = 'tripo3d/tripo/v2.5/image-to-3d'): void
 {
     $model = AiTaskRoute::query()->where('task', 'product_model')->firstOrFail()->primaryModel;
+
+    // Under a generator's own name: the adapter reads the family off the code, so this is
+    // how each request shape is reached, and the test route's placeholder code reaches none.
+    $model?->forceFill(['code' => $code])->save();
 
     $provider = $model?->provider;
 
@@ -222,6 +226,84 @@ it('sends one image when nobody has said which side is which', function (): void
     Http::assertSent(fn (Request $request): bool => str_contains($request->url(), 'image-to-3d')
         && ! str_contains($request->url(), 'multiview')
         && str_contains((string) $request->data()['image_url'], 'cover.jpg'));
+});
+
+/** Runs the job inline and returns it, outcome and all. */
+function generate(?string $modelCode = null, ?string $keepAs = null): GenerateProductModel
+{
+    $job = new GenerateProductModel((string) test()->product->getKey(), $modelCode, $keepAs);
+
+    $job->handle(
+        app(AiJobDispatcher::class),
+        app(GeneratedImageStore::class),
+        test()->models,
+        app(ProductViewTagger::class),
+    );
+
+    return $job;
+}
+
+it('asks each generator family in its own shape', function (string $code, string $path, array $expected): void {
+    realProvider(code: $code);
+
+    generate();
+
+    Http::assertSent(function (Request $request) use ($path, $expected): bool {
+        if (! str_contains($request->url(), $path)) {
+            return false;
+        }
+
+        $body = $request->data();
+
+        foreach ($expected as $field => $value) {
+            if (! array_key_exists($field, $body) || ($value !== null && $body[$field] !== $value)) {
+                return false;
+            }
+        }
+
+        return true;
+    });
+})->with([
+    'Tripo H3.1' => ['tripo3d/h3.1/image-to-3d', 'tripo3d/h3.1/image-to-3d', ['image_url' => null, 'pbr' => true, 'face_limit' => 20_000]],
+    'Rodin 2.5' => ['fal-ai/hyper3d/rodin/v2.5', 'fal-ai/hyper3d/rodin/v2.5', ['image_urls' => null, 'material' => 'PBR', 'geometry_file_format' => 'glb']],
+    'Hunyuan3D v3' => ['fal-ai/hunyuan3d-v3/image-to-3d', 'fal-ai/hunyuan3d-v3/image-to-3d', ['input_image_url' => null, 'enable_pbr' => true, 'face_count' => 20_000]],
+]);
+
+it('reads the mesh from whichever field the generator puts it in', function (): void {
+    realProvider(fakeHttp: false, code: 'fal-ai/hunyuan3d-v3/image-to-3d');
+
+    // Hunyuan answers `model_glb`, not `model_mesh`.
+    Http::fake([
+        'rest.alpha.fal.ai/storage/upload/initiate*' => Http::response(['upload_url' => 'https://upload.fal.test/slot', 'file_url' => 'https://v3b.fal.test/p.jpeg']),
+        'upload.fal.test/*' => Http::response('', 200),
+        'fal.run/*' => Http::response(['model_glb' => ['url' => 'https://cdn.fal.test/mesh.glb']]),
+        'cdn.fal.test/*' => Http::response(glb(), 200, ['Content-Type' => 'model/gltf-binary']),
+    ]);
+
+    expect(generate()->outcome['url'] ?? null)->not->toBeNull()
+        ->and(ProductMedia::query()->where('product_id', $this->product->getKey())->where('type', 'model_3d')->exists())->toBeTrue();
+});
+
+it('keeps a bake-off result beside the catalogue rather than in it', function (): void {
+    realProvider();
+
+    // A second generator on the same provider, named by the job rather than by the route.
+    $primary = AiTaskRoute::query()->where('task', 'product_model')->firstOrFail()->primaryModel;
+
+    $primary?->replicate()->forceFill(['code' => 'fal-ai/hyper3d/rodin/v2.5', 'name' => 'Rodin'])->save();
+
+    $job = generate('fal-ai/hyper3d/rodin/v2.5', 'rodin-2.5');
+
+    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), 'fal-ai/hyper3d/rodin/v2.5'));
+
+    /*
+     * The bake-off runs the same ten products through several generators and every result
+     * has to survive the next one — so a candidate is a file in the bake-off folder, never
+     * the product's model. Nothing in the shop or the planner sees it.
+     */
+    expect($job->outcome['url'] ?? null)->toContain('product-models/bakeoff/rodin-25/')
+        ->and(Storage::disk('s3-public')->exists(ProductModelStorage::candidatePath($this->product, 'rodin-2.5')))->toBeTrue()
+        ->and(ProductMedia::query()->where('product_id', $this->product->getKey())->where('type', 'model_3d')->exists())->toBeFalse();
 });
 
 it('puts the photograph on fal storage rather than sending a link it cannot reach', function (): void {
