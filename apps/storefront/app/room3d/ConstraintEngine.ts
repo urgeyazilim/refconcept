@@ -1,8 +1,11 @@
 import {
+  againstWall,
   clearanceRectangle,
   footprintOf,
   isMeasured,
   isUnderfoot,
+  isWallMounted,
+  nearestWall,
   polygonFromRect,
   polygonOf,
   polygonsOverlap,
@@ -18,11 +21,15 @@ import type { LayoutItem, RoomGeometry, RoomOpening } from './types'
  * `settled` is false when no position could be found — the room is full, or the piece is
  * wider than the room — and `x`/`z` are then the fallback the caller supplied, which is where
  * the piece was before anybody touched it.
+ *
+ * `rotation` is set only when the constraint decided it: a wall-hung piece faces the wall it
+ * was put on, whatever way it was pointing before.
  */
 export interface Settled {
   x: number
   z: number
   settled: boolean
+  rotation?: number
 }
 
 /**
@@ -80,6 +87,10 @@ export class ConstraintEngine {
       return { x: at.x, z: at.z, settled: true }
     }
 
+    if (isWallMounted(item)) {
+      return this.hang(item, at)
+    }
+
     const rotation = at.rotation ?? item.rotation_y_deg
     const blockers = this.blockersFor(item, items)
 
@@ -113,6 +124,33 @@ export class ConstraintEngine {
   }
 
   // --- internals -------------------------------------------------------------
+
+  /**
+   * A wall-hung piece goes on the nearest wall, facing the room, and slides along it.
+   *
+   * Dragged across the floor it does not float there: it lands flush on whichever wall is
+   * closest to where the pointer is, at the point along that wall the pointer is level with.
+   * Nothing on the floor is in its way — it is on the wall — so there is nothing to push
+   * out of, only the wall's ends to stay inside.
+   */
+  private hang(item: LayoutItem, at: { x: number, z: number }): Settled {
+    const wall = nearestWall(at.x, at.z, this.geometry)
+    const hung = againstWall(item, wall, this.geometry, 0)
+    const turned = footprintOf(item, hung.rotation_y_deg)
+
+    const halfWidth = Math.trunc(turned.width / 2)
+    const halfDepth = Math.trunc(turned.depth / 2)
+
+    // Along the wall the pointer decides; across it the wall does.
+    const alongX = wall === 'north' || wall === 'south'
+
+    return {
+      x: alongX ? clamp(at.x, halfWidth, this.geometry.width_mm - halfWidth) : hung.position_x_mm,
+      z: alongX ? hung.position_z_mm : clamp(at.z, halfDepth, this.geometry.length_mm - halfDepth),
+      rotation: hung.rotation_y_deg,
+      settled: true,
+    }
+  }
 
   /**
    * Inside the walls, footprint and all.

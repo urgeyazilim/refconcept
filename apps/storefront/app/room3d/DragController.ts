@@ -20,13 +20,14 @@ export interface DragDelegate {
   setOrbitEnabled: (enabled: boolean) => void
   onSelect: (id: string | null) => void
   /** Called on every pointer move, with a position nothing has been saved at yet. */
-  onPreview: (id: string, at: { x: number, z: number }, state: CollisionState, guides: SnapGuide[]) => void
+  onPreview: (id: string, at: { x: number, z: number, rotation?: number }, state: CollisionState, guides: SnapGuide[]) => void
   /** Called once, on release, with the position to keep. */
-  onCommit: (id: string, at: { x: number, z: number }) => void
+  onCommit: (id: string, at: { x: number, z: number, rotation?: number }) => void
   /** Called on release when the piece did not actually move. */
   onCancel: (id: string) => void
-  snap: (item: LayoutItem, at: { x: number, z: number }) => { x: number, z: number, guides: SnapGuide[] }
-  stateAt: (item: LayoutItem, at: { x: number, z: number }) => CollisionState
+  /** Where the piece may go, given where the pointer put it — and which way it then faces, when the room decides that. */
+  snap: (item: LayoutItem, at: { x: number, z: number }) => { x: number, z: number, rotation?: number, guides: SnapGuide[] }
+  stateAt: (item: LayoutItem, at: { x: number, z: number, rotation?: number }) => CollisionState
   /** Whether the pointer is on the gizmo's handles, which then own the gesture. */
   gizmoActive: () => boolean
 }
@@ -159,10 +160,12 @@ export class DragController {
 
     this.dragging.moved = snapped.x !== this.dragging.startX || snapped.z !== this.dragging.startZ
 
+    const at = { x: snapped.x, z: snapped.z, rotation: snapped.rotation }
+
     this.delegate.onPreview(
       this.dragging.item.id,
-      { x: snapped.x, z: snapped.z },
-      this.delegate.stateAt(this.dragging.item, snapped),
+      at,
+      this.delegate.stateAt(this.dragging.item, at),
       snapped.guides,
     )
   }
@@ -199,7 +202,7 @@ export class DragController {
       z: toMm(point.z) + offsetZ,
     })
 
-    this.delegate.onCommit(item.id, { x: snapped.x, z: snapped.z })
+    this.delegate.onCommit(item.id, { x: snapped.x, z: snapped.z, rotation: snapped.rotation })
   }
 
   // --- internals -------------------------------------------------------------

@@ -5,7 +5,7 @@ import { GizmoController, type GizmoMode } from './GizmoController'
 import { type Measurement, MeasurementEngine, formatDistance } from './MeasurementEngine'
 import { SceneManager } from './SceneManager'
 import { SnapEngine } from './SnapEngine'
-import { againstWall, footprintOf } from './footprint'
+import { againstWall, footprintOf, isWallMounted, wallMountHeight } from './footprint'
 import { type LayoutItem, type RoomGeometry, type RoomOpening, type ViewMode, type WallName, toMm } from './types'
 
 /** A measurement, already placed on the screen, for the HTML overlay to draw. */
@@ -176,6 +176,7 @@ export class RoomEditor {
         return {
           x: held.x,
           z: held.z,
+          rotation: held.rotation,
           guides: held.x === snapped.x && held.z === snapped.z ? snapped.guides : [],
         }
       },
@@ -312,7 +313,7 @@ export class RoomEditor {
         { x: current.x, z: current.z },
       )
 
-      this.gizmoPreview = { x: held.x, z: held.z, rotation: current.rotation }
+      this.gizmoPreview = { x: held.x, z: held.z, rotation: held.rotation ?? current.rotation }
 
       this.scene.setGuides(held.x === snapped.x && held.z === snapped.z ? snapped.guides : [])
     }
@@ -340,10 +341,15 @@ export class RoomEditor {
   }
 
   /** Moves a piece, having already decided where. The drag's commit path. */
-  moveTo(id: string, at: { x: number, z: number }): void {
+  moveTo(id: string, at: { x: number, z: number, rotation?: number }): void {
     this.edit(id, (item) => {
       item.position_x_mm = at.x
       item.position_z_mm = at.z
+
+      // A wall-hung piece faces whichever wall it landed on.
+      if (at.rotation !== undefined) {
+        item.rotation_y_deg = at.rotation
+      }
     })
 
     this.scene.setGuides([])
@@ -563,7 +569,26 @@ export class RoomEditor {
      */
     const chosen = item.position_x_mm !== 0 || item.position_z_mm !== 0
 
-    const placed = chosen ? { ...item } : { ...item, ...this.freeSpotFor(item) }
+    let placed = chosen ? { ...item } : { ...item, ...this.freeSpotFor(item) }
+
+    /*
+     * A picture goes on a wall, at picture height, whatever the floor search said.
+     *
+     * The server's placement and the free-spot search both think in floor space. A wall-hung
+     * piece is hung instead: on the nearest wall to wherever they put it, facing the room, its
+     * bottom at the height its kind is usually hung — unless somebody already set one.
+     */
+    if (isWallMounted(placed)) {
+      const hung = this.constraints.settle(placed, this.items, { x: placed.position_x_mm, z: placed.position_z_mm })
+
+      placed = {
+        ...placed,
+        position_x_mm: hung.x,
+        position_z_mm: hung.z,
+        rotation_y_deg: hung.rotation ?? placed.rotation_y_deg,
+        position_y_mm: placed.position_y_mm > 0 ? placed.position_y_mm : wallMountHeight(placed.category),
+      }
+    }
 
     this.items = [...this.items, placed]
     this.selectedId = placed.id

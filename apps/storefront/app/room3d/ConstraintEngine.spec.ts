@@ -107,12 +107,14 @@ describe('constraintEngine', () => {
     expect(engine().settle(rug, [sofa, rug], { x: -500, z: 2600 })).toEqual({ x: 1000, z: 2600, settled: true })
   })
 
-  it('keeps a wall-hung piece over the furniture and inside the room', () => {
+  it('keeps a raised piece over the furniture and inside the room', () => {
+    // A pendant light, hung from the ceiling over the sofa: off the floor, so over the sofa
+    // is fine, but never outside the walls.
     const sofa = piece('sofa', 2200, 900, 2400, 2600)
-    const picture = piece('picture', 800, 30, 2400, 2600, { category: 'tablo', position_y_mm: 1500 })
+    const pendant = piece('pendant', 800, 800, 2400, 2600, { category: 'tavan-aydinlatma', position_y_mm: 2000 })
 
-    expect(engine().settle(picture, [sofa, picture], { x: 2400, z: 2600 })).toEqual({ x: 2400, z: 2600, settled: true })
-    expect(engine().settle(picture, [sofa, picture], { x: 9000, z: 2600 })).toEqual({ x: 4450, z: 2600, settled: true })
+    expect(engine().settle(pendant, [sofa, pendant], { x: 2400, z: 2600 })).toEqual({ x: 2400, z: 2600, settled: true })
+    expect(engine().settle(pendant, [sofa, pendant], { x: 9000, z: 2600 })).toEqual({ x: 4450, z: 2600, settled: true })
   })
 
   it('keeps the floor in front of a door clear', () => {
@@ -143,6 +145,26 @@ describe('constraintEngine', () => {
     expect(held.x).toBeLessThan(2400)
     expect(held.z).toBeGreaterThan(3200)
     expect(polygonsOverlap(polygonOf(table, held), polygonOf(sofa))).toBe(false)
+  })
+
+  it('hangs a picture on the nearest wall and slides it along it', () => {
+    const sofa = piece('sofa', 2200, 900, 2400, 2600)
+    const picture = piece('picture', 800, 30, 0, 0, { category: 'tablo', position_y_mm: 1200 })
+
+    // Dropped near the west wall: flush to it, facing east, level with the pointer.
+    const west = engine().settle(picture, [sofa, picture], { x: 300, z: 2000 })
+
+    expect(west).toEqual({ x: 15, z: 2000, rotation: 90, settled: true })
+
+    // Dragged to the far end of that wall: it stops at the corner rather than leaving it.
+    const corner = engine().settle(picture, [sofa, picture], { x: 100, z: 5000 })
+
+    expect(corner).toEqual({ x: 15, z: 5200 - 400, rotation: 90, settled: true })
+
+    // Over the sofa, nearer the south wall: it goes on the south wall, not into the sofa.
+    const south = engine().settle(picture, [sofa, picture], { x: 2400, z: 4900 })
+
+    expect(south).toEqual({ x: 2400, z: 5200 - 15, rotation: 180, settled: true })
   })
 
   it('leaves an unmeasured piece exactly where it was put', () => {

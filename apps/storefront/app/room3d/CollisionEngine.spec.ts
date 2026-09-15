@@ -140,6 +140,19 @@ describe('collisionEngine', () => {
     expect(engine().evaluate([sofa, across]).get('across')).toBe('blocked')
   })
 
+  it('lets a curtain hang behind the sofa and a picture over the door', () => {
+    // On the wall is not on the floor. Mirrored on the server with the same numbers.
+    const sofa = place('sofa', 'kanepe', 2_200, 900, 2_400, 500)
+    const curtain = place('curtain', 'perde', 2_000, 20, 2_400, 10)
+    const picture = place('picture', 'tablo', 600, 30, 4_250, 15, 0, 1_500)
+
+    const states = engine([opening('door', 'north', 3_800, 900)]).evaluate([sofa, curtain, picture])
+
+    expect(states.get('curtain')).toBe('ok')
+    expect(states.get('sofa')).toBe('ok')
+    expect(states.get('picture')).toBe('ok')
+  })
+
   it('leaves an unmeasured piece alone rather than guessing its size', () => {
     const sofa = place('sofa', 'kanepe', 2_200, 900, 2_400, 2_600)
     const unmeasured = { ...place('lamp', 'aydinlatma', 0, 0, 2_400, 2_600), width_mm: null, depth_mm: null }

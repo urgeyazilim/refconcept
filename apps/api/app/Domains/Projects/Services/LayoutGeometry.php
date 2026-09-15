@@ -65,6 +65,15 @@ final class LayoutGeometry
     private const UNDERFOOT_CATEGORIES = ['hali', 'kilim', 'paspas'];
 
     /**
+     * The categories that hang on a wall rather than stand on the floor.
+     *
+     * A picture above a sofa and a curtain behind one are the ordinary arrangement, not an
+     * overlap, and a picture above a doorway blocks nobody's way through it. Same list as
+     * the browser's.
+     */
+    private const WALL_MOUNTED_CATEGORIES = ['tablo', 'ayna', 'duvar-aydinlatma', 'perde'];
+
+    /**
      * Checks every item in a layout and returns the state each one is in.
      *
      * Returned rather than saved, so a caller can use this to answer "what would happen if I
@@ -146,6 +155,11 @@ final class LayoutGeometry
             if ($this->polygonsOverlap($shape, $this->polygonOf($other))) {
                 return 'blocked';
             }
+        }
+
+        // A picture above a doorway blocks nobody's way through it.
+        if ($this->isWallMounted($item)) {
+            return 'ok';
         }
 
         // Doorways and windows are the difference between a layout that looks fine on a plan
@@ -306,15 +320,29 @@ final class LayoutGeometry
             return true;
         }
 
-        return $this->isUnderfoot($item) || $this->isUnderfoot($other);
+        return $this->isUnderfoot($item) || $this->isUnderfoot($other)
+            || $this->isWallMounted($item) || $this->isWallMounted($other);
     }
 
     private function isUnderfoot(DesignLayoutItem $item): bool
     {
+        return array_intersect($this->categorySlugs($item), self::UNDERFOOT_CATEGORIES) !== [];
+    }
+
+    private function isWallMounted(DesignLayoutItem $item): bool
+    {
+        return array_intersect($this->categorySlugs($item), self::WALL_MOUNTED_CATEGORIES) !== [];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function categorySlugs(DesignLayoutItem $item): array
+    {
         $product = $item->product;
 
         if ($product === null) {
-            return false;
+            return [];
         }
 
         /*
@@ -335,7 +363,7 @@ final class LayoutGeometry
             $slugs[] = $primary;
         }
 
-        return array_intersect($slugs, self::UNDERFOOT_CATEGORIES) !== [];
+        return array_values(array_map('strval', $slugs));
     }
 
     /**

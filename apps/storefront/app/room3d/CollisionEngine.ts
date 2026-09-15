@@ -2,6 +2,7 @@ import {
   clearanceRectangle,
   isMeasured,
   isUnderfoot,
+  isWallMounted,
   polygonFromRect,
   polygonInsideRoom,
   polygonOf,
@@ -85,18 +86,23 @@ export class CollisionEngine {
         continue
       }
 
-      // One of them is off the floor, or one of them is a rug.
+      // One of them is off the floor, one of them is a rug, or one of them is on the wall.
       if (item.position_y_mm > 0 || other.position_y_mm > 0) {
         continue
       }
 
-      if (isUnderfoot(item) || isUnderfoot(other)) {
+      if (isUnderfoot(item) || isUnderfoot(other) || isWallMounted(item) || isWallMounted(other)) {
         continue
       }
 
       if (polygonsOverlap(shape, polygonOf(other))) {
         return 'blocked'
       }
+    }
+
+    // A picture above a doorway blocks nobody's way through it.
+    if (isWallMounted(item)) {
+      return 'ok'
     }
 
     for (const opening of this.openings) {

@@ -234,6 +234,28 @@ it('turns a footprint when the piece is turned', function (): void {
         ->and($service->rectangleOf($turned))->toBe(['x1' => 1_950, 'z1' => 1_500, 'x2' => 2_850, 'z2' => 3_700]);
 });
 
+it('lets a curtain hang behind the sofa and a picture over the door', function (): void {
+    // On the wall is not on the floor. Mirrored in the browser with the same numbers.
+    $sofa = place('Kanepe', 'kanepe', 2_200, 900, 2_400, 500);
+    $curtain = place('Perde', 'perde', 2_000, 20, 2_400, 10);
+    $picture = place('Tablo', 'tablo', 600, 30, 4_250, 15, 0, 1_500);
+
+    RoomConstraint::query()->create([
+        'room_id' => $this->room->getKey(),
+        'type' => 'door',
+        'wall' => 'north',
+        'offset_mm' => 3_800,
+        'width_mm' => 900,
+        'height_mm' => 2_100,
+    ]);
+
+    $states = $this->geometryService->evaluate($this->layout->fresh());
+
+    expect($states[$curtain->id])->toBe('ok')
+        ->and($states[$sofa->id])->toBe('ok')
+        ->and($states[$picture->id])->toBe('ok');
+});
+
 it('boxes a piece turned off a right angle by the box it actually fits in', function (): void {
     // At 45° a 2200 × 900 rectangle fits in a 2192 × 2192 box. That box is what the wall
     // arithmetic uses; whether it touches anything is decided by its outline, below.

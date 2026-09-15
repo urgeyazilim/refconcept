@@ -41,6 +41,54 @@ const UNDERFOOT_CATEGORIES = ['hali', 'kilim', 'paspas']
 const SWINGING_TYPES = ['door', 'balcony_door']
 
 /**
+ * The categories that hang on a wall rather than stand on the floor.
+ *
+ * They are placed differently — flush to the nearest wall, facing the room, sliding along it
+ * rather than across the floor — and they collide with nothing: a picture above a sofa and a
+ * curtain behind one are the ordinary arrangement, not an overlap.
+ */
+const WALL_MOUNTED_CATEGORIES = ['tablo', 'ayna', 'duvar-aydinlatma', 'perde']
+
+/** Where the bottom of a wall-hung piece goes when nobody has said, by category. */
+const WALL_MOUNT_HEIGHTS_MM: Record<string, number> = {
+  'tablo': 1_200,
+  'ayna': 1_000,
+  'duvar-aydinlatma': 1_700,
+  'perde': 0,
+}
+
+export const isWallMounted = (item: LayoutItem): boolean =>
+  item.category !== null && WALL_MOUNTED_CATEGORIES.includes(item.category)
+
+export const wallMountHeight = (category: string | null): number =>
+  category === null ? 0 : (WALL_MOUNT_HEIGHTS_MM[category] ?? 1_200)
+
+/** The wall a point is nearest to, which is where a wall-hung piece dragged there goes. */
+export function nearestWall(x: number, z: number, geometry: RoomGeometry): WallName {
+  // A pointer outside the room is treated as being at the wall it went past, not as being
+  // nearer the far wall because the distance went negative.
+  const px = Math.min(Math.max(x, 0), geometry.width_mm)
+  const pz = Math.min(Math.max(z, 0), geometry.length_mm)
+
+  const distances: Array<[WallName, number]> = [
+    ['west', px],
+    ['east', geometry.width_mm - px],
+    ['north', pz],
+    ['south', geometry.length_mm - pz],
+  ]
+
+  let best = distances[0]!
+
+  for (const candidate of distances) {
+    if (candidate[1] < best[1]) {
+      best = candidate
+    }
+  }
+
+  return best[0]
+}
+
+/**
  * Whether the catalogue knows how big this actually is.
  *
  * An unmeasured variant has no footprint here and none on the server either. It is drawn as a
