@@ -27,11 +27,118 @@ const props = withDefaults(defineProps<{
   items: LayoutItem[]
   states: Map<string, string>
   selectedId?: string | null
+  /** Whether doors and windows can be dragged along their wall. */
+  editableOpenings?: boolean
 }>(), {
   selectedId: null,
+  editableOpenings: false,
 })
 
-const emit = defineEmits<{ select: [id: string | null] }>()
+const emit = defineEmits<{
+  select: [id: string | null]
+  /** A door or window was dragged along its wall and let go at this offset. */
+  moveOpening: [id: string, offsetMm: number]
+}>()
+
+const svg = ref<SVGSVGElement | null>(null)
+
+/**
+ * A door or window being dragged along its wall.
+ *
+ * The plan is where openings get corrected: the analysis puts a window 4.2 m along a 4.85 m
+ * wall and the customer, who can see it is in the middle, slides it there. Along the wall
+ * only — an opening cannot leave its wall by being dragged, and the corners stop it.
+ */
+const dragging = ref<{ id: string, wall: string, startOffset: number, startAlong: number, offset: number } | null>(null)
+
+/** Where the pointer is, in the plan's own millimetres. */
+function planPoint(event: PointerEvent): { x: number, y: number } | null {
+  const element = svg.value
+
+  if (element === null) {
+    return null
+  }
+
+  const matrix = element.getScreenCTM()
+
+  if (matrix === null) {
+    return null
+  }
+
+  const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse())
+
+  return { x: point.x, y: point.y }
+}
+
+function along(wall: string, point: { x: number, y: number }): number {
+  return wall === 'north' || wall === 'south' ? point.x : point.y
+}
+
+function startOpeningDrag(event: PointerEvent, opening: RoomOpening): void {
+  if (!props.editableOpenings || opening.wall === null || opening.offset_mm === null || opening.width_mm === null) {
+    return
+  }
+
+  const point = planPoint(event)
+
+  if (point === null) {
+    return
+  }
+
+  dragging.value = {
+    id: opening.id,
+    wall: opening.wall,
+    startOffset: opening.offset_mm,
+    startAlong: along(opening.wall, point),
+    offset: opening.offset_mm,
+  }
+
+  svg.value?.setPointerCapture(event.pointerId)
+}
+
+function moveOpeningDrag(event: PointerEvent): void {
+  const drag = dragging.value
+
+  if (drag === null) {
+    return
+  }
+
+  const point = planPoint(event)
+  const opening = props.openings.find(candidate => candidate.id === drag.id)
+
+  if (point === null || opening === undefined || opening.width_mm === null) {
+    return
+  }
+
+  const span = drag.wall === 'north' || drag.wall === 'south' ? props.geometry.width_mm : props.geometry.length_mm
+  const desired = drag.startOffset + (along(drag.wall, point) - drag.startAlong)
+
+  // Inside its wall, to the corners and no further; rounded to the centimetre a plan works in.
+  drag.offset = Math.round(Math.max(0, Math.min(span - opening.width_mm, desired)) / 10) * 10
+}
+
+function endOpeningDrag(event: PointerEvent): void {
+  const drag = dragging.value
+
+  if (drag === null) {
+    return
+  }
+
+  dragging.value = null
+
+  if (svg.value?.hasPointerCapture(event.pointerId)) {
+    svg.value.releasePointerCapture(event.pointerId)
+  }
+
+  if (drag.offset !== drag.startOffset) {
+    emit('moveOpening', drag.id, drag.offset)
+  }
+}
+
+/** An opening's offset as it is being dragged, or as it is. */
+function offsetOf(opening: RoomOpening): number | null {
+  return dragging.value?.id === opening.id ? dragging.value.offset : opening.offset_mm
+}
 
 /** Room for the dimension lines and wall thickness outside the floor itself. */
 const MARGIN_MM = 700
@@ -60,6 +167,7 @@ interface Segment {
 }
 
 interface Opening {
+  opening: RoomOpening
   x1: number
   y1: number
   x2: number
@@ -89,10 +197,10 @@ function cut(
   toSegment: (along: { from: number, to: number }) => Segment,
 ): Segment[] {
   const gaps = props.openings
-    .filter(opening => opening.wall === wall && opening.offset_mm !== null && opening.width_mm !== null)
+    .filter(opening => opening.wall === wall && offsetOf(opening) !== null && opening.width_mm !== null)
     .map(opening => ({
-      from: opening.offset_mm ?? 0,
-      to: (opening.offset_mm ?? 0) + (opening.width_mm ?? 0),
+      from: offsetOf(opening) ?? 0,
+      to: (offsetOf(opening) ?? 0) + (opening.width_mm ?? 0),
     }))
     .sort((a, b) => a.from - b.from)
 
@@ -121,7 +229,7 @@ const gaps = computed<Opening[]>(() => {
   const drawn: Opening[] = []
 
   for (const opening of props.openings) {
-    const offset = opening.offset_mm
+    const offset = offsetOf(opening)
     const span = opening.width_mm
 
     if (offset === null || span === null) {
@@ -132,16 +240,16 @@ const gaps = computed<Opening[]>(() => {
 
     switch (opening.wall) {
       case 'north':
-        drawn.push({ x1: offset, y1: 0, x2: offset + span, y2: 0, swings })
+        drawn.push({ opening, x1: offset, y1: 0, x2: offset + span, y2: 0, swings })
         break
       case 'south':
-        drawn.push({ x1: offset, y1: length, x2: offset + span, y2: length, swings })
+        drawn.push({ opening, x1: offset, y1: length, x2: offset + span, y2: length, swings })
         break
       case 'west':
-        drawn.push({ x1: 0, y1: offset, x2: 0, y2: offset + span, swings })
+        drawn.push({ opening, x1: 0, y1: offset, x2: 0, y2: offset + span, swings })
         break
       case 'east':
-        drawn.push({ x1: width, y1: offset, x2: width, y2: offset + span, swings })
+        drawn.push({ opening, x1: width, y1: offset, x2: width, y2: offset + span, swings })
         break
     }
   }
@@ -191,11 +299,16 @@ const LABEL_MM = 150
     rather than a missing capital B.
   -->
   <svg
+    ref="svg"
     :viewBox="viewBox"
     class="block h-full w-full bg-bg-muted"
+    :class="{ 'touch-none': editableOpenings }"
     role="img"
     :aria-label="`Oda planı, ${(geometry.width_mm / 1000).toFixed(2)} metreye ${(geometry.length_mm / 1000).toFixed(2)} metre`"
     @click="emit('select', null)"
+    @pointermove="moveOpeningDrag"
+    @pointerup="endOpeningDrag"
+    @pointercancel="endOpeningDrag"
   >
     <!-- The floor. Clicking it is how somebody deselects. -->
     <rect x="0" y="0" :width="geometry.width_mm" :height="geometry.length_mm" class="fill-surface" />
@@ -211,13 +324,29 @@ const LABEL_MM = 150
     -->
     <g :stroke-width="WALL_MM * 0.6" stroke-linecap="butt">
       <line
-        v-for="(gap, index) in gaps"
-        :key="`o${index}`"
+        v-for="gap in gaps"
+        :key="gap.opening.id"
         :x1="gap.x1"
         :y1="gap.y1"
         :x2="gap.x2"
         :y2="gap.y2"
-        :class="gap.swings ? 'stroke-warning' : 'stroke-accent-500'"
+        :class="[gap.swings ? 'stroke-warning' : 'stroke-accent-500', { 'cursor-move': editableOpenings }]"
+        @pointerdown.stop="startOpeningDrag($event, gap.opening)"
+        @click.stop
+      />
+      <!-- A wider, invisible handle over each opening: a 60 mm line is a hard thing to grab. -->
+      <line
+        v-for="gap in gaps"
+        :key="`h${gap.opening.id}`"
+        :x1="gap.x1"
+        :y1="gap.y1"
+        :x2="gap.x2"
+        :y2="gap.y2"
+        :stroke-width="WALL_MM * 3"
+        stroke="transparent"
+        :class="{ 'cursor-move': editableOpenings }"
+        @pointerdown.stop="startOpeningDrag($event, gap.opening)"
+        @click.stop
       />
     </g>
 

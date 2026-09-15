@@ -127,7 +127,12 @@ chosen from the room analysis, a quality toggle, SSAO.
   first-person walk (WASD, or drag on mobile) with collision against walls.
 - A quality toggle (low/high) — the high path is heavy on integrated GPUs.
 
-### Phase 4 — The plan itself (1 week)
+### Phase 4 — The plan itself (1 week) — IN PROGRESS
+
+Done 2026-09-15: openings dragged along their wall on the plan (`RoomPlanSvg`
+`editableOpenings`), added and removed from the plan page, persisted as room constraints;
+`room-openings.spec.ts`. Open: non-rectangular rooms (wall polyline), corner dragging,
+polygon containment on the server.
 - Non-rectangular rooms: the geometry becomes a wall polyline (L-shapes, bay windows);
   the AI proposal stays rectangular, the plan editor lets the customer drag corners.
 - Openings placed by dragging on the plan; the 3D scene updates live.

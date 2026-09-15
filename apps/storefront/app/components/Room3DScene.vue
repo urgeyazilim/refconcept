@@ -39,7 +39,12 @@ const props = withDefaults(defineProps<{
  * that answer depends on what is already in the room *now* — not on what was last written
  * a second and a half ago. Sending the stale list puts every new piece in the same place.
  */
-const emit = defineEmits<{ save: [items: LayoutItem[]], change: [items: LayoutItem[]] }>()
+const emit = defineEmits<{
+  save: [items: LayoutItem[]]
+  change: [items: LayoutItem[]]
+  /** A door or window was dragged along its wall on the plan. */
+  moveOpening: [id: string, offsetMm: number]
+}>()
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 const view = ref<ViewMode>('perspective')
@@ -262,7 +267,9 @@ defineExpose({
         :items="state.items"
         :states="state.states"
         :selected-id="state.selectedId"
+        :editable-openings="editable"
         @select="editor?.select($event)"
+        @move-opening="(id, offset) => emit('moveOpening', id, offset)"
       />
 
       <!--

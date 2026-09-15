@@ -1,0 +1,88 @@
+import { expect, test } from '@playwright/test'
+import { createVerifiedAccount } from './support/accounts'
+import { fillStable } from './support/forms'
+import { gotoInteractive, waitForHydration } from './support/hydration'
+import { signInThrough } from './support/signin'
+
+/**
+ * Doors and windows, corrected by hand on the plan.
+ *
+ * The analysis reads them off a photograph; the customer slides the window to where it
+ * really is. This adds a window from the form, switches to the plan, drags it along the
+ * north wall with a real pointer, and reads the room back from the API to see that the wall
+ * — the same rows the 3D scene, the collision rules and the render use — now has it there.
+ */
+
+const STOREFRONT = process.env.E2E_STOREFRONT_URL ?? 'http://localhost:3000'
+const API = process.env.E2E_API_URL ?? 'http://localhost:58000'
+
+test.describe.configure({ timeout: 300_000 })
+
+test.describe('room openings', () => {
+  test('a window added from the form can be dragged along its wall on the plan', async ({ page, request }) => {
+    const account = await createVerifiedAccount('openings-customer')
+    const headers = { Authorization: `Bearer ${account.token}`, Accept: 'application/json' }
+
+    const project = await request.post(`${API}/api/v1/projects`, { headers, data: { name: `Açıklık ${Date.now()}` } })
+    const projectId = (await project.json()).data.id
+    const room = await request.post(`${API}/api/v1/projects/${projectId}/rooms`, { headers, data: { name: 'Salon', room_type: 'living_room' } })
+    const roomId = (await room.json()).data.id
+
+    await signInThrough(page, STOREFRONT, account.email, /\/account$/)
+    await gotoInteractive(page, `${STOREFRONT}/projects/${projectId}/rooms/${roomId}/plan`)
+    await waitForHydration(page)
+
+    await fillStable(page, 'input[type="number"] >> nth=0', '485')
+    await fillStable(page, 'input[type="number"] >> nth=1', '520')
+    await fillStable(page, 'input[type="number"] >> nth=2', '272')
+    await page.getByRole('button', { name: 'Kaydet ve devam et' }).click()
+    await expect(page.locator('canvas')).toBeVisible({ timeout: 30_000 })
+
+    // --- add a window on the north wall, a metre from the corner ---------------------
+    const section = page.locator('section', { hasText: 'Kapılar ve pencereler' })
+
+    await expect(section.getByText('Bu odada kayıtlı kapı ya da pencere yok.')).toBeVisible()
+    await section.getByRole('button', { name: 'Ekle', exact: true }).click()
+    await expect(section.getByText(/Pencere · kuzey duvarı · 100 cm'de, 120 cm geniş/)).toBeVisible({ timeout: 15_000 })
+
+    // --- drag it along the wall on the plan ------------------------------------------
+    await page.getByRole('button', { name: 'Plan', exact: true }).click()
+
+    /*
+     * Where the window is on screen. A horizontal SVG line has a zero-height box, which
+     * Playwright reads as "hidden", so its rectangle is asked for directly; the stroke is
+     * drawn round the geometric line, so the box's centre is on the stroke.
+     */
+    await page.locator('svg line[stroke="transparent"]').first().waitFor({ state: 'attached' })
+
+    const box = await page.evaluate(() => {
+      const line = document.querySelector('svg line[stroke="transparent"]')!
+      const rect = line.getBoundingClientRect()
+
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+    })
+
+    const from = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+
+    await page.mouse.move(from.x, from.y)
+    await page.mouse.down()
+    await page.mouse.move(from.x + 80, from.y, { steps: 10 })
+    await page.mouse.move(from.x + 160, from.y, { steps: 10 })
+    await page.mouse.up()
+
+    // The list says where it went, and so does the room itself.
+    await expect(section.getByText(/Pencere · kuzey duvarı · (1[1-9]\d|[2-9]\d\d) cm'de/)).toBeVisible({ timeout: 15_000 })
+
+    const layout = await request.get(`${API}/api/v1/projects/${projectId}/rooms/${roomId}/layout`, { headers })
+    const openings = (await layout.json()).data.openings as Array<{ wall: string, offset_mm: number, width_mm: number }>
+
+    expect(openings).toHaveLength(1)
+    expect(openings[0]!.wall).toBe('north')
+    expect(openings[0]!.offset_mm).toBeGreaterThan(1_000)
+    expect(openings[0]!.offset_mm).toBeLessThanOrEqual(4_850 - 1_200)
+
+    // --- and gone again ------------------------------------------------------------
+    await section.getByRole('button', { name: 'Kaldır' }).click()
+    await expect(section.getByText('Bu odada kayıtlı kapı ya da pencere yok.')).toBeVisible({ timeout: 15_000 })
+  })
+})

@@ -31,6 +31,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   expected price and the ceiling before it queues anything, and saying plainly when the
   task is still routed to the simulator.
 
+### Added — Planner v2, phase 4 (the plan itself)
+
+- **Doors and windows corrected by hand.** On the plan view a door or window drags along its
+  wall and stops at the corners; a "Kapılar ve pencereler" panel adds the one the photograph
+  did not show and removes the "window" that was a mirror. Every change is a room constraint,
+  so the 3D room, the collision rules and the final picture all read the same wall. A browser
+  test adds a window, drags it with a real pointer and reads the room back.
+- **The floor is drawn as the photograph showed it** — boards, tiles or carpet — from the
+  analysis's own words.
+
 ### Added — Planner v2, phase 3 (a room that looks like a room)
 
 - **Materials painted on a canvas, not loaded from files:** oak boards laid in staggered

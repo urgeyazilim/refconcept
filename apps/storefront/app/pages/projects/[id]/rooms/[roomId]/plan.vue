@@ -135,6 +135,101 @@ const composeNotice = ref<string | null>(null)
 const adding = ref(false)
 const cartNotice = ref<string | null>(null)
 
+// --- doors and windows -----------------------------------------------------------
+
+/**
+ * The openings, corrected by hand.
+ *
+ * The analysis reads them off a photograph and is right to within a hand's width most of
+ * the time; the plan is where somebody slides the window to where it actually is, adds the
+ * door the photograph did not show, or removes the "window" that was a mirror. Every change
+ * goes to the room's constraints — the same rows the layout rules and the render read — so
+ * the 3D scene, the collision rules and the final picture all see the same wall.
+ */
+const openingNotice = ref<string | null>(null)
+const openingBusy = ref(false)
+
+const WALL_LABELS: Record<string, string> = { north: 'kuzey', east: 'doğu', south: 'güney', west: 'batı' }
+const TYPE_LABELS: Record<string, string> = { door: 'Kapı', balcony_door: 'Balkon kapısı', window: 'Pencere' }
+
+const newOpening = reactive({
+  type: 'window' as 'window' | 'door' | 'balcony_door',
+  wall: 'north' as 'north' | 'east' | 'south' | 'west',
+  offset_cm: 100,
+  width_cm: 120,
+  height_cm: 140,
+  sill_cm: 90,
+})
+
+function asOpening(raw: Record<string, unknown>): RoomOpening {
+  return {
+    id: String(raw.id),
+    type: String(raw.type),
+    wall: (raw.wall as RoomOpening['wall']) ?? null,
+    offset_mm: typeof raw.offset_mm === 'number' ? raw.offset_mm : null,
+    width_mm: typeof raw.width_mm === 'number' ? raw.width_mm : null,
+    height_mm: typeof raw.height_mm === 'number' ? raw.height_mm : null,
+    sill_height_mm: typeof raw.sill_height_mm === 'number' ? raw.sill_height_mm : null,
+  }
+}
+
+async function moveOpening(id: string, offsetMm: number): Promise<void> {
+  const previous = openings.value
+
+  // Moved on screen first, put back if the server refuses: a window that snaps back a second
+  // after being dragged is honest, and a window that waits a second to move feels broken.
+  openings.value = openings.value.map(opening => (opening.id === id ? { ...opening, offset_mm: offsetMm } : opening))
+
+  try {
+    await api.patch(`${base}/constraints/${id}`, { offset_mm: offsetMm })
+  }
+  catch (error) {
+    openings.value = previous
+    openingNotice.value = error instanceof ApiError ? error.message : 'Açıklık taşınamadı.'
+  }
+}
+
+async function addOpening(): Promise<void> {
+  openingBusy.value = true
+  openingNotice.value = null
+
+  const isDoor = newOpening.type !== 'window'
+
+  try {
+    const response = await api.post<{ data: Record<string, unknown> }>(`${base}/constraints`, {
+      type: newOpening.type,
+      label: TYPE_LABELS[newOpening.type],
+      wall: newOpening.wall,
+      offset_mm: Math.round(newOpening.offset_cm * 10),
+      width_mm: Math.round(newOpening.width_cm * 10),
+      height_mm: Math.round(newOpening.height_cm * 10),
+      sill_height_mm: isDoor ? 0 : Math.round(newOpening.sill_cm * 10),
+    })
+
+    openings.value = [...openings.value, asOpening(response.data)]
+  }
+  catch (error) {
+    openingNotice.value = error instanceof ApiError ? error.message : 'Açıklık eklenemedi.'
+  }
+  finally {
+    openingBusy.value = false
+  }
+}
+
+async function removeOpening(id: string): Promise<void> {
+  const previous = openings.value
+
+  openings.value = openings.value.filter(opening => opening.id !== id)
+
+  try {
+    await api.delete(`${base}/constraints/${id}`)
+  }
+  catch (error) {
+    openings.value = previous
+    openingNotice.value = error instanceof ApiError ? error.message : 'Açıklık kaldırılamadı.'
+  }
+}
+
 /**
  * The design somebody arrived from, if they arrived from one.
  *
@@ -976,7 +1071,78 @@ onMounted(async () => {
         editable
         @save="save"
         @change="liveItems = $event"
+        @move-opening="moveOpening"
       />
+
+      <!--
+        Doors and windows, by hand.
+
+        The analysis reads them off the photograph; this is where they get corrected. Drag one
+        along its wall on the plan view, add the one the photograph did not show, remove the
+        "window" that turned out to be a mirror. The 3D room, the collision rules and the
+        final picture all read the same rows.
+      -->
+      <section class="rounded-md border border-line bg-surface p-4">
+        <h2 class="text-sm font-medium text-ink">
+          Kapılar ve pencereler
+        </h2>
+        <p class="mt-1 text-xs text-muted">
+          Plan görünümünde bir kapıyı ya da pencereyi duvar boyunca sürükleyerek yerini düzeltebilirsiniz.
+        </p>
+
+        <p v-if="openingNotice" class="mt-3 rounded-sm bg-warning-subtle p-2 text-xs text-warning-strong">
+          {{ openingNotice }}
+        </p>
+
+        <ul v-if="openings.length > 0" class="mt-3 divide-y divide-line text-sm">
+          <li v-for="opening in openings" :key="opening.id" class="flex items-center justify-between gap-3 py-2">
+            <span>
+              {{ TYPE_LABELS[opening.type] ?? opening.type }} ·
+              {{ opening.wall ? WALL_LABELS[opening.wall] : '—' }} duvarı ·
+              {{ opening.offset_mm === null ? '?' : Math.round(opening.offset_mm / 10) }} cm'de,
+              {{ opening.width_mm === null ? '?' : Math.round(opening.width_mm / 10) }} cm geniş
+            </span>
+            <button type="button" class="text-xs text-danger hover:underline" @click="removeOpening(opening.id)">
+              Kaldır
+            </button>
+          </li>
+        </ul>
+        <p v-else class="mt-3 text-xs text-muted">Bu odada kayıtlı kapı ya da pencere yok.</p>
+
+        <form class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-6" @submit.prevent="addOpening">
+          <select v-model="newOpening.type" class="rounded-sm border border-line bg-surface px-2 py-1.5 text-xs">
+            <option value="window">Pencere</option>
+            <option value="door">Kapı</option>
+            <option value="balcony_door">Balkon kapısı</option>
+          </select>
+          <select v-model="newOpening.wall" class="rounded-sm border border-line bg-surface px-2 py-1.5 text-xs">
+            <option v-for="(label, wall) in WALL_LABELS" :key="wall" :value="wall">{{ label }}</option>
+          </select>
+          <label class="text-xs text-muted">
+            konum (cm)
+            <input v-model.number="newOpening.offset_cm" type="number" min="0" class="mt-0.5 w-full rounded-sm border border-line bg-surface px-2 py-1 text-xs text-ink">
+          </label>
+          <label class="text-xs text-muted">
+            genişlik (cm)
+            <input v-model.number="newOpening.width_cm" type="number" min="10" class="mt-0.5 w-full rounded-sm border border-line bg-surface px-2 py-1 text-xs text-ink">
+          </label>
+          <label class="text-xs text-muted">
+            yükseklik (cm)
+            <input v-model.number="newOpening.height_cm" type="number" min="10" class="mt-0.5 w-full rounded-sm border border-line bg-surface px-2 py-1 text-xs text-ink">
+          </label>
+          <label v-if="newOpening.type === 'window'" class="text-xs text-muted">
+            denizlik (cm)
+            <input v-model.number="newOpening.sill_cm" type="number" min="0" class="mt-0.5 w-full rounded-sm border border-line bg-surface px-2 py-1 text-xs text-ink">
+          </label>
+          <button
+            type="submit"
+            class="col-span-2 rounded-pill border border-line px-3 py-1.5 text-xs hover:bg-bg-muted disabled:opacity-50 sm:col-span-1 sm:self-end"
+            :disabled="openingBusy"
+          >
+            Ekle
+          </button>
+        </form>
+      </section>
 
       <!--
         The catalogue, in the room.
