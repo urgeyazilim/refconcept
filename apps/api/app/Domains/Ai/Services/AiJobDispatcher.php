@@ -90,6 +90,30 @@ final class AiJobDispatcher
                 && $existing->status === AiJobStatus::Failed
                 && $existing->total_cost_micros === 0;
 
+            if ($existing !== null && $this->abandoned($existing)) {
+                /*
+                 * A job that says it is running and has not moved in half an hour is not
+                 * running. A worker died under it — a deploy, a timeout, a container restart —
+                 * and nothing will ever finish it. Left as it was, the key returns that corpse
+                 * to every caller forever and the product can never be tried again.
+                 *
+                 * Closed as a timeout, with the reason written out: whether the provider billed
+                 * for the call the worker died in is not something this system can know, and an
+                 * operator reading the record deserves to be told that rather than a zero.
+                 */
+                $existing->forceFill([
+                    'status' => AiJobStatus::Failed,
+                    'failure_kind' => AiFailureKind::Timeout,
+                    'failure_reason' => 'İşçi iş sürerken durdu; sağlayıcının bu çağrıyı ücretlendirip ücretlendirmediği bilinmiyor.',
+                    'finished_at' => now(),
+                ])->save();
+
+                // Whatever credits it held go back, as for any crash.
+                $this->credits->settle($existing);
+
+                $spentNothing = true;
+            }
+
             if ($existing !== null && ! $spentNothing) {
                 return $existing;
             }
@@ -314,5 +338,18 @@ final class AiJobDispatcher
 
         // A worker that died still leaves a customer owed their credits back.
         $this->credits->settle($job);
+    }
+
+    /**
+     * Whether a job claims to be running and plainly is not.
+     *
+     * Half an hour since it started. The longest thing routed through here — a room tour video
+     * — is capped at fifteen minutes by its own worker, so nothing alive is ever this old.
+     */
+    private function abandoned(AiJob $job): bool
+    {
+        return $job->status === AiJobStatus::Running
+            && $job->started_at !== null
+            && $job->started_at->lt(now()->subMinutes(30));
     }
 }

@@ -201,6 +201,61 @@ it('lets a key be tried again when the failure cost nothing', function (): void 
         ->and(AiJob::query()->whereKey($first->getKey())->value('idempotency_key'))->toBeNull();
 });
 
+it('gives up on a job whose worker died under it', function (): void {
+    $dispatcher = app(AiJobDispatcher::class);
+
+    $first = $dispatcher->dispatch(
+        AiTask::RoomAnalysis,
+        ['room_type' => 'salon'],
+        $this->owner,
+        idempotencyKey: 'killed-worker',
+    );
+
+    /*
+     * What the first real product-model run left behind: the worker was killed at sixty
+     * seconds, mid-call, and the job still says running an hour later. Nothing will ever
+     * finish it, and while it holds the key nothing can ever try again.
+     */
+    $first->forceFill(['status' => AiJobStatus::Running, 'started_at' => now()->subHour()])->save();
+
+    $second = $dispatcher->dispatch(
+        AiTask::RoomAnalysis,
+        ['room_type' => 'salon'],
+        $this->owner,
+        idempotencyKey: 'killed-worker',
+    );
+
+    $dead = $first->fresh();
+
+    expect($second->getKey())->not->toBe($first->getKey())
+        ->and($dead?->status)->toBe(AiJobStatus::Failed)
+        ->and($dead?->failure_kind)->toBe(AiFailureKind::Timeout);
+});
+
+it('leaves a job that is genuinely still running alone', function (): void {
+    $dispatcher = app(AiJobDispatcher::class);
+
+    $first = $dispatcher->dispatch(
+        AiTask::RoomAnalysis,
+        ['room_type' => 'salon'],
+        $this->owner,
+        idempotencyKey: 'live-worker',
+    );
+
+    // Two minutes in: a render taking its time, not a corpse. A second tap must not start a
+    // second paid call beside it.
+    $first->forceFill(['status' => AiJobStatus::Running, 'started_at' => now()->subMinutes(2)])->save();
+
+    $second = $dispatcher->dispatch(
+        AiTask::RoomAnalysis,
+        ['room_type' => 'salon'],
+        $this->owner,
+        idempotencyKey: 'live-worker',
+    );
+
+    expect($second->getKey())->toBe($first->getKey());
+});
+
 it('never re-runs a key whose failure had already been billed', function (): void {
     $dispatcher = app(AiJobDispatcher::class);
 

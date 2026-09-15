@@ -12,6 +12,7 @@ use App\Domains\Ai\Services\AiResult;
 use App\Domains\Ai\Services\GeneratedImageStore;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -28,11 +29,12 @@ use Throwable;
  * that makes a planner worse than a box. The editor normalises every mesh to the SKU's
  * recorded dimensions.
  *
- * **The photograph is sent as a URL rather than as bytes.** It is a shop photograph on the
- * public product disk — the one thing in this system that is already public — so there is
- * nothing to protect and a URL costs a fraction of the request. Room photographs go nowhere
- * near this provider, and there is no path here that could send one: the only input is a
- * product image.
+ * **The photograph goes onto fal's own storage before the generator sees it.** The job hands
+ * over the bytes as a data URI; a link to our bucket only works where the bucket is reachable
+ * from the internet, and a local MinIO is not. The generator itself cannot open a data URI
+ * either — both were tried for real — so the adapter uploads it to fal's CDN, free, and passes
+ * that link. Nothing in a shop photograph needs protecting. Room photographs go nowhere near this provider, and there is no path here that could send
+ * one: the only input is a product image.
  *
  * **A synchronous call rather than a queued one.** Generation is seconds, the queue API would
  * be a second polling loop to maintain, and this already runs inside a queued job — which is
@@ -41,6 +43,9 @@ use Throwable;
 final class FalAiProvider implements AiProvider
 {
     private const DEFAULT_BASE_URL = 'https://fal.run';
+
+    /** fal's file storage. Uploads are free; what they return is a link the models can fetch. */
+    private const STORAGE_URL = 'https://rest.alpha.fal.ai';
 
     /**
      * The model behind the task.
@@ -135,6 +140,25 @@ final class FalAiProvider implements AiProvider
             ARRAY_FILTER_USE_BOTH,
         );
 
+        /*
+         * Every photograph onto fal's own storage first.
+         *
+         * The generator sits behind fal and downloads what it is given; it cannot open a data
+         * URI and it cannot reach a bucket on somebody's laptop. Both were tried against the
+         * real endpoint and both came back "Failed to download the file". Uploading is free,
+         * returns a link on fal's CDN, and that link is reachable from wherever the model runs.
+         */
+        try {
+            $image = $this->hosted($image, $key, $call->options);
+
+            $views = array_map(fn (string $url): string => $this->hosted($url, $key, $call->options), $views);
+        } catch (Throwable $e) {
+            return AiResult::failure(
+                AiFailureKind::NetworkError,
+                'Ürün görseli fal.ai deposuna yüklenemedi: '.$e->getMessage(),
+            );
+        }
+
         $multiview = count($views) > 1;
 
         $path = $multiview ? self::MULTIVIEW_PATH : self::SINGLE_PATH;
@@ -204,7 +228,9 @@ final class FalAiProvider implements AiProvider
             return AiResult::failure(
                 AiFailureKind::NetworkError,
                 'Üretilen mesh indirilemedi.',
-                $mesh->status(),
+                // The generation's status, not the download's: fal billed for a model that
+                // was made, and the ledger has to say so even though we could not fetch it.
+                $response->status(),
             );
         }
 
@@ -222,6 +248,59 @@ final class FalAiProvider implements AiProvider
             imageCount: 1,
             httpStatus: $response->status(),
         );
+    }
+
+    /**
+     * A link the generator can download: a data URI is uploaded, anything else is left alone.
+     *
+     * Two calls, both free: ask fal for an upload slot, then put the bytes in it. What comes
+     * back is a file on fal's CDN, which is the one host the model is guaranteed to reach.
+     *
+     * @param  array<string, mixed>  $options
+     *
+     * @throws RuntimeException when the upload is refused
+     */
+    private function hosted(string $image, string $key, array $options): string
+    {
+        if (! str_starts_with($image, 'data:')) {
+            return $image;
+        }
+
+        if (preg_match('#^data:([^;,]+);base64,(.+)$#s', $image, $parts) !== 1) {
+            throw new RuntimeException('Görsel verisi okunamadı.');
+        }
+
+        $mime = $parts[1];
+        $bytes = base64_decode($parts[2], true);
+
+        if ($bytes === false || $bytes === '') {
+            throw new RuntimeException('Görsel verisi çözülemedi.');
+        }
+
+        $initiate = Http::withHeaders(['Authorization' => 'Key '.$key])
+            ->timeout(60)
+            ->post(
+                rtrim((string) ($options['storage_url'] ?? self::STORAGE_URL), '/').'/storage/upload/initiate?storage_type=fal-cdn-v3',
+                [
+                    'content_type' => $mime,
+                    'file_name' => 'product.'.(explode('/', $mime)[1] ?? 'bin'),
+                ],
+            );
+
+        $uploadUrl = $initiate->json('upload_url');
+        $fileUrl = $initiate->json('file_url');
+
+        if ($initiate->failed() || ! is_string($uploadUrl) || ! is_string($fileUrl)) {
+            throw new RuntimeException(sprintf('yükleme başlatılamadı (%d)', $initiate->status()));
+        }
+
+        $put = Http::withBody($bytes, $mime)->timeout(60)->put($uploadUrl);
+
+        if ($put->failed()) {
+            throw new RuntimeException(sprintf('yükleme tamamlanamadı (%d)', $put->status()));
+        }
+
+        return $fileUrl;
     }
 
     private function kindFor(int $status): AiFailureKind

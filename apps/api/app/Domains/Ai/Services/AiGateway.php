@@ -341,6 +341,13 @@ final class AiGateway
                 $result->inputTokens,
                 $result->outputTokens,
                 $result->imageCount,
+                /*
+                 * Billed when the provider did the work: an answer we could use, or a 2xx
+                 * whose body we then could not. A 401, a 403, a 429 or a connection that
+                 * never opened costs nothing at the provider and costs nothing here.
+                 */
+                accepted: $result->successful
+                    || ($result->httpStatus !== null && $result->httpStatus >= 200 && $result->httpStatus < 300),
             ) ?? 0;
 
             $cost = $this->cost->convert($quoted, $rate?->currency);

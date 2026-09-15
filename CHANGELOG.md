@@ -33,6 +33,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **The first real fal.ai run, and everything it found.** One armchair came back as a
+  textured 101k-triangle mesh and stands in the planner; getting there took five fixes:
+  - A refused call (403, locked account) was recorded as a bought model — the flat
+    per-request fee was written whether or not the provider accepted the request. It is now
+    charged only on a 2xx.
+  - fal cannot reach a localhost bucket, and the Tripo endpoint cannot open a data URI
+    either. Photographs now go onto fal's own storage first (free) and the generator is
+    given the CDN link.
+  - The job ran on the default queue, whose worker kills anything past sixty seconds; Tripo
+    takes about one. Two generations were killed after fal had made and billed them. It now
+    runs on the AI worker with a ten-minute timeout.
+  - A job whose worker died stayed `running` forever and held its idempotency key, so the
+    product could never be retried. After half an hour it is closed as a timeout, its
+    credits settled, and the key released — with a reason that says the provider may have
+    billed for the call, because nothing here can know.
+  - Generated meshes ignore the requested face limit (20k asked, 101k delivered); noted, not
+    yet handled.
+- **The bank-transfer and checkout sweepers died whenever two things expired together.** Both
+  lazy-loaded a relation inside the loop, which Laravel refuses only when a model came out of a
+  list of more than one — so every single-record test passed while the real scheduler threw on
+  the first busy day, closed nothing, and kept the goods on hold. Found in the scheduler's own
+  log. Transfers are now also re-read under a lock, so one confirmed a second after the sweep
+  listed it is not expired out from under a paid order.
 - **An idempotency key no longer pins a job to a failure forever.** The key exists to stop
   a second charge, not to stop a second attempt: a job that failed *without spending
   anything* — a cost ceiling set too low, a missing key, a locked provider account — now

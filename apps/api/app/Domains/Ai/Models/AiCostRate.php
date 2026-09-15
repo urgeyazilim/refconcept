@@ -90,9 +90,18 @@ class AiCostRate extends Model
      * monthly bill. Division truncates, which under-reports by less than one micro per
      * call — an error small enough to accept and consistent enough to reason about.
      */
-    public function costFor(int $inputTokens, int $outputTokens, int $images): int
+    public function costFor(int $inputTokens, int $outputTokens, int $images, bool $accepted = true): int
     {
-        return $this->micros_per_request
+        /*
+         * The per-request fee only when the provider took the request.
+         *
+         * Tokens and images are already zero on a refusal, so they take care of themselves;
+         * a flat fee does not. Charged unconditionally, a locked account answering 403 three
+         * times was recorded as three generated models — money nobody spent, and a figure
+         * that then told the idempotency check the jobs had been billed and must never run
+         * again.
+         */
+        return ($accepted ? $this->micros_per_request : 0)
             + intdiv($inputTokens * $this->input_micros_per_million_tokens, 1_000_000)
             + intdiv($outputTokens * $this->output_micros_per_million_tokens, 1_000_000)
             + ($images * $this->micros_per_image);

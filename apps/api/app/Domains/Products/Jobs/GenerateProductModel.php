@@ -16,6 +16,7 @@ use App\Domains\Products\Services\ProductViewTagger;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 /**
@@ -50,7 +51,21 @@ final class GenerateProductModel implements ShouldQueue
      */
     public int $tries = 1;
 
-    public function __construct(public readonly string $productId) {}
+    /**
+     * Long enough for the generation it waits on, which is not short.
+     *
+     * The first real run put this on the default queue, whose worker kills anything past sixty
+     * seconds. Tripo takes about a minute: one model squeezed in at sixty-one seconds and the
+     * other two were killed mid-call — after fal had made them and billed for them, and before
+     * anything here could write down that they existed.
+     */
+    public int $timeout = 600;
+
+    public function __construct(public readonly string $productId)
+    {
+        // The AI worker: one process, a long timeout, and no payment callback waiting behind it.
+        $this->onQueue('ai');
+    }
 
     public function handle(
         AiJobDispatcher $dispatcher,
@@ -86,7 +101,7 @@ final class GenerateProductModel implements ShouldQueue
         $labelled = $product->media
             ->where('type', 'image')
             ->whereNotNull('view')
-            ->mapWithKeys(static fn (ProductMedia $media): array => [(string) $media->view => $media->url()])
+            ->mapWithKeys(static fn (ProductMedia $media): array => [(string) $media->view => self::reachable($media)])
             ->all();
 
         $photograph = $product->media->firstWhere('type', 'image');
@@ -102,19 +117,20 @@ final class GenerateProductModel implements ShouldQueue
          * unlabelled catalogue still gets a model — the same one it would have got before any
          * of this existed.
          */
-        $front = $labelled['front'] ?? $photograph->url();
+        $front = $labelled['front'] ?? self::reachable($photograph);
 
         try {
             $ran = $dispatcher->runInline(
                 task: AiTask::ProductModel,
                 input: [
                     'product_id' => (string) $product->getKey(),
-                    /*
-                     * A URL rather than bytes: this is the shop photograph, the one thing in
-                     * this system that is already public, and the provider fetches it itself.
-                     * Room photographs are never in reach of this task.
-                     */
+                    // The shop photograph, inline — see reachable(). Room photographs are never
+                    // in reach of this task.
                     'image_urls' => [$front],
+                    // Nothing for the gateway to read and inline: the adapter sends the image
+                    // itself. Left out, the gateway falls back to fetching `image_urls` as if
+                    // they were links, and logs a failure for every data URI it cannot GET.
+                    'image_sources' => [],
                     // Front, left, back, right, as far as anybody knows them. The adapter
                     // sends the multi-view endpoint when there is more than a front.
                     'options' => ['views' => $labelled],
@@ -193,5 +209,40 @@ final class GenerateProductModel implements ShouldQueue
 
         // Scratch space nobody empties becomes an archive of every mesh ever made.
         $files->discard($reference);
+    }
+
+    /**
+     * The photograph as something the provider can actually open.
+     *
+     * The bytes, as a data URI, rather than a link. A link was the first design — the shop
+     * photograph is public, so why send more than its address — and it failed the first time
+     * it met a real provider: in development the bucket is `localhost`, fal fetched it from
+     * the internet, and three paid-for generations came back "Failed to download the file".
+     * A link works only where the bucket happens to be reachable from outside; the bytes work
+     * everywhere, and there is nothing in a product photograph to protect.
+     *
+     * Falls back to the link when the file cannot be read or is too large to inline, which is
+     * no worse than what was sent before.
+     */
+    private static function reachable(ProductMedia $media): string
+    {
+        // Comfortably above the 8 MB upload ceiling; a file past this was not put there by it.
+        $limit = 12 * 1024 * 1024;
+
+        if ($media->size_bytes > $limit) {
+            return $media->url();
+        }
+
+        try {
+            $bytes = Storage::disk($media->disk)->get($media->storage_path);
+        } catch (Throwable) {
+            return $media->url();
+        }
+
+        if (! is_string($bytes) || $bytes === '' || strlen($bytes) > $limit) {
+            return $media->url();
+        }
+
+        return 'data:'.$media->mime_type.';base64,'.base64_encode($bytes);
     }
 }
