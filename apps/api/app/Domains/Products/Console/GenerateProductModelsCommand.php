@@ -8,8 +8,10 @@ use App\Domains\Ai\Models\AiTaskRoute;
 use App\Domains\Products\Enums\ModerationStatus;
 use App\Domains\Products\Jobs\GenerateProductModel;
 use App\Domains\Products\Models\Product;
+use App\Domains\Products\Services\ProductModelStorage;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Converts a catalogue that already exists into 3D models, once.
@@ -32,6 +34,7 @@ final class GenerateProductModelsCommand extends Command
     protected $signature = 'refconcept:product-models
         {--limit=50 : How many products to convert in this run}
         {--force : Include products that already have a generated model}
+        {--adopt= : Take bake-off candidates with this label as the model, free, before generating anything}
         {--dry-run : Count and price the work without queueing any of it}';
 
     protected $description = 'Yayındaki ürünler için fotoğraflarından 3B model üretir.';
@@ -47,6 +50,22 @@ final class GenerateProductModelsCommand extends Command
         }
 
         $limit = max(1, (int) $this->option('limit'));
+
+        /*
+         * What the bake-off already paid for is not paid for again.
+         *
+         * Its winner's answers are sitting in the bake-off folder as files. Adopting one is
+         * reading the file, running it through the optimiser and storing it as the product's
+         * model — the same path a fresh generation takes after the provider answers, minus
+         * the provider. Done before anything is priced, so the price is for what is left.
+         */
+        $adopt = trim((string) $this->option('adopt'));
+
+        if ($adopt !== '') {
+            $adopted = $this->adopt($adopt, (bool) $this->option('dry-run'));
+
+            $this->info(sprintf('%d ürün karşılaştırmadan alındı%s.', $adopted, (bool) $this->option('dry-run') ? ' (deneme)' : ''));
+        }
 
         $products = $this->candidates((bool) $this->option('force'))->limit($limit)->get();
 
@@ -113,6 +132,52 @@ final class GenerateProductModelsCommand extends Command
         $this->info(sprintf('%d ürün kuyruğa alındı.', $products->count()));
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Stores the bake-off's answer for every product that has one under this label.
+     *
+     * @return int how many were adopted (or would be, on a dry run)
+     */
+    private function adopt(string $label, bool $dryRun): int
+    {
+        $disk = Storage::disk((string) config('refconcept.storage.public_disk', config('filesystems.default')));
+        $storage = app(ProductModelStorage::class);
+
+        $count = 0;
+
+        // With --force a product that already has a generated model takes the bake-off's
+        // instead: the armchair had a Tripo model from the first run, and the vote went the other way.
+        foreach ($this->candidates((bool) $this->option('force'))->get() as $product) {
+            $path = ProductModelStorage::candidatePath($product, $label);
+
+            if (! $disk->exists($path)) {
+                continue;
+            }
+
+            $count++;
+
+            if ($dryRun) {
+                $this->line('  · '.$product->name.' (karşılaştırmadan)');
+
+                continue;
+            }
+
+            $bytes = (string) $disk->get($path);
+
+            if ($bytes === '' || ! str_starts_with($bytes, 'glTF')) {
+                $this->warn('  · '.$product->name.': aday dosyası okunamadı, atlandı.');
+                $count--;
+
+                continue;
+            }
+
+            $stored = $storage->storeGenerated($product, $bytes);
+
+            $this->line(sprintf('  · %s → %.1f MB', $product->name, $stored->size_bytes / 1_048_576));
+        }
+
+        return $count;
     }
 
     /**
