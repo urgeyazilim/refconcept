@@ -112,6 +112,9 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, EnsureEmailIsVerif
         // returns a URL that expires in five minutes.
         Route::get('{project}/rooms/{room}/media/{medium}/link', [RoomMediaController::class, 'link'])
             ->name('rooms.media.link');
+        // The plate: this photograph with the furniture taken out, made in the background.
+        Route::post('{project}/rooms/{room}/media/{medium}/clear', [RoomMediaController::class, 'clear'])
+            ->name('rooms.media.clear');
         Route::patch('{project}/rooms/{room}/media/{medium}', [RoomMediaController::class, 'update'])
             ->name('rooms.media.update');
         Route::delete('{project}/rooms/{room}/media/{medium}', [RoomMediaController::class, 'destroy'])

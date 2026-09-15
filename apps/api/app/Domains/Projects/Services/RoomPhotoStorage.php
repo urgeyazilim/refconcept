@@ -236,6 +236,98 @@ final class RoomPhotoStorage
     }
 
     /**
+     * Stores the emptied room — the plate — beside the photograph it was made from.
+     *
+     * On the private disk under the photograph's own rules: it is the customer's home with
+     * the furniture taken out, which reveals rather than hides. A room media row of type
+     * `plate`, pointing at its source photograph, so the renderer can ask for "the plate of
+     * this photograph" and get exactly one — an earlier plate of the same photograph is
+     * removed, file and row.
+     */
+    public function storePlate(Room $room, RoomMedia $photograph, string $reference): RoomMedia
+    {
+        $store = app(GeneratedImageStore::class);
+
+        $stream = $store->read($reference);
+
+        if ($stream === null) {
+            throw new RuntimeException('Boşaltılmış oda görseli bulunamadı.');
+        }
+
+        $temporary = tempnam(sys_get_temp_dir(), 'rc-plate-');
+
+        if ($temporary === false) {
+            fclose($stream);
+
+            throw new RuntimeException('Geçici dosya oluşturulamadı.');
+        }
+
+        try {
+            $handle = fopen($temporary, 'wb');
+
+            if ($handle === false) {
+                throw new RuntimeException('Geçici dosya yazılamadı.');
+            }
+
+            stream_copy_to_stream($stream, $handle);
+            fclose($handle);
+
+            $mime = $store->mimeTypeOf($reference);
+            $disk = $this->disk();
+            $path = sprintf('room-media/%s/%s.%s', $room->getKey(), Str::uuid7()->toString(), $this->extensionForMime($mime));
+
+            $this->put($disk, $path, $temporary, $mime);
+
+            [$width, $height] = $this->dimensions($temporary);
+
+            // One plate per photograph. The previous one is not a version worth keeping: it
+            // was made from the same picture by the same instruction, and the newer is the
+            // one somebody asked for.
+            foreach ($room->media()->where('type', 'plate')->where('source_media_id', $photograph->getKey())->get() as $previous) {
+                $this->purge($previous->disk, $previous->storage_path);
+                $previous->delete();
+            }
+
+            $plate = RoomMedia::query()->create([
+                'room_id' => $room->getKey(),
+                'type' => 'plate',
+                'source_media_id' => $photograph->getKey(),
+                'disk' => $disk,
+                'storage_path' => $path,
+                'original_name' => 'bos-oda.'.$this->extensionForMime($mime),
+                'mime_type' => $mime,
+                'size_bytes' => (int) filesize($temporary),
+                'width' => $width,
+                'height' => $height,
+                'checksum_sha256' => hash_file('sha256', $temporary) ?: '',
+                'position' => $this->nextPosition($room),
+                'uploaded_by' => $photograph->uploaded_by,
+            ]);
+
+            $store->discard($reference);
+
+            return $plate;
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+
+            @unlink($temporary);
+        }
+    }
+
+    /** The plate of a photograph, if one has been made. */
+    public function plateOf(RoomMedia $photograph): ?RoomMedia
+    {
+        return RoomMedia::query()
+            ->where('room_id', $photograph->room_id)
+            ->where('type', 'plate')
+            ->where('source_media_id', $photograph->getKey())
+            ->latest('created_at')
+            ->first();
+    }
+
+    /**
      * Fetches an image a provider produced and stores it as a design asset.
      *
      * Downloaded rather than linked, and that is the whole point. A provider's URL

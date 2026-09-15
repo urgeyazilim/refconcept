@@ -802,6 +802,29 @@ final class AiGatewaySeeder extends Seeder
                 ],
             ],
 
+            AiTask::RoomClear->value => [
+                'primary' => 'gemini-image',
+                'fallback' => 'fake-image',
+                // Nobody is charged: the plate is the shop's floor, made once per photograph.
+                'credits' => 0,
+                'max_cost_micros' => 600_000,
+                'concurrency' => 2,
+                'timeout' => 120,
+                'attempts' => 2,
+                'description' => 'Oda fotoğrafından taşınabilir eşyaları kaldırır; mimari olduğu gibi kalır.',
+                'prompt' => [
+                    'system' => implode(' ', [
+                        'You edit a photograph of a room so that it is empty.',
+                        'Remove every movable object: furniture, rugs, lamps, plants, cushions, pictures, curtains that hang free, boxes, clutter.',
+                        'Keep the architecture exactly as photographed: walls, floor, ceiling, windows, doors, radiators, sockets, switches, built-in lighting, skirting, the view through the windows.',
+                        'Fill the floor and walls that were hidden so they continue the visible surfaces seamlessly — same material, same pattern, same lighting and shadows.',
+                        'Do not change the camera, the perspective, the crop, the colour balance or the time of day. Do not add anything.',
+                        'Output the edited photograph only.',
+                    ]),
+                    'template' => "Remove these from the room: {{ objects }}.\nRoom type: {{ room_type }}.\n",
+                ],
+            ],
+
             AiTask::ImageEdit->value => [
                 'primary' => 'gemini-image',
                 'fallback' => 'fake-image',

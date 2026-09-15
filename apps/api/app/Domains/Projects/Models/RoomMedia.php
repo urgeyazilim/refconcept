@@ -27,6 +27,7 @@ use Illuminate\Support\Carbon;
  * @property string $id
  * @property string $room_id
  * @property string $type
+ * @property string|null $source_media_id
  * @property string $disk
  * @property string $storage_path
  * @property string $original_name
@@ -69,6 +70,7 @@ class RoomMedia extends Model
     protected $fillable = [
         'room_id',
         'type',
+        'source_media_id',
         'disk',
         'storage_path',
         'original_name',
@@ -93,6 +95,24 @@ class RoomMedia extends Model
             'height' => 'integer',
             'position' => 'integer',
         ];
+    }
+
+    /**
+     * The photograph a plate was made from.
+     *
+     * A plate — the room with its furniture taken out — is a room media row of its own, and
+     * this is how it says which photograph it emptied. Null for a photograph.
+     *
+     * @return BelongsTo<RoomMedia, $this>
+     */
+    public function source(): BelongsTo
+    {
+        return $this->belongsTo(RoomMedia::class, 'source_media_id');
+    }
+
+    public function isPlate(): bool
+    {
+        return $this->type === 'plate';
     }
 
     /** @return BelongsTo<Room, $this> */

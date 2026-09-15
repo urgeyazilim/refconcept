@@ -362,7 +362,18 @@ final class DesignGenerationPipeline
          */
         $photograph = $this->photographOf($room);
 
-        $images = [['disk' => $photograph->disk, 'path' => $photograph->storage_path]];
+        /*
+         * The plate, when there is one: the same photograph with the furniture taken out.
+         *
+         * A render built on the furnished photograph has to paint over the customer's old
+         * sofa, and usually paints around it instead — the new sofa beside the old one, or
+         * the old one wearing the new one's fabric. Built on the emptied room there is
+         * nothing to paint over. The photograph stays the fallback: a room whose plate was
+         * never made is drawn the way every room was drawn before plates existed.
+         */
+        $base = $this->storage->plateOf($photograph) ?? $photograph;
+
+        $images = [['disk' => $base->disk, 'path' => $base->storage_path]];
 
         /*
          * Then the 3D plan, when the customer has made one.

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domains\Projects\Http\Controllers;
 
 use App\Domains\Audit\Services\AuditLogger;
+use App\Domains\Projects\Jobs\ClearRoomPhotograph;
 use App\Domains\Projects\Models\DesignAsset;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\Room;
@@ -98,6 +99,32 @@ final class RoomMediaController
         );
 
         return response()->json(['data' => $this->summary($media->fresh(), $room->fresh())], 201);
+    }
+
+    /**
+     * Asks for the plate: this photograph with its furniture taken out.
+     *
+     * Queued rather than done here — a minute of a model's time — and answered with 202.
+     * The media list then shows the plate as a row of type `plate` pointing back at the
+     * photograph, and the studio swaps it in when it appears. Asking twice queues nothing
+     * twice: the plate is idempotent per photograph.
+     */
+    public function clear(Request $request, Project $project, Room $room, RoomMedia $medium): JsonResponse
+    {
+        $this->authorizeProject($request, $project);
+        $this->assertBelongs($room, $project);
+        abort_unless($medium->room_id === $room->getKey(), 404);
+        abort_unless($medium->type === 'photo', 422, 'Yalnızca bir oda fotoğrafı boşaltılabilir.');
+
+        $existing = $this->storage->plateOf($medium);
+
+        if ($existing !== null) {
+            return response()->json(['data' => $this->summary($existing, $room)]);
+        }
+
+        ClearRoomPhotograph::dispatch((string) $medium->getKey());
+
+        return response()->json(['data' => ['status' => 'queued', 'source_media_id' => $medium->getKey()]], 202);
     }
 
     /** A short-lived link, issued only after the ownership check above. */
@@ -256,6 +283,8 @@ final class RoomMediaController
         return [
             'id' => $media->id,
             'type' => $media->type,
+            // For a plate: the photograph it emptied. The studio pairs the two for before/after.
+            'source_media_id' => $media->source_media_id,
             'original_name' => $media->original_name,
             'mime_type' => $media->mime_type,
             'size_bytes' => $media->size_bytes,

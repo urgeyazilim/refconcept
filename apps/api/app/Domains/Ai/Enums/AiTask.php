@@ -33,6 +33,15 @@ enum AiTask: string
     case ImageEdit = 'image_edit';
 
     /**
+     * Take the furniture out of a room photograph.
+     *
+     * The plate every render starts from: the customer's own walls, floor, windows and
+     * doors with nothing standing in front of them. Once per photograph, in the background,
+     * and nobody is charged — an empty room is the shop's floor, not a customer's design.
+     */
+    case RoomClear = 'room_clear';
+
+    /**
      * A short film of the finished room, from the render.
      *
      * The camera may only move within what the customer's photograph already showed. A
@@ -88,6 +97,7 @@ enum AiTask: string
             self::ImageRenderDraft => 'Görsel üretimi (taslak)',
             self::ImageRenderPremium => 'Görsel üretimi (yüksek kalite)',
             self::ImageEdit => 'Görsel düzenleme',
+            self::RoomClear => 'Oda boşaltma',
             self::VideoTour => 'Oda videosu',
             self::ProductModel => 'Ürün 3B modeli',
             self::ProductViewTagging => 'Ürün görsel yönü',
@@ -108,7 +118,7 @@ enum AiTask: string
         return match ($this) {
             self::RoomAnalysis, self::ObjectExtraction, self::ProductTagging => AiModality::Vision,
             self::TextEmbedding => AiModality::Embedding,
-            self::ImageRenderDraft, self::ImageRenderPremium, self::ImageEdit => AiModality::Image,
+            self::ImageRenderDraft, self::ImageRenderPremium, self::ImageEdit, self::RoomClear => AiModality::Image,
             self::VideoTour => AiModality::Video,
             self::ProductModel => AiModality::Model3d,
             self::ProductViewTagging => AiModality::Vision,
