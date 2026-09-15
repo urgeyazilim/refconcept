@@ -298,6 +298,10 @@ final class CheckoutService
             ->live()
             ->whereNotNull('expires_at')
             ->where('expires_at', '<', now())
+            // Loaded with the list: read one at a time inside the loop, Laravel refuses the
+            // second session's user — and only when there is a second, so a single-session
+            // test never sees the scheduler die.
+            ->with('user')
             ->get();
 
         $closed = 0;

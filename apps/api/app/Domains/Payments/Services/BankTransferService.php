@@ -278,12 +278,33 @@ final class BankTransferService
             ->open()
             ->whereNotNull('expires_at')
             ->where('expires_at', '<', now())
-            ->get();
+            ->pluck('id');
 
         $closed = 0;
 
-        foreach ($overdue as $transfer) {
-            DB::transaction(function () use ($transfer): void {
+        foreach ($overdue as $id) {
+            /*
+             * Each transfer re-read, locked and re-checked inside its own transaction.
+             *
+             * Two defects lived in the version that looped over the list it had just read.
+             * It lazy-loaded the intent of each transfer — which Laravel only refuses when a
+             * model came out of a list of more than one, so every single-transfer test passed
+             * and the scheduler died on the first real day two transfers expired together,
+             * closing none of them and leaving their stock held. And it expired whatever the
+             * list said was open, so a transfer an operator confirmed a second after the query
+             * was then marked expired and had its stock released out from under a paid order.
+             */
+            $expired = DB::transaction(function () use ($id): bool {
+                $transfer = BankTransfer::query()
+                    ->with('intent.session')
+                    ->whereKey($id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($transfer === null || ! $transfer->status->isOpen()) {
+                    return false;
+                }
+
                 $transfer->forceFill(['status' => BankTransferStatus::Expired])->save();
 
                 $intent = $transfer->intent;
@@ -298,9 +319,11 @@ final class BankTransferService
                 }
 
                 $this->releaseHolds($intent);
+
+                return true;
             });
 
-            $closed++;
+            $closed += $expired ? 1 : 0;
         }
 
         return $closed;

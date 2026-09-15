@@ -284,6 +284,57 @@ it('closes a transfer nobody paid and gives the stock back', function (): void {
         ->and($transfer->fresh()?->intent?->session?->status)->toBe(CheckoutStatus::Expired);
 });
 
+it('closes every overdue transfer when several expire together', function (): void {
+    $first = startTransfer();
+
+    // A second customer, because a customer holds one live basket checkout at a time.
+    $this->customer = User::factory()->create();
+    $this->customer->forceFill(['email_verified_at' => now()])->save();
+    UserAddress::query()->create([
+        'user_id' => $this->customer->getKey(),
+        'recipient_name' => 'Ece Kaya',
+        'city' => 'Ankara',
+        'address_line1' => 'Tunalı Hilmi Caddesi 12',
+        'is_default_shipping' => true,
+    ]);
+
+    startTransfer();
+
+    // Both opened within the same second, so "the latest" cannot tell them apart.
+    $second = BankTransfer::query()->whereKeyNot($first->getKey())->firstOrFail();
+
+    expect($this->stock->sellableFor($this->sku))->toBe(1);
+
+    BankTransfer::query()->whereKey([$first->getKey(), $second->getKey()])->update(['expires_at' => now()->subHour()]);
+
+    /*
+     * Found in the scheduler's own log. With lazy loading forbidden, Laravel only objects
+     * when a model came out of a list of more than one — so the single-transfer test above
+     * passed while the real sweeper died on the first day two transfers ran out together,
+     * closed neither, and kept both customers' sofas off the market indefinitely.
+     */
+    expect($this->transfers->expireOverdue())->toBe(2)
+        ->and($first->fresh()?->status)->toBe(BankTransferStatus::Expired)
+        ->and($second->fresh()?->status)->toBe(BankTransferStatus::Expired)
+        ->and($this->stock->sellableFor($this->sku))->toBe(3);
+});
+
+it('does not expire a transfer that was settled after the sweep read it', function (): void {
+    $transfer = startTransfer();
+
+    $transfer->forceFill(['expires_at' => now()->subHour()])->save();
+
+    /*
+     * The operator confirms the money in the moment between the sweeper listing overdue
+     * transfers and reaching this one. Expiring it anyway would release the stock of an order
+     * somebody has just paid for, so each transfer is re-read under a lock and re-checked.
+     */
+    BankTransfer::query()->whereKey($transfer->getKey())->update(['status' => BankTransferStatus::Confirmed->value]);
+
+    expect($this->transfers->expireOverdue())->toBe(0)
+        ->and($transfer->fresh()?->status)->toBe(BankTransferStatus::Confirmed);
+});
+
 it('leaves a transfer alone while its window is open', function (): void {
     startTransfer();
 

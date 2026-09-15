@@ -19,6 +19,7 @@ use App\Domains\Payments\Enums\CheckoutStatus;
 use App\Domains\Payments\Enums\PaymentStatus;
 use App\Domains\Payments\Exceptions\CheckoutRefused;
 use App\Domains\Payments\Gateways\FakePaymentGateway;
+use App\Domains\Payments\Models\CheckoutSession;
 use App\Domains\Payments\Models\PaymentIntent;
 use App\Domains\Payments\Models\PaymentTransaction;
 use App\Domains\Payments\Models\PaymentWebhookEvent;
@@ -471,6 +472,33 @@ it('closes an abandoned checkout and gives the stock back', function (): void {
         ->and($session->fresh()?->status)->toBe(CheckoutStatus::Expired)
         // Back on the shelf: a hold nobody came back for is a sofa somebody else is being
         // told is sold out.
+        ->and($this->stock->sellableFor($this->sku))->toBe(4);
+});
+
+it('closes every abandoned checkout when several expire together', function (): void {
+    $this->carts->add($this->customer, $this->sku, 1);
+    $first = $this->checkout->openCart($this->customer, []);
+
+    $other = User::factory()->create();
+    $other->forceFill(['email_verified_at' => now()])->save();
+    UserAddress::query()->create([
+        'user_id' => $other->getKey(),
+        'recipient_name' => 'Ece Kaya',
+        'city' => 'Ankara',
+        'address_line1' => 'Tunalı Hilmi Caddesi 12',
+        'is_default_shipping' => true,
+    ]);
+
+    $this->carts->add($other, $this->sku, 1);
+    $second = $this->checkout->openCart($other, []);
+
+    CheckoutSession::query()->whereKey([$first->getKey(), $second->getKey()])->update(['expires_at' => now()->subMinute()]);
+
+    // Two at once is the case a single-session test cannot see: the sweeper reached for the
+    // second session's customer one at a time, and lazy loading is refused only past one.
+    expect($this->checkout->expireOverdue())->toBe(2)
+        ->and($first->fresh()?->status)->toBe(CheckoutStatus::Expired)
+        ->and($second->fresh()?->status)->toBe(CheckoutStatus::Expired)
         ->and($this->stock->sellableFor($this->sku))->toBe(4);
 });
 
