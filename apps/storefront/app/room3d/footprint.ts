@@ -52,12 +52,12 @@ export const isMeasured = (item: LayoutItem): boolean =>
   (item.width_mm ?? 0) > 0 && (item.depth_mm ?? 0) > 0
 
 /**
- * The space a piece occupies, with rotation applied.
+ * The space a piece occupies, with rotation applied, as an axis-aligned box.
  *
- * Only right angles change the footprint. At anything else the bounding square is used, which
- * is conservative rather than exact — it refuses positions a careful fit would allow, and
- * never allows two pieces to pass through each other. That is the right direction for a
- * delivery nobody can undo.
+ * Exact at right angles. At any other angle it is the box the turned rectangle fits in —
+ * conservative, and the right thing for everything that reasons in boxes: the distance to a
+ * wall, the snap to a neighbour's edge, the clamp inside the room. Whether two turned pieces
+ * actually touch is a different question, answered exactly by {@see polygonsOverlap}.
  */
 export function footprintOf(item: LayoutItem, rotationDeg?: number): { width: number, depth: number } {
   if (!isMeasured(item)) {
@@ -77,9 +77,161 @@ export function footprintOf(item: LayoutItem, rotationDeg?: number): { width: nu
     return { width, depth }
   }
 
-  const side = Math.max(width, depth)
+  const radians = (angle * Math.PI) / 180
+  const cos = Math.abs(Math.cos(radians))
+  const sin = Math.abs(Math.sin(radians))
 
-  return { width: side, depth: side }
+  return {
+    width: Math.round(width * cos + depth * sin),
+    depth: Math.round(width * sin + depth * cos),
+  }
+}
+
+/** A point on the floor plan, in millimetres. */
+export interface Point {
+  x: number
+  z: number
+}
+
+/** The four corners of a piece, in order round the outline. */
+export type Polygon = [Point, Point, Point, Point]
+
+/**
+ * Where a piece stands, exactly: its rectangle turned about its centre.
+ *
+ * This is what decides whether two pieces touch. A sofa at thirty degrees to the wall and
+ * a table tucked into the corner its box would cover do not collide, and a planner that said
+ * they did would be refusing the arrangement people make on purpose. The turn is the same one
+ * the scene applies — clockwise seen from above, +x towards +z — so the outline matches the
+ * mesh rather than its mirror image.
+ */
+export function polygonOf(item: LayoutItem, at?: { x: number, z: number, rotation?: number }): Polygon {
+  const x = at?.x ?? item.position_x_mm
+  const z = at?.z ?? item.position_z_mm
+  const angle = (((at?.rotation ?? item.rotation_y_deg) % 360) + 360) % 360
+
+  const halfWidth = (item.width_mm ?? 0) / 2
+  const halfDepth = (item.depth_mm ?? 0) / 2
+
+  const radians = (angle * Math.PI) / 180
+  const cos = Math.cos(radians)
+  const sin = Math.sin(radians)
+
+  const corner = (dx: number, dz: number): Point => ({
+    x: Math.round(x + dx * cos - dz * sin),
+    z: Math.round(z + dx * sin + dz * cos),
+  })
+
+  return [
+    corner(-halfWidth, -halfDepth),
+    corner(halfWidth, -halfDepth),
+    corner(halfWidth, halfDepth),
+    corner(-halfWidth, halfDepth),
+  ]
+}
+
+export function polygonFromRect(rect: Rect): Polygon {
+  return [
+    { x: rect.x1, z: rect.z1 },
+    { x: rect.x2, z: rect.z1 },
+    { x: rect.x2, z: rect.z2 },
+    { x: rect.x1, z: rect.z2 },
+  ]
+}
+
+/**
+ * The directions along which two rectangles could be apart: each one's two edge normals.
+ *
+ * Separating-axis theorem, for the one shape it is trivial on. Two convex outlines are apart
+ * if and only if some edge normal of either separates their projections.
+ */
+function separatingAxes(a: Polygon, b: Polygon): Point[] {
+  const axes: Point[] = []
+
+  for (const polygon of [a, b]) {
+    for (const index of [0, 1]) {
+      const from = polygon[index]!
+      const to = polygon[index + 1]!
+      const length = Math.hypot(to.x - from.x, to.z - from.z)
+
+      if (length > 0) {
+        // The normal of the edge, unit length.
+        axes.push({ x: -(to.z - from.z) / length, z: (to.x - from.x) / length })
+      }
+    }
+  }
+
+  return axes
+}
+
+function projection(polygon: Polygon, axis: Point): { min: number, max: number } {
+  let min = Number.POSITIVE_INFINITY
+  let max = Number.NEGATIVE_INFINITY
+
+  for (const point of polygon) {
+    const along = point.x * axis.x + point.z * axis.z
+
+    min = Math.min(min, along)
+    max = Math.max(max, along)
+  }
+
+  return { min, max }
+}
+
+/** Whether two outlines share floor, allowing the tolerance that snapping produces. */
+export function polygonsOverlap(a: Polygon, b: Polygon, tolerance = TOUCH_TOLERANCE_MM): boolean {
+  for (const axis of separatingAxes(a, b)) {
+    const pa = projection(a, axis)
+    const pb = projection(b, axis)
+
+    if (pa.max <= pb.min + tolerance || pb.max <= pa.min + tolerance) {
+      return false
+    }
+  }
+
+  return true
+}
+
+/**
+ * Every way of moving `a` off `b`: two per separating axis, shortest first.
+ *
+ * Along each axis the piece can leave either way — back the way it came, or right through
+ * and out the other side. Both are offered, because the short way is sometimes into a wall
+ * and the long way is then the only way. For two pieces square to the room that is the four
+ * familiar pushes: left, right, front, back. The shortest of all is the classic minimum
+ * translation vector.
+ */
+export function pushOutCandidates(a: Polygon, b: Polygon): Array<{ dx: number, dz: number, distance: number }> {
+  const candidates: Array<{ dx: number, dz: number, distance: number }> = []
+
+  for (const axis of separatingAxes(a, b)) {
+    const pa = projection(a, axis)
+    const pb = projection(b, axis)
+
+    // Out along -axis, until a's far edge meets b's near edge; and out along +axis.
+    for (const [distance, sign] of [[pa.max - pb.min, -1], [pb.max - pa.min, 1]] as const) {
+      if (distance <= 0) {
+        continue
+      }
+
+      candidates.push({
+        dx: Math.round(axis.x * distance * sign),
+        dz: Math.round(axis.z * distance * sign),
+        distance,
+      })
+    }
+  }
+
+  return candidates.sort((first, second) => first.distance - second.distance)
+}
+
+export function polygonInsideRoom(polygon: Polygon, geometry: RoomGeometry): boolean {
+  return polygon.every(point =>
+    point.x >= -TOUCH_TOLERANCE_MM
+    && point.z >= -TOUCH_TOLERANCE_MM
+    && point.x <= geometry.width_mm + TOUCH_TOLERANCE_MM
+    && point.z <= geometry.length_mm + TOUCH_TOLERANCE_MM,
+  )
 }
 
 /**

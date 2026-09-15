@@ -3,10 +3,12 @@ import {
   footprintOf,
   isMeasured,
   isUnderfoot,
-  overlaps,
-  rectangleOf,
+  polygonFromRect,
+  polygonOf,
+  polygonsOverlap,
+  pushOutCandidates,
   swings,
-  type Rect,
+  type Polygon,
 } from './footprint'
 import type { LayoutItem, RoomGeometry, RoomOpening } from './types'
 
@@ -90,14 +92,14 @@ export class ConstraintEngine {
       x = clamped.x
       z = clamped.z
 
-      const rect = rectangleOf(item, { x, z, rotation })
-      const collided = blockers.find(blocker => overlaps(rect, blocker))
+      const shape = polygonOf(item, { x, z, rotation })
+      const collided = blockers.find(blocker => polygonsOverlap(shape, blocker))
 
       if (collided === undefined) {
         return { x, z, settled: true }
       }
 
-      const push = this.shortestPushOut(rect, collided)
+      const push = this.shortestPushOut(item, shape, collided, rotation)
 
       x += push.dx
       z += push.dz
@@ -139,8 +141,8 @@ export class ConstraintEngine {
    * floor pass over things, rugs are for standing on, and a window's clearance is a warning
    * rather than a wall.
    */
-  private blockersFor(item: LayoutItem, items: LayoutItem[]): Rect[] {
-    const blockers: Rect[] = []
+  private blockersFor(item: LayoutItem, items: LayoutItem[]): Polygon[] {
+    const blockers: Polygon[] = []
 
     const raised = item.position_y_mm > 0
     const underfoot = isUnderfoot(item)
@@ -151,7 +153,7 @@ export class ConstraintEngine {
           continue
         }
 
-        blockers.push(rectangleOf(other))
+        blockers.push(polygonOf(other))
       }
     }
 
@@ -163,7 +165,7 @@ export class ConstraintEngine {
       const span = clearanceRectangle(opening, this.geometry)
 
       if (span !== null) {
-        blockers.push(span)
+        blockers.push(polygonFromRect(span))
       }
     }
 
@@ -171,10 +173,12 @@ export class ConstraintEngine {
   }
 
   /**
-   * The smallest move that takes `rect` off `blocker` and keeps it in the room.
+   * The smallest move that takes the piece off `blocker` and keeps it in the room.
    *
-   * Four candidates — out to the left, right, front or back — and the shortest wins, which is
-   * what makes a drag feel like sliding along the sofa rather than jumping over it.
+   * One candidate per separating axis — the two edge directions of each outline — and the
+   * shortest wins, which is what makes a drag feel like sliding along the sofa rather than
+   * jumping over it. For two pieces square to the walls that is out to the left, right, front
+   * or back; for a turned piece the candidates are turned with it.
    *
    * A push that would leave the room is not a way out: the wall pushes straight back, the
    * blocker pushes out again, and the piece oscillates until the passes run out. So a
@@ -182,30 +186,27 @@ export class ConstraintEngine {
    * that is the whole difference — the short way out is *into* the wall, and the right way
    * out is further into the room.
    */
-  private shortestPushOut(rect: Rect, blocker: Rect): { dx: number, dz: number } {
-    const candidates: Array<{ dx: number, dz: number, distance: number }> = [
-      { dx: -(rect.x2 - blocker.x1), dz: 0, distance: rect.x2 - blocker.x1 },
-      { dx: blocker.x2 - rect.x1, dz: 0, distance: blocker.x2 - rect.x1 },
-      { dx: 0, dz: -(rect.z2 - blocker.z1), distance: rect.z2 - blocker.z1 },
-      { dx: 0, dz: blocker.z2 - rect.z1, distance: blocker.z2 - rect.z1 },
-    ]
+  private shortestPushOut(item: LayoutItem, shape: Polygon, blocker: Polygon, rotation: number): { dx: number, dz: number } {
+    const candidates = pushOutCandidates(shape, blocker)
+
+    if (candidates.length === 0) {
+      return { dx: 0, dz: 0 }
+    }
+
+    const footprint = footprintOf(item, rotation)
+    const halfWidth = Math.trunc(footprint.width / 2)
+    const halfDepth = Math.trunc(footprint.depth / 2)
+    const centreX = (shape[0].x + shape[2].x) / 2
+    const centreZ = (shape[0].z + shape[2].z) / 2
 
     const staysInside = (candidate: { dx: number, dz: number }): boolean =>
-      rect.x1 + candidate.dx >= 0
-      && rect.x2 + candidate.dx <= this.geometry.width_mm
-      && rect.z1 + candidate.dz >= 0
-      && rect.z2 + candidate.dz <= this.geometry.length_mm
+      centreX + candidate.dx - halfWidth >= 0
+      && centreX + candidate.dx + halfWidth <= this.geometry.width_mm
+      && centreZ + candidate.dz - halfDepth >= 0
+      && centreZ + candidate.dz + halfDepth <= this.geometry.length_mm
 
-    const inside = candidates.filter(staysInside)
-    const pool = inside.length > 0 ? inside : candidates
-
-    let best = pool[0]!
-
-    for (const candidate of pool) {
-      if (candidate.distance < best.distance) {
-        best = candidate
-      }
-    }
+    // Sorted shortest first already; the first that stays inside wins.
+    const best = candidates.find(staysInside) ?? candidates[0]!
 
     return { dx: best.dx, dz: best.dz }
   }

@@ -104,11 +104,9 @@ class DesignLayoutItem extends Model
     /**
      * The space this occupies, in millimetres, with rotation applied.
      *
-     * Only right angles change the footprint — at 45° a rotated rectangle needs more room
-     * than either dimension, and pretending otherwise would let two pieces pass through each
-     * other. Snapping keeps furniture on right angles in practice; the diagonal case is
-     * handled by taking the bounding square, which is conservative rather than exact and
-     * errs towards refusing a position rather than allowing an overlap.
+     * Exact at right angles; at any other angle, the axis-aligned box the turned rectangle
+     * fits in. A box is what the wall arithmetic wants. Whether two turned pieces touch is a
+     * different question, answered by their outlines rather than their boxes.
      *
      * @return array{width: int, depth: int}
      */
@@ -139,10 +137,18 @@ class DesignLayoutItem extends Model
             return ['width' => $width, 'depth' => $depth];
         }
 
-        // Anything off a right angle: the square that certainly contains it.
-        $side = max($width, $depth);
+        // Anything off a right angle: the axis-aligned box the turned rectangle fits in.
+        // Conservative, and right for everything that reasons in boxes — the clamp inside the
+        // walls, the distance to one. Whether two turned pieces actually touch is answered
+        // exactly, by outline, in LayoutGeometry.
+        $radians = deg2rad($angle);
+        $cos = abs(cos($radians));
+        $sin = abs(sin($radians));
 
-        return ['width' => $side, 'depth' => $side];
+        return [
+            'width' => (int) round($width * $cos + $depth * $sin),
+            'depth' => (int) round($width * $sin + $depth * $cos),
+        ];
     }
 
     /** Whether the layout engine may move this. */

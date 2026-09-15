@@ -126,6 +126,20 @@ describe('collisionEngine', () => {
     expect(states.get('picture')).toBe('ok')
   })
 
+  it('lets a turned sofa and a table share the box round them but not the floor', () => {
+    /*
+     * A sofa on the diagonal and a table tucked into the corner its bounding box covers. The
+     * box says they collide; the outlines say they do not, and the outlines are right — this
+     * is the arrangement people make on purpose. Mirrored on the server with the same numbers.
+     */
+    const sofa = place('sofa', 'kanepe', 2_200, 900, 2_400, 2_600, 45)
+    const clear = place('clear', 'sehpa', 500, 500, 3_300, 1_700)
+    const across = place('across', 'sehpa', 500, 500, 2_400, 3_200)
+
+    expect(engine().evaluate([sofa, clear]).get('clear')).toBe('ok')
+    expect(engine().evaluate([sofa, across]).get('across')).toBe('blocked')
+  })
+
   it('leaves an unmeasured piece alone rather than guessing its size', () => {
     const sofa = place('sofa', 'kanepe', 2_200, 900, 2_400, 2_600)
     const unmeasured = { ...place('lamp', 'aydinlatma', 0, 0, 2_400, 2_600), width_mm: null, depth_mm: null }

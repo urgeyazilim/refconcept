@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { ConstraintEngine } from './ConstraintEngine'
+import { polygonOf, polygonsOverlap } from './footprint'
 import type { LayoutItem, RoomGeometry, RoomOpening } from './types'
 
 /**
@@ -125,6 +126,23 @@ describe('constraintEngine', () => {
     const held = engine([door]).settle(chest, [chest], { x: 950, z: 300 })
 
     expect(held).toEqual({ x: 1400 + 300, z: 300, settled: true })
+  })
+
+  it('pushes a turned piece out along its own edges', () => {
+    const sofa = piece('sofa', 2200, 900, 2400, 2600, { rotation_y_deg: 45 })
+    const table = piece('table', 500, 500, 2400, 3200, { category: 'sehpa' })
+
+    /*
+     * Dropped across the diagonal sofa's front edge; the short way out is perpendicular to
+     * that edge, not along the room's axes. At 45° the front faces -x/+z, so that is where
+     * the table goes — and afterwards the two outlines no longer share floor.
+     */
+    const held = engine().settle(table, [sofa, table], { x: 2400, z: 3200 })
+
+    expect(held.settled).toBe(true)
+    expect(held.x).toBeLessThan(2400)
+    expect(held.z).toBeGreaterThan(3200)
+    expect(polygonsOverlap(polygonOf(table, held), polygonOf(sofa))).toBe(false)
   })
 
   it('leaves an unmeasured piece exactly where it was put', () => {

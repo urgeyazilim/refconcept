@@ -234,12 +234,31 @@ it('turns a footprint when the piece is turned', function (): void {
         ->and($service->rectangleOf($turned))->toBe(['x1' => 1_950, 'z1' => 1_500, 'x2' => 2_850, 'z2' => 3_700]);
 });
 
-it('is conservative about a piece turned off a right angle', function (): void {
-    // At 45° a rectangle needs more room than either dimension. The bounding square is not
-    // exact and errs towards refusing a position rather than allowing two pieces to pass
-    // through each other, which is the right direction for a delivery nobody can undo.
+it('boxes a piece turned off a right angle by the box it actually fits in', function (): void {
+    // At 45° a 2200 × 900 rectangle fits in a 2192 × 2192 box. That box is what the wall
+    // arithmetic uses; whether it touches anything is decided by its outline, below.
     $diagonal = place('Kanepe', 'kanepe', 2_200, 900, 2_400, 2_600, 45);
 
     expect($this->geometryService->rectangleOf($diagonal))
-        ->toBe(['x1' => 1_300, 'z1' => 1_500, 'x2' => 3_500, 'z2' => 3_700]);
+        ->toBe(['x1' => 1_304, 'z1' => 1_504, 'x2' => 3_496, 'z2' => 3_696]);
+});
+
+it('lets a turned sofa and a table share the box round them but not the floor', function (): void {
+    /*
+     * A sofa on the diagonal and a table tucked into the corner its bounding box covers. The
+     * box says they collide; the outlines say they do not, and the outlines are right — this
+     * is the arrangement people make on purpose. Mirrored in the browser with the same numbers.
+     */
+    place('Kanepe', 'kanepe', 2_200, 900, 2_400, 2_600, 45);
+    $clear = place('Sehpa', 'sehpa', 500, 500, 3_300, 1_700);
+
+    $states = $this->geometryService->evaluate($this->layout->fresh());
+
+    expect($states[$clear->id])->toBe('ok');
+
+    $across = place('Sehpa 2', 'sehpa', 500, 500, 2_400, 3_200);
+
+    $states = $this->geometryService->evaluate($this->layout->fresh());
+
+    expect($states[$across->id])->toBe('blocked');
 });

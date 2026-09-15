@@ -319,7 +319,9 @@ final class FalAiProvider implements AiProvider
                     ...(isset($views['left']) ? ['left_image_url' => $views['left']] : []),
                     ...(isset($views['right']) ? ['right_image_url' => $views['right']] : []),
                     'enable_pbr' => true,
-                    'face_count' => $faceLimit,
+                    // Hunyuan refuses anything under forty thousand ("Input should be greater
+                    // than or equal to 40000"); the optimiser brings it down afterwards.
+                    'face_count' => max(40_000, $faceLimit),
                 ],
             ];
         }

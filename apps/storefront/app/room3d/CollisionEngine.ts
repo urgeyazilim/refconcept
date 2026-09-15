@@ -1,10 +1,11 @@
 import {
   clearanceRectangle,
-  insideRoom,
   isMeasured,
   isUnderfoot,
-  overlaps,
-  rectangleOf,
+  polygonFromRect,
+  polygonInsideRoom,
+  polygonOf,
+  polygonsOverlap,
   swings,
 } from './footprint'
 import type { LayoutItem, RoomGeometry, RoomOpening } from './types'
@@ -68,11 +69,14 @@ export class CollisionEngine {
       return 'ok'
     }
 
-    const rect = rectangleOf(item, at)
+    // The exact outline, turned as the piece is turned. Two pieces at an angle touch when
+    // their outlines do — not when the boxes round them do, which is what made a sofa on the
+    // diagonal refuse a table in the corner it never reached.
+    const shape = polygonOf(item, at)
 
     // Through a wall is not a warning. Nothing can be delivered to a position outside the
     // room, and a client that produced one has a bug.
-    if (!insideRoom(rect, this.geometry)) {
+    if (!polygonInsideRoom(shape, this.geometry)) {
       return 'blocked'
     }
 
@@ -90,7 +94,7 @@ export class CollisionEngine {
         continue
       }
 
-      if (overlaps(rect, rectangleOf(other))) {
+      if (polygonsOverlap(shape, polygonOf(other))) {
         return 'blocked'
       }
     }
@@ -98,7 +102,7 @@ export class CollisionEngine {
     for (const opening of this.openings) {
       const span = clearanceRectangle(opening, this.geometry)
 
-      if (span === null || !overlaps(rect, span)) {
+      if (span === null || !polygonsOverlap(shape, polygonFromRect(span))) {
         continue
       }
 

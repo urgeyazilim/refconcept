@@ -266,7 +266,7 @@ it('asks each generator family in its own shape', function (string $code, string
 })->with([
     'Tripo H3.1' => ['tripo3d/h3.1/image-to-3d', 'tripo3d/h3.1/image-to-3d', ['image_url' => null, 'pbr' => true, 'face_limit' => 20_000]],
     'Rodin 2.5' => ['fal-ai/hyper3d/rodin/v2.5', 'fal-ai/hyper3d/rodin/v2.5', ['image_urls' => null, 'material' => 'PBR', 'geometry_file_format' => 'glb']],
-    'Hunyuan3D v3' => ['fal-ai/hunyuan3d-v3/image-to-3d', 'fal-ai/hunyuan3d-v3/image-to-3d', ['input_image_url' => null, 'enable_pbr' => true, 'face_count' => 20_000]],
+    'Hunyuan3D v3' => ['fal-ai/hunyuan3d-v3/image-to-3d', 'fal-ai/hunyuan3d-v3/image-to-3d', ['input_image_url' => null, 'enable_pbr' => true, 'face_count' => 40_000]],
 ]);
 
 it('reads the mesh from whichever field the generator puts it in', function (): void {

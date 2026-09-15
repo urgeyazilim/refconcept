@@ -124,11 +124,13 @@ final class LayoutGeometry
         ?RoomGeometryVersion $geometry,
         array $constraints,
     ): string {
-        $rectangle = $this->rectangleOf($item);
+        // The exact outline, turned as the piece is turned. Two pieces at an angle touch when
+        // their outlines do — not when the boxes round them do. Same rule as the browser.
+        $shape = $this->polygonOf($item);
 
         // Outside the room is not a warning. Nothing can be delivered to a position that is
         // through a wall, and a client that produced one is a client with a bug.
-        if ($geometry !== null && ! $this->insideRoom($rectangle, $geometry)) {
+        if ($geometry !== null && ! $this->polygonInsideRoom($shape, $geometry)) {
             return 'blocked';
         }
 
@@ -141,7 +143,7 @@ final class LayoutGeometry
                 continue;
             }
 
-            if ($this->overlaps($rectangle, $this->rectangleOf($other))) {
+            if ($this->polygonsOverlap($shape, $this->polygonOf($other))) {
                 return 'blocked';
             }
         }
@@ -159,7 +161,7 @@ final class LayoutGeometry
                 continue;
             }
 
-            if ($this->overlaps($rectangle, $span)) {
+            if ($this->polygonsOverlap($shape, $this->polygonFromRect($span))) {
                 /*
                  * A blocked doorway is a refusal; a covered window is a warning.
                  *
@@ -174,27 +176,121 @@ final class LayoutGeometry
         return 'ok';
     }
 
-    /** @param  array{x1: int, z1: int, x2: int, z2: int}  $rectangle */
-    private function insideRoom(array $rectangle, RoomGeometryVersion $geometry): bool
+    /**
+     * Where a piece stands, exactly: its rectangle turned about its centre.
+     *
+     * The same turn the browser draws — clockwise seen from above, +x towards +z — so the
+     * outline is the mesh's and not its mirror image. Rounded to whole millimetres, like
+     * everything else here.
+     *
+     * @return list<array{x: int, z: int}>
+     */
+    public function polygonOf(DesignLayoutItem $item): array
     {
-        return $rectangle['x1'] >= -self::TOUCH_TOLERANCE_MM
-            && $rectangle['z1'] >= -self::TOUCH_TOLERANCE_MM
-            && $rectangle['x2'] <= $geometry->width_mm + self::TOUCH_TOLERANCE_MM
-            && $rectangle['z2'] <= $geometry->length_mm + self::TOUCH_TOLERANCE_MM;
+        $dimensions = $item->sku?->dimensions;
+
+        $halfWidth = ((int) ($dimensions->width_mm ?? 0)) / 2;
+        $halfDepth = ((int) ($dimensions->depth_mm ?? 0)) / 2;
+
+        $radians = deg2rad(((int) $item->rotation_y_deg % 360 + 360) % 360);
+        $cos = cos($radians);
+        $sin = sin($radians);
+
+        $corner = fn (float $dx, float $dz): array => [
+            'x' => (int) round($item->position_x_mm + $dx * $cos - $dz * $sin),
+            'z' => (int) round($item->position_z_mm + $dx * $sin + $dz * $cos),
+        ];
+
+        return [
+            $corner(-$halfWidth, -$halfDepth),
+            $corner($halfWidth, -$halfDepth),
+            $corner($halfWidth, $halfDepth),
+            $corner(-$halfWidth, $halfDepth),
+        ];
     }
 
     /**
-     * @param  array{x1: int, z1: int, x2: int, z2: int}  $a
-     * @param  array{x1: int, z1: int, x2: int, z2: int}  $b
+     * @param  array{x1: int, z1: int, x2: int, z2: int}  $rect
+     * @return list<array{x: int, z: int}>
      */
-    private function overlaps(array $a, array $b): bool
+    private function polygonFromRect(array $rect): array
     {
-        $tolerance = self::TOUCH_TOLERANCE_MM;
+        return [
+            ['x' => $rect['x1'], 'z' => $rect['z1']],
+            ['x' => $rect['x2'], 'z' => $rect['z1']],
+            ['x' => $rect['x2'], 'z' => $rect['z2']],
+            ['x' => $rect['x1'], 'z' => $rect['z2']],
+        ];
+    }
 
-        return $a['x1'] < $b['x2'] - $tolerance
-            && $a['x2'] > $b['x1'] + $tolerance
-            && $a['z1'] < $b['z2'] - $tolerance
-            && $a['z2'] > $b['z1'] + $tolerance;
+    /** @param  list<array{x: int, z: int}>  $polygon */
+    private function polygonInsideRoom(array $polygon, RoomGeometryVersion $geometry): bool
+    {
+        foreach ($polygon as $point) {
+            if ($point['x'] < -self::TOUCH_TOLERANCE_MM
+                || $point['z'] < -self::TOUCH_TOLERANCE_MM
+                || $point['x'] > $geometry->width_mm + self::TOUCH_TOLERANCE_MM
+                || $point['z'] > $geometry->length_mm + self::TOUCH_TOLERANCE_MM) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Whether two outlines share floor, allowing the tolerance that snapping produces.
+     *
+     * Separating-axis theorem, for the one shape it is trivial on: two rectangles are apart
+     * if and only if one of their four edge normals separates their projections.
+     *
+     * @param  list<array{x: int, z: int}>  $a
+     * @param  list<array{x: int, z: int}>  $b
+     */
+    private function polygonsOverlap(array $a, array $b): bool
+    {
+        foreach ([$a, $b] as $polygon) {
+            foreach ([0, 1] as $index) {
+                $from = $polygon[$index];
+                $to = $polygon[$index + 1];
+                $length = hypot($to['x'] - $from['x'], $to['z'] - $from['z']);
+
+                if ($length <= 0) {
+                    continue;
+                }
+
+                $axis = ['x' => -($to['z'] - $from['z']) / $length, 'z' => ($to['x'] - $from['x']) / $length];
+
+                [$minA, $maxA] = $this->projection($a, $axis);
+                [$minB, $maxB] = $this->projection($b, $axis);
+
+                if ($maxA <= $minB + self::TOUCH_TOLERANCE_MM || $maxB <= $minA + self::TOUCH_TOLERANCE_MM) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param  list<array{x: int, z: int}>  $polygon
+     * @param  array{x: float, z: float}  $axis
+     * @return array{0: float, 1: float}
+     */
+    private function projection(array $polygon, array $axis): array
+    {
+        $min = PHP_FLOAT_MAX;
+        $max = -PHP_FLOAT_MAX;
+
+        foreach ($polygon as $point) {
+            $along = $point['x'] * $axis['x'] + $point['z'] * $axis['z'];
+
+            $min = min($min, $along);
+            $max = max($max, $along);
+        }
+
+        return [$min, $max];
     }
 
     /**
