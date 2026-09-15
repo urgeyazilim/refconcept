@@ -150,8 +150,7 @@ function onKeydown(event: KeyboardEvent): void {
       break
     case 'r':
     case 'R':
-      // The turn handle, not a quarter turn: the buttons do quarter turns.
-      setTool(tool.value === 'rotate' ? 'translate' : 'rotate')
+      editor.value.rotate(id, 90)
       break
     case 'Shift':
       // Held: the turn handle stops snapping to fifteen degrees.
@@ -172,13 +171,6 @@ function onKeyup(event: KeyboardEvent): void {
   }
 }
 
-/** Which handles the selected piece shows: arrows to move it, a ring to turn it. */
-const tool = ref<'translate' | 'rotate'>('translate')
-
-function setTool(mode: 'translate' | 'rotate'): void {
-  tool.value = mode
-  editor.value?.setTool(mode)
-}
 
 onMounted(() => {
   if (canvas.value === null) {
@@ -411,28 +403,13 @@ defineExpose({
           </div>
 
           <!--
-            The handles on the piece itself: arrows to slide it along the floor, a ring to
-            turn it. The storyboard's panel 5, and what "professional 3D" meant when the first
-            editor was found not to be it. R switches; Shift frees the turn from 15° steps.
+            The handles are on the piece itself — arrows to slide it, a ring to turn it, both
+            at once. Said here because nothing else says it: Shift frees the ring from 15°
+            steps, R is a quarter turn.
           -->
-          <div class="mt-3 inline-flex rounded-pill border border-line p-0.5 text-xs">
-            <button
-              type="button"
-              class="rounded-pill px-3 py-1"
-              :class="tool === 'translate' ? 'bg-charcoal text-white' : 'hover:bg-bg-muted'"
-              @click="setTool('translate')"
-            >
-              Taşı
-            </button>
-            <button
-              type="button"
-              class="rounded-pill px-3 py-1"
-              :class="tool === 'rotate' ? 'bg-charcoal text-white' : 'hover:bg-bg-muted'"
-              @click="setTool('rotate')"
-            >
-              Döndür
-            </button>
-          </div>
+          <p class="mt-2 text-xs text-muted">
+            Oklarla taşıyın, yeşil halkayla döndürün (15° adımlar; Shift ile serbest).
+          </p>
 
           <div class="mt-3 flex flex-wrap gap-2">
             <button type="button" class="rounded-pill border border-line px-3 py-1.5 text-xs hover:bg-bg-muted" @click="editor?.rotate(selected.id, -90)">

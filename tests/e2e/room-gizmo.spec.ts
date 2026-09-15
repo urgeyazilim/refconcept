@@ -56,7 +56,11 @@ async function placement(page: Page): Promise<Placement> {
 }
 
 async function hoveredAxis(page: Page): Promise<string | null> {
-  return page.evaluate(() => (window as unknown as { __rcEditor: { gizmo: { controls: { axis: string | null } } } }).__rcEditor.gizmo.controls.axis)
+  return page.evaluate(() => {
+    const gizmo = (window as unknown as { __rcEditor: { gizmo: { mover: { axis: string | null }, turner: { axis: string | null } } } }).__rcEditor.gizmo
+
+    return gizmo.mover.axis ?? gizmo.turner.axis
+  })
 }
 
 /** The canvas's box on screen, after bringing it into view — a button click may have scrolled it away. */
@@ -109,15 +113,13 @@ test.describe('room gizmo', () => {
     await page.waitForTimeout(1_500)
 
     // --- the ring --------------------------------------------------------------
-    await page.getByRole('button', { name: 'Döndür', exact: true }).click()
-
     const before = await placement(page)
     const box = await canvasBox(page)
 
     expect(before.screen).not.toBeNull()
 
-    // The rim, to the right of the piece, dragged downwards and round.
-    const rim = { x: box.x + before.screen!.x + 62, y: box.y + before.screen!.y }
+    // The ring's rim, to the right of the piece and past the arrow, dragged downwards and round.
+    const rim = { x: box.x + before.screen!.x + 78, y: box.y + before.screen!.y }
 
     await page.mouse.move(rim.x, rim.y)
     await page.waitForTimeout(300)
@@ -134,8 +136,6 @@ test.describe('room gizmo', () => {
     expect(turned.rotation_y_deg % 15).toBe(0)
 
     // --- the arrow, into the wall ---------------------------------------------------
-    await page.getByRole('button', { name: 'Taşı', exact: true }).click()
-
     const box2 = await canvasBox(page)
     const centre = { x: box2.x + turned.screen!.x, y: box2.y + turned.screen!.y }
 

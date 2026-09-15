@@ -13,7 +13,7 @@ export type GizmoMode = 'translate' | 'rotate'
 export interface GizmoDelegate {
   camera: () => Camera
   setOrbitEnabled: (enabled: boolean) => void
-  /** The handle moved the attached group. */
+  /** A handle moved the attached group. */
   onChange: () => void
   /** The handle was released. */
   onCommit: () => void
@@ -22,19 +22,18 @@ export interface GizmoDelegate {
 }
 
 /**
- * The move and turn handles on the selected piece.
+ * The move and turn handles on the selected piece, both at once.
  *
- * The storyboard's panel 5: arrows to slide a piece along the floor, a ring to turn it, the
- * way every planner anyone has used does it. The first editor had a drag and four buttons,
- * and the product owner's verdict was that it could not "turn or place like professional 3D".
+ * The storyboard's panel 5: arrows to slide a piece along the floor and a ring to turn it,
+ * the way every planner anyone has used does it. The first version showed one or the other
+ * behind a toggle, and the product owner's first words on seeing the arrows were "döndürme
+ * yok" — a handle behind a button is a handle that is not there.
  *
- * Built on Three.js's own TransformControls rather than drawn by hand: the picking, the
- * screen-space sizing, the hover highlight and the touch handling are a few thousand lines
- * that already exist and are already right.
- *
- * Two of its three axes are switched off. Furniture slides along the floor and turns about
- * the vertical, and a handle that could lift a sofa into the air or tip it onto its side is a
- * handle somebody will pull by accident.
+ * Built on two of Three.js's own TransformControls rather than drawn by hand: one in
+ * translate mode with the vertical axis off, one in rotate mode with only the vertical ring.
+ * The picking, the screen-space sizing, the hover and the touch handling are a few thousand
+ * lines that already exist and are already right. While one is being dragged the other is
+ * switched off, so the ring cannot be caught mid-slide.
  *
  * Turning snaps to fifteen degrees. Furniture in a room is square to the walls almost always,
  * and a sofa at 88° looks like a mistake in every render made from it; Shift frees the turn
@@ -44,78 +43,95 @@ export class GizmoController {
   /** The step the turn handle snaps to, in degrees. */
   static readonly ROTATION_STEP_DEG = 15
 
-  private readonly controls: TransformControls
+  private readonly mover: TransformControls
 
-  private readonly helper: Object3D
+  private readonly turner: TransformControls
 
-  private mode: GizmoMode = 'translate'
+  private readonly helpers: Object3D[]
 
   constructor(
     canvas: HTMLCanvasElement,
     private readonly scene: Scene,
     private readonly delegate: GizmoDelegate,
   ) {
-    this.controls = new TransformControls(delegate.camera(), canvas)
-    this.controls.setSpace('world')
-    this.controls.setSize(0.85)
+    this.mover = new TransformControls(delegate.camera(), canvas)
+    this.mover.setMode('translate')
+    this.mover.setSpace('world')
+    this.mover.setSize(0.8)
+    // Along the floor only. A handle that could lift a sofa into the air is one somebody
+    // pulls by accident.
+    this.mover.showY = false
+
+    this.turner = new TransformControls(delegate.camera(), canvas)
+    this.turner.setMode('rotate')
+    this.turner.setSpace('world')
+    this.turner.setSize(1.05)
+    // About the vertical only.
+    this.turner.showX = false
+    this.turner.showZ = false
 
     // The visible handles. TransformControls itself is no longer an Object3D; what goes in
     // the scene is this, and it must never be in the furniture group the drag raycasts.
-    this.helper = this.controls.getHelper()
-    this.helper.name = 'gizmo'
-    this.scene.add(this.helper)
+    this.helpers = [this.mover.getHelper(), this.turner.getHelper()]
+    this.helpers[0]!.name = 'gizmo-move'
+    this.helpers[1]!.name = 'gizmo-turn'
+    this.scene.add(...this.helpers)
 
-    this.controls.addEventListener('dragging-changed', (event) => {
-      const dragging = Boolean((event as { value?: boolean }).value)
+    for (const [controls, other] of [[this.mover, this.turner], [this.turner, this.mover]] as const) {
+      controls.addEventListener('dragging-changed', (event) => {
+        const dragging = Boolean((event as { value?: boolean }).value)
 
-      // While a handle is held the camera must not also be orbiting.
-      this.delegate.setOrbitEnabled(!dragging)
+        // While a handle is held the camera must not also be orbiting, and the other set of
+        // handles must not be catchable.
+        this.delegate.setOrbitEnabled(!dragging)
+        other.enabled = !dragging
 
-      if (!dragging) {
-        this.delegate.onCommit()
-      }
-    })
+        if (!dragging) {
+          this.delegate.onCommit()
+        }
+      })
 
-    this.controls.addEventListener('objectChange', () => this.delegate.onChange())
-    this.controls.addEventListener('change', () => this.delegate.invalidate())
+      controls.addEventListener('objectChange', () => this.delegate.onChange())
+      controls.addEventListener('change', () => this.delegate.invalidate())
+    }
 
-    this.applyMode()
     this.setFreeRotation(false)
   }
 
   /** Puts the handles on a piece, or takes them off. */
   attach(group: Group | null): void {
-    if (group === null) {
-      this.controls.detach()
-    }
-    else {
-      this.controls.attach(group)
+    for (const controls of [this.mover, this.turner]) {
+      if (group === null) {
+        controls.detach()
+      }
+      else {
+        controls.attach(group)
+      }
     }
 
     this.delegate.invalidate()
   }
 
   attached(): Object3D | null {
-    return this.controls.object ?? null
+    return this.mover.object ?? null
   }
 
-  setMode(mode: GizmoMode): void {
-    if (this.mode === mode) {
-      return
+  /** Which handle is being dragged right now, if any. */
+  activeMode(): GizmoMode | null {
+    if (this.mover.dragging) {
+      return 'translate'
     }
 
-    this.mode = mode
-    this.applyMode()
-    this.delegate.invalidate()
-  }
+    if (this.turner.dragging) {
+      return 'rotate'
+    }
 
-  getMode(): GizmoMode {
-    return this.mode
+    return null
   }
 
   /** Free rotation while Shift is held; fifteen-degree steps otherwise. */
   setFreeRotation(free: boolean): void {
-    this.controls.rotationSnap = free ? null : (GizmoController.ROTATION_STEP_DEG * Math.PI) / 180
+    this.turner.rotationSnap = free ? null : (GizmoController.ROTATION_STEP_DEG * Math.PI) / 180
   }
 
   /**
@@ -125,37 +141,21 @@ export class GizmoController {
    * on the handle, and the piece underneath it must not also start following the pointer.
    */
   isActive(): boolean {
-    return this.controls.dragging || this.controls.axis !== null
+    return this.mover.dragging || this.turner.dragging || this.mover.axis !== null || this.turner.axis !== null
   }
 
   /** The camera changed — the plan view swaps to an orthographic one — and the handles follow. */
   syncCamera(): void {
-    this.controls.camera = this.delegate.camera()
+    this.mover.camera = this.delegate.camera()
+    this.turner.camera = this.delegate.camera()
     this.delegate.invalidate()
   }
 
   dispose(): void {
-    this.controls.detach()
-    this.scene.remove(this.helper)
-    this.controls.dispose()
-  }
-
-  // --- internals -------------------------------------------------------------
-
-  private applyMode(): void {
-    this.controls.setMode(this.mode)
-
-    if (this.mode === 'translate') {
-      // Along the floor only.
-      this.controls.showX = true
-      this.controls.showZ = true
-      this.controls.showY = false
-    }
-    else {
-      // About the vertical only.
-      this.controls.showX = false
-      this.controls.showZ = false
-      this.controls.showY = true
-    }
+    this.mover.detach()
+    this.turner.detach()
+    this.scene.remove(...this.helpers)
+    this.mover.dispose()
+    this.turner.dispose()
   }
 }

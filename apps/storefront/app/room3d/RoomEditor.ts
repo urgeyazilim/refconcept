@@ -1,7 +1,7 @@
 import { CollisionEngine, type CollisionState } from './CollisionEngine'
 import { ConstraintEngine } from './ConstraintEngine'
 import { DragController } from './DragController'
-import { GizmoController, type GizmoMode } from './GizmoController'
+import { GizmoController } from './GizmoController'
 import { type Measurement, MeasurementEngine, formatDistance } from './MeasurementEngine'
 import { SceneManager } from './SceneManager'
 import { SnapEngine } from './SnapEngine'
@@ -212,23 +212,38 @@ export class RoomEditor {
     this.future = []
     this.selectedId = null
 
+    /*
+     * Anything saved somewhere the room will not take it is brought back in.
+     *
+     * A layout written before the constraints existed can hold a sofa two metres outside the
+     * west wall — the product owner's own room did — and a rule that only guards new moves
+     * leaves it there forever. Each piece is settled where it stands: inside the walls, off
+     * the others, and if the room genuinely has no space, where it was. What moved is saved.
+     */
+    let healed = false
+
+    for (const item of this.items) {
+      const held = this.constraints.settle(item, this.items, { x: item.position_x_mm, z: item.position_z_mm })
+
+      if (held.settled && (held.x !== item.position_x_mm || held.z !== item.position_z_mm || (held.rotation !== undefined && held.rotation !== item.rotation_y_deg))) {
+        item.position_x_mm = held.x
+        item.position_z_mm = held.z
+        item.rotation_y_deg = held.rotation ?? item.rotation_y_deg
+        healed = true
+      }
+    }
+
     this.reevaluate()
+
+    if (healed) {
+      this.schedulePersist()
+    }
   }
 
   setView(mode: ViewMode): void {
     this.scene.setView(mode)
     // The plan view is a different camera, and handles drawn for the old one point nowhere.
     this.gizmo.syncCamera()
-  }
-
-  /** Which handles the selected piece shows: arrows to move it, a ring to turn it. */
-  setTool(mode: GizmoMode): void {
-    this.gizmo.setMode(mode)
-    this.publish()
-  }
-
-  getTool(): GizmoMode {
-    return this.gizmo.getMode()
   }
 
   /** Shift held: the turn handle stops snapping to fifteen degrees. */
@@ -276,8 +291,9 @@ export class RoomEditor {
   private onGizmoChange(): void {
     const group = this.gizmo.attached()
     const item = this.selectedId === null ? undefined : this.find(this.selectedId)
+    const mode = this.gizmo.activeMode()
 
-    if (group === null || item === undefined) {
+    if (group === null || item === undefined || mode === null) {
       return
     }
 
@@ -287,7 +303,7 @@ export class RoomEditor {
       rotation: item.rotation_y_deg,
     }
 
-    if (this.gizmo.getMode() === 'rotate') {
+    if (mode === 'rotate') {
       // The scene turns the other way round; see FurnitureBuilder.place().
       const degrees = Math.round((((-group.rotation.y * 180) / Math.PI) % 360 + 360) % 360)
 
