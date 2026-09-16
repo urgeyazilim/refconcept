@@ -170,7 +170,7 @@ test.describe('design generation', () => {
       await page.getByRole('navigation', { name: 'Oda stüdyosu adımları' }).getByRole('button', { name: /İstekler/ }).click()
       await completeBrief(page)
 
-      await expect(page.getByRole('heading', { name: /Salon tasarımı/ })).toBeVisible()
+      await expect(page.getByRole('heading', { level: 1, name: /Salon tasarımı/ })).toBeVisible()
 
       /*
        * The engine runs on a worker, so the page polls. Given a generous window because a

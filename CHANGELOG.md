@@ -5,6 +5,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — Walking the ten steps as a customer
+
+Found by walking the steps end to end with a fresh account, through the guide's own
+buttons, screenshot at every step. None was caught by a test.
+
+- **After a photograph the guide said "okuyorum… bitince devam ederiz" and never moved.**
+  The reading was only followed after "Yeniden oku"; an upload queued one and nobody
+  watched it, so nothing happened until the customer reloaded. The room page now follows
+  a reading after every upload and on opening a room whose photographs are being read.
+- **"Hayır, hepsi kalsın" skipped step three.** Saying no made step two done, the
+  automatic step moved to three, and "advance" then advanced from three — to four. The same
+  fault skipped step four after "Evet, doğru". `advance()` now moves from the step the
+  customer was on.
+- **"Kaldırıyorum…" for ever.** A plate that never comes (the provider's answer thrown away,
+  a job that fails quietly) left the spinner spinning. After 150 s the guide says "Boş odayı
+  hazırlayamadım" and offers another go or the room as it is.
+- **"Render al" opened the old picture.** The plan sent the design's id as the version to
+  show, so the design screen opened on v1 saying "Tasarımın hazır" while v2 was made out of
+  sight. It sends the version's id now, and the design screen honours `?version=`.
+- Two "Render al" buttons on the plan (the guide's and the panel's) — the panel's is gone,
+  with the basket button beside it; step ten owns the purchase.
+- The stage was three pixels taller than the window; it is not now.
+
 ### Changed — Ten steps, one screen each
 
 - **The studio walks the product owner's ten steps in their order:** Fotoğraf, Eşyalar,

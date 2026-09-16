@@ -47,7 +47,8 @@ const renderedFromPlan = computed(() => (shownVersion.value?.user_prompt ?? '').
 
 const studioDone = computed(() => ({
   photo: true,
-  plate: shownVersion.value?.render_base === 'plate',
+  // A design exists, so the furniture question was answered — emptied, or kept as it is.
+  plate: true,
   recognise: true,
   propose: true,
   design: shownVersion.value?.status === 'ready',
@@ -124,7 +125,7 @@ const designGuide = computed(() => {
       return {
         icon: 'sparkle' as const,
         say: 'Beğendiklerini sepete ekle.',
-        detail: 'Fiyatlar render\'daki fiyatlar; fark olursa söylerim.',
+        detail: 'Her parça için "Seç" de, sonra hepsini tek seferde sepete at. Fiyatlar render\'daki fiyatlar; fark olursa söylerim.',
         action: null,
         secondary: null,
         busy: false,
@@ -280,7 +281,8 @@ const shownVersionId = computed(() => {
 })
 
 /** The version the customer chose to look at, or null for the design's current one. */
-const viewedVersionId = ref<string | null>(null)
+// Opened on a particular version — the plan sends its fresh render here as `?version=` — or on the design's current one.
+const viewedVersionId = ref<string | null>(typeof route.query.version === 'string' && route.query.version !== '' ? route.query.version : null)
 
 /** A second version held up beside the shown one (K26), or null. */
 const compareVersionId = ref<string | null>(null)
@@ -820,7 +822,7 @@ const statusTone: Record<string, string> = {
       </div>
 
       <!-- The stage: as tall as the window; the guide stays, the step's panel scrolls in its column. -->
-      <div class="grid gap-4 lg:h-[calc(100vh-8.5rem)] lg:grid-cols-[minmax(320px,380px)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+      <div class="grid gap-4 lg:h-[calc(100vh-11rem)] lg:grid-cols-[minmax(320px,380px)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
       <div class="min-h-0 space-y-3 lg:overflow-y-auto">
       <!-- The guide's last question (REHBER.md §3): the picture is here; would you move things? -->
       <StudioGuide

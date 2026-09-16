@@ -269,9 +269,15 @@ function goTo(step: StudioStep) {
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
-/** Moves on when a step's work is done and the customer said so. */
-function advance() {
-  const at = STEP_ORDER.indexOf(activeStep.value)
+/**
+ * Moves on when a step's work is done and the customer said so.
+ *
+ * From the step the customer was on, passed in by callers that change state first: saying
+ * yes to the size makes step 3 done, which moves the automatic step to 4 — and advancing
+ * from *that* landed on 5, skipping the questions. Found by walking the steps.
+ */
+function advance(from: StudioStep = activeStep.value) {
+  const at = STEP_ORDER.indexOf(from)
   const next = STEP_ORDER[at + 1]
 
   if (next !== undefined) goTo(next)
@@ -290,8 +296,15 @@ watch(activeStep, (step) => {
 
 /** After an upload or a deletion: reload, and if the reading is underway, watch it. */
 async function onMediaChanged() {
+  const before = room.value?.analysis?.id ?? null
+
   await load()
   await loadLayout()
+
+  // The upload queued a reading; follow it, so the guide moves on when it lands.
+  if (hasPhoto.value && !recognised.value && (room.value?.analysis_failure ?? null) === null) {
+    watchReading(before)
+  }
 }
 
 /** The size the reading proposed, as the plan holds it or as the analysis said it. */
@@ -336,6 +349,7 @@ const confirmingSize = ref(false)
 
 /** Says yes to the proposed size: the plan's proposal when there is one, else the reading's. */
 async function acceptProposal() {
+  const from = activeStep.value
   const size = proposedSize.value
 
   if (size === null) return
@@ -360,7 +374,7 @@ async function acceptProposal() {
     await api.post(`${base}/geometry/${id}/confirm`)
     await load()
     await loadLayout()
-    advance()
+    advance(from)
   }
   catch (error) {
     actionError.value = error instanceof ApiError ? error.message : 'Ölçüler onaylanamadı.'
@@ -372,6 +386,7 @@ async function acceptProposal() {
 
 /** Saves the size the customer typed and confirms it in one go. */
 async function submitSize() {
+  const from = activeStep.value
   const width = cmToMm(sizeForm.width)
   const length = cmToMm(sizeForm.length)
   const height = cmToMm(sizeForm.height)
@@ -407,7 +422,7 @@ async function submitSize() {
     editingSize.value = false
     await load()
     await loadLayout()
-    advance()
+    advance(from)
   }
   catch (error) {
     actionError.value = error instanceof ApiError
@@ -482,6 +497,22 @@ async function analyse(force = false) {
     return
   }
 
+  watchReading(before)
+}
+
+/**
+ * Follows a reading that is under way until it lands, fails or takes too long.
+ *
+ * Called after an upload as well as after "Yeniden oku". It was only called for the latter,
+ * so the guide said "okuyorum… bitince devam ederiz" after a photograph and then nothing
+ * happened until the customer reloaded the page — found by walking the ten steps as a
+ * customer, not by any test.
+ *
+ * @param before the reading on the room when the wait began; a new one ends it
+ */
+function watchReading(before: string | null): void {
+  stopWatchingAnalysis()
+
   analysing.value = true
   analysingSince = Date.now()
 
@@ -494,11 +525,20 @@ async function analyse(force = false) {
 
     if ((now !== null && now !== undefined && now.id !== before && !now.is_stale) || failed || Date.now() - analysingSince > 180_000) {
       stopWatchingAnalysis()
+      await loadLayout()
     }
   }, 4_000)
 }
 
 onBeforeUnmount(stopWatchingAnalysis)
+
+// A room whose photographs are being read when the page opens: follow that reading too.
+// In the browser only — a timer started during server rendering is a 500 page.
+onMounted(() => {
+  if (hasPhoto.value && !recognised.value && (room.value?.analysis_failure ?? null) === null) {
+    watchReading(room.value?.analysis?.id ?? null)
+  }
+})
 
 /** Which of the things the reading saw the customer wants taken out. Everything, at first. */
 const removing = ref<Set<string>>(new Set())
@@ -522,6 +562,12 @@ function toggleRemoval(label: string) {
 
 const clearingPlate = ref(false)
 let plateTimer: ReturnType<typeof setInterval> | null = null
+
+/** How long a plate is waited for before the guide says it could not be made. */
+const PLATE_WAIT_MS = 150_000
+
+/** The last attempt produced no plate; the guide offers another go or the room as it is. */
+const plateFailed = ref(false)
 
 /**
  * Asks for the plate with the customer's choice of what stays; `remake` asks for it again
@@ -547,11 +593,21 @@ async function clearPrimary(remake = false) {
     return
   }
 
+  plateFailed.value = false
+  const since = Date.now()
+
   plateTimer = setInterval(async () => {
     await load()
 
-    if (primaryPlate.value !== null) {
+    // Landed — or not landed in the time a plate takes. The job says nothing when the
+    // provider's answer is thrown away, so the wait has to end on its own: found by walking
+    // the steps, where "Kaldırıyorum…" spun for three minutes with nothing behind it.
+    const landed = primaryPlate.value !== null
+    const gaveUp = Date.now() - since > PLATE_WAIT_MS
+
+    if (landed || gaveUp) {
       clearingPlate.value = false
+      plateFailed.value = !landed
 
       if (plateTimer !== null) {
         clearInterval(plateTimer)
@@ -723,6 +779,16 @@ const guide = computed<GuideState>(() => {
         })
       }
 
+      if (plateFailed.value && !clearingPlate.value) {
+        return quiet({
+          icon: 'broom',
+          say: 'Boş odayı hazırlayamadım.',
+          detail: 'Bir daha deneyebilirim; ya da eşyalar yerinde kalsın, tasarımı öyle yaparım.',
+          action: { label: 'Yine dene' },
+          secondary: { label: 'Eşyalarla devam et' },
+        })
+      }
+
       if (analysis !== null && analysis.movable_objects.length > 0) {
         return quiet({
           icon: 'broom',
@@ -851,8 +917,9 @@ function guideSecondary() {
         void clearPrimary(true)
       }
       else {
+        const from = activeStep.value
         plateSkipped.value = true
-        advance()
+        advance(from)
       }
 
       return
@@ -908,7 +975,7 @@ function guideSecondary() {
         moves; the step's work on the right scrolls inside its own column when it has to.
         The page itself does not scroll — "mouse ile aşağıya inmeyeyim, TV ekranı gibi".
       -->
-      <div class="grid gap-4 lg:h-[calc(100vh-8.5rem)] lg:grid-cols-[minmax(320px,380px)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+      <div class="grid gap-4 lg:h-[calc(100vh-11rem)] lg:grid-cols-[minmax(320px,380px)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
         <!-- The guide: the one voice that says what comes next (REHBER.md). -->
         <div class="min-h-0 space-y-3 lg:overflow-y-auto">
           <StudioGuide

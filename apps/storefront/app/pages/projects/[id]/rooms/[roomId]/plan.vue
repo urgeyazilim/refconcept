@@ -154,8 +154,6 @@ const rendering = ref(false)
 const composing = ref(false)
 const composeNotice = ref<string | null>(null)
 
-const adding = ref(false)
-const cartNotice = ref<string | null>(null)
 
 // --- doors and windows -----------------------------------------------------------
 
@@ -792,38 +790,6 @@ async function addProduct(candidate: Candidate): Promise<void> {
   })
 }
 
-/**
- * Puts everything standing in the room into the basket.
- *
- * The end of the module. A plan is a list of real products at real sizes in a room they have
- * been checked against, so one press from being an order is the only sensible place for it to
- * end. What could not be added is named rather than skipped — a basket that quietly contains
- * four of the five things somebody planned is a basket they discover at the door.
- */
-async function addLayoutToCart(): Promise<void> {
-  adding.value = true
-  saveError.value = null
-  cartNotice.value = null
-
-  try {
-    const response = await api.post<{
-      data: { added: number }
-      meta: { refused: Array<{ name: string | null, reason: string }> }
-    }>(`${base}/layout/cart`)
-
-    cartNotice.value = response.meta.refused.length === 0
-      ? `${response.data.added} ürün sepete eklendi.`
-      : `${response.data.added} ürün sepete eklendi. Eklenemeyenler: ${response.meta.refused
-        .map(entry => `${entry.name ?? 'ürün'} (${entry.reason})`)
-        .join(' · ')}`
-  }
-  catch (error) {
-    saveError.value = error instanceof Error ? error.message : 'Sepete eklenemedi.'
-  }
-  finally {
-    adding.value = false
-  }
-}
 
 /**
  * The categories that belong in this room.
@@ -872,7 +838,10 @@ async function renderFinal(): Promise<void> {
   saveError.value = null
 
   try {
-    const created = await api.post<{ data: { id: string } }>(
+    // `data` is the design; the new version's id rides beside it. The design's id was being
+    // sent as `?version=`, so the design screen opened on the old picture with "Tasarımın
+    // hazır" while the render was being made out of sight — found by walking the steps.
+    const created = await api.post<{ data: { id: string }, version_id: string }>(
       `${base}/designs/${current.design_id}/branch`,
       {
         parent_version_id: current.version_id,
@@ -880,7 +849,7 @@ async function renderFinal(): Promise<void> {
       },
     )
 
-    await navigateTo(`/projects/${projectId}/rooms/${roomId}/designs/${current.design_id}?version=${created.data.id}`)
+    await navigateTo(`/projects/${projectId}/rooms/${roomId}/designs/${current.design_id}?version=${created.version_id}`)
   }
   catch (error) {
     saveError.value = error instanceof Error ? error.message : 'Final görsel başlatılamadı.'
@@ -1133,26 +1102,6 @@ onMounted(async () => {
           they have been checked against, and finding each again in the shop is doing the work
           twice.
         -->
-        <template #actions>
-          <button
-            v-if="design !== null && liveItems.length > 0"
-            type="button"
-            class="rounded-pill bg-charcoal px-4 py-2 text-xs text-white disabled:opacity-50"
-            :disabled="rendering"
-            @click="renderFinal"
-          >
-            {{ rendering ? 'Render alınıyor…' : 'Render al' }}
-          </button>
-          <button
-            v-if="liveItems.length > 0"
-            type="button"
-            class="rounded-pill border border-line px-4 py-2 text-xs hover:bg-bg-muted disabled:opacity-50"
-            :disabled="adding"
-            @click="addLayoutToCart"
-          >
-            Odadakileri sepete ekle
-          </button>
-        </template>
 
         <template #side-start>
           <!--
@@ -1173,12 +1122,6 @@ onMounted(async () => {
             @secondary="composeLayout()"
           />
     
-          <p v-if="cartNotice" class="rounded-sm bg-bg-muted p-3 text-sm text-ink-secondary">
-            {{ cartNotice }}
-            <NuxtLink to="/cart" class="ml-1 underline">
-              Sepete git
-            </NuxtLink>
-          </p>
     
           <!-- The question the 409 exists to ask. -->
           <div v-if="overwrite" class="rounded-md border border-line bg-warning-subtle p-4">
