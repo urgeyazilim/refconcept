@@ -53,7 +53,7 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-  (event: 'act'): void
+  (event: 'act' | 'secondary'): void
   (event: 'toggle', key: string): void
 }>()
 
@@ -161,6 +161,14 @@ const key = computed(() => `${props.icon}|${props.say}`)
           <NuxtLink v-if="secondary?.to" :to="secondary.to" class="text-sm text-ink-secondary underline-offset-4 hover:underline">
             {{ secondary.label }}
           </NuxtLink>
+          <button
+            v-else-if="secondary"
+            type="button"
+            class="text-sm text-ink-secondary underline-offset-4 hover:underline"
+            @click="emit('secondary')"
+          >
+            {{ secondary.label }}
+          </button>
         </div>
       </div>
     </div>

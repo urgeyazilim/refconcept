@@ -31,6 +31,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   expected price and the ceiling before it queues anything, and saying plainly when the
   task is still routed to the simulator.
 
+### Changed — one step on the screen, and the guide moves on by itself
+
+- **The room screen shows one step at a time**: the strip, the guide, and that step's panel.
+  The sections that used to stack down the page — photographs, reading, size, plan card,
+  fixtures — are now the panels of their steps, opened from the strip. Nothing to scroll
+  past, nothing to discover at the bottom.
+- **No "Odayı tanı" button.** The reading starts when the photographs arrive, the customer
+  stays with their pictures while it runs (and may add a corner), and when it lands the guide
+  asks its first question: "Eşyaları kaldırayım mı?" — Evet, kaldır / Hayır, hepsi kalsın.
+  Then the size ("… okudum, doğru mu?" — Evet, doğru / Düzelt, confirmed on the spot, no
+  trip to the plan), then "Şimdi sen: ne istersin?" opens the questions itself.
+- **The design screen asks the last question**: "Tasarımın hazır. Yerlerini değiştirmek ister
+  misin?" — Evet, düzenleyelim opens the 3D plan with that layout.
+- The step order the guide walks is photo → reading → empty room → size → design; the strip
+  numbers follow it.
+
 ### Added — the guide: the product speaks, in the second person singular
 
 - **`docs/product/REHBER.md`**: how RefConcept talks to a customer. One voice (an interior

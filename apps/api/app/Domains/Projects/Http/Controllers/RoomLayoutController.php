@@ -659,12 +659,9 @@ final class RoomLayoutController
                 continue;
             }
 
-            $box = array_values(array_filter(
-                (array) ($region['box'] ?? []),
-                static fn (mixed $value): bool => is_int($value) || is_float($value),
-            ));
+            $box = $this->boxOf($region);
 
-            if (count($box) !== 4) {
+            if ($box === null) {
                 continue;
             }
 
@@ -689,6 +686,40 @@ final class RoomLayoutController
                 static fn (mixed $warning): bool => is_string($warning),
             )),
         ];
+    }
+
+    /**
+     * A region's box as the screen draws it: [x1, y1, x2, y2] as fractions of the picture.
+     *
+     * The model answers in its own convention — `box_2d` as [ymin, xmin, ymax, xmax] on a
+     * 0–1000 grid, which is how it was taught to point at things — and older readings
+     * carried `box` in ours. Both are accepted; the conversion lives here and nowhere else.
+     *
+     * @param  array<string, mixed>  $region
+     * @return array{float, float, float, float}|null
+     */
+    private function boxOf(array $region): ?array
+    {
+        $numbers = static fn (mixed $list): array => array_values(array_filter(
+            (array) $list,
+            static fn (mixed $value): bool => is_int($value) || is_float($value),
+        ));
+
+        $native = $numbers($region['box_2d'] ?? []);
+
+        if (count($native) === 4) {
+            [$top, $left, $bottom, $right] = $native;
+
+            return [$left / 1000, $top / 1000, $right / 1000, $bottom / 1000];
+        }
+
+        $ours = $numbers($region['box'] ?? []);
+
+        if (count($ours) === 4) {
+            return [(float) $ours[0], (float) $ours[1], (float) $ours[2], (float) $ours[3]];
+        }
+
+        return null;
     }
 
     /**

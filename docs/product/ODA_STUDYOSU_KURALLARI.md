@@ -138,7 +138,7 @@ Her geçiş bir olaydır (`DesignVersionEvent` gibi), geri dönüş her zaman m�
 ## 5. UI / UX
 
 **Tek ekran, yedi adım.** `projects/{id}/rooms/{roomId}/studio` — üstte adım şeridi (1 Fotoğraf ·
-2 Tanıma · 3 Onay · 4 Boş oda · 5 Öneri · 6 Düzenle · 7 Render). Tamamlanan adım tik alır,
+2 Tanıma · 3 Boş oda · 4 Onay · 5 Öneri · 6 Düzenle · 7 Render — 2026-09-16: boş oda sorusu ölçü onayından önce gelir, bkz. REHBER.md §2a). Tamamlanan adım tik alır,
 aktif adım vurgulanır, sonraki adımlar kilitli ama görünür — müşteri nerede olduğunu ve neyin
 geldiğini her an bilir.
 

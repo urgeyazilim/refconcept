@@ -18,15 +18,37 @@ const props = defineProps<{
   current: StudioStep
   /** Which steps are done, as far as this screen knows. Unknown steps are shown quiet. */
   done: Partial<Record<StudioStep, boolean>>
+  /**
+   * Whether the room screen's own steps are chosen here rather than navigated to: the
+   * strip then emits `select` for a step that is done or current, and the steps that
+   * live on other screens stay links.
+   */
+  selectable?: boolean
 }>()
+
+const emit = defineEmits<{ (event: 'select', step: StudioStep): void }>()
+
+// Resolved once: a string in `:is` only finds globally registered components, and NuxtLink
+// is auto-imported, not registered — the strip rendered `<nuxtlink>` elements nobody could click.
+const NuxtLink = resolveComponent('NuxtLink')
+
+/** The steps the room screen shows itself; the rest are other screens. */
+const ON_ROOM: StudioStep[] = ['photo', 'recognise', 'confirm', 'plate', 'propose']
+
+/**
+ * Every room step opens once there is a photograph: somebody who does not want to wait
+ * for the reading can type the size themselves, or look back at what was read.
+ */
+const choosable = (key: StudioStep): boolean =>
+  props.selectable === true && ON_ROOM.includes(key) && (props.done.photo === true || key === props.current)
 
 const room = computed(() => `/projects/${props.projectId}/rooms/${props.roomId}`)
 
 const steps = computed(() => [
   { key: 'photo' as const, label: 'Fotoğraf', to: `${room.value}#fotograf` },
   { key: 'recognise' as const, label: 'Tanıma', to: `${room.value}#olculer` },
-  { key: 'confirm' as const, label: 'Onay', to: `${room.value}/plan` },
   { key: 'plate' as const, label: 'Boş oda', to: `${room.value}#fotograf` },
+  { key: 'confirm' as const, label: 'Onay', to: `${room.value}/plan` },
   { key: 'propose' as const, label: 'Öneri', to: `${room.value}#tasarim` },
   { key: 'edit' as const, label: 'Düzenle', to: `${room.value}/plan` },
   { key: 'render' as const, label: 'Render', to: `${room.value}#tasarim` },
@@ -58,8 +80,10 @@ const next = computed(() => {
   <nav aria-label="Oda stüdyosu adımları" class="rc-card overflow-x-auto px-4 py-3">
     <ol class="flex min-w-max items-center gap-1 text-xs">
       <li v-for="(step, at) in steps" :key="step.key" class="flex items-center">
-        <NuxtLink
-          :to="step.to"
+        <component
+          :is="choosable(step.key) ? 'button' : (selectable && ON_ROOM.includes(step.key) ? 'span' : NuxtLink)"
+          :to="choosable(step.key) || (selectable && ON_ROOM.includes(step.key)) ? undefined : step.to"
+          :type="choosable(step.key) ? 'button' : undefined"
           class="flex items-center gap-2 rounded-pill px-3 py-1.5 transition-colors"
           :class="{
             'bg-charcoal text-white': stateOf(step.key) === 'current',
@@ -67,6 +91,7 @@ const next = computed(() => {
             'text-muted': stateOf(step.key) === 'ahead',
           }"
           :aria-current="stateOf(step.key) === 'current' ? 'step' : undefined"
+          @click="choosable(step.key) && emit('select', step.key)"
         >
           <span
             class="grid size-5 place-items-center rounded-full border text-[10px] tabular-nums"
@@ -80,7 +105,7 @@ const next = computed(() => {
             <template v-else>{{ at + 1 }}</template>
           </span>
           <span>{{ step.label }}</span>
-        </NuxtLink>
+        </component>
 
         <span v-if="at < steps.length - 1" class="mx-1 h-px w-4 bg-line" aria-hidden="true" />
       </li>

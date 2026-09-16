@@ -121,6 +121,8 @@ test.describe('project journey', () => {
       .toBeGreaterThan(0)
 
     // --- measurements ------------------------------------------------------------
+    // The size lives on the Onay step; the strip opens it without waiting for the reading.
+    await page.getByRole('navigation', { name: 'Oda stüdyosu adımları' }).getByRole('button', { name: /Onay/ }).click()
     await fillStable(page, '#width', '420')
     await fillStable(page, '#length', '560')
     await fillStable(page, '#height', '270')
@@ -128,9 +130,11 @@ test.describe('project journey', () => {
     await page.getByRole('button', { name: 'Ölçüleri kaydet' }).click()
 
     // Centimetres in the form, millimetres on the wire: 420 × 560 cm is 23.52 m².
-    await expect(page.getByText('23.52 m²')).toBeVisible()
+    await expect(page.getByText('23.52 m²').first()).toBeVisible()
 
     // --- something to design around ------------------------------------------------
+    // Saving the size moved the guide on; the doors and windows are back on the Onay step.
+    await page.getByRole('navigation', { name: 'Oda stüdyosu adımları' }).getByRole('button', { name: /Onay/ }).click()
     await page.getByRole('button', { name: 'Ekle', exact: true }).click()
     await page.locator('#ctype').selectOption('window')
     await page.locator('#wall').selectOption('south')
@@ -151,7 +155,8 @@ test.describe('project journey', () => {
      * needs to act on — which is the behaviour worth asserting here, because this journey
      * is about a customer arriving with nothing.
      */
-    await page.getByRole('button', { name: 'Hadi tasarlayalım' }).click()
+    // The questions open by themselves on the Öneri step; the strip takes us there.
+    await page.getByRole('navigation', { name: 'Oda stüdyosu adımları' }).getByRole('button', { name: /Öneri/ }).click()
     await completeBrief(page)
 
     await expect(page.getByText(/kredi gerektiriyor/)).toBeVisible()

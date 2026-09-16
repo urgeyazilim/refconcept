@@ -26,6 +26,24 @@ bir kişi: adı yok (marka konuşur), ama sesi var. Her ekranda **tek bir kart**
   "Bunu okuyamadım, bir daha deneyelim mi?"
 - **Hesap, ödeme, sözleşme ekranları** bu sesin dışındadır; orada "siz" ve düz dil kalır.
 
+## 2a. Tek odak, kendiliğinden ilerleme (2026-09-16 eki)
+
+Sahibinin sözü: "Odayı tanı diye buton mu olur? Biz sistem istiyoruz; kullanıcıyı butonlarla
+yormadan. Resmi aldın, odanı tanı; eşya görürsen kaldırayım mı de; evet derse kaldır; sonra
+renkleri, ürünleri sor; güzel tasarım yap; yerlerini değiştirmek ister misin diye sor; evet
+derse üç boyutta yerleştir."
+
+- Ekranda **tek adım** vardır: şerit + Rehber kartı + o adımın paneli. Alt alta bölüm yok,
+  kaydırıp aramak yok.
+- **Rehber yapar, sormaz — sormak gerekince tek soru sorar.** Fotoğraf gelince okuma
+  kendiliğinden başlar (buton yok). Okuma bitince Rehber kendiliğinden bir sonraki soruya
+  geçer: "Eşyaları kaldırayım mı?" → **Evet, kaldır / Hayır, hepsi kalsın**.
+- Sıra: Fotoğraf → (okuma kendiliğinden) → Boş oda sorusu → Ölçü onayı ("… okudum, doğru mu?"
+  → **Evet, doğru / Düzelt**) → "Şimdi sen: ne istersin?" (sorular kendiliğinden açılır) →
+  tasarım → tasarım ekranında "Yerlerini değiştirmek ister misin?" → **Evet, düzenleyelim** →
+  3B plan, tasarımdaki yerleşimle birebir.
+- Beklemek istemeyen, şeritten istediği adıma gidebilir (ölçüyü kendisi yazabilir).
+
 ## 3. Yolculuk boyunca Rehber'in cümleleri
 
 | Durum | Rehber der ki | Düğme |

@@ -688,6 +688,26 @@ const statusTone: Record<string, string> = {
     <template v-else-if="design">
       <StudioStepper :project-id="projectId" :room-id="roomId" current="render" :done="studioDone" />
 
+      <!-- The guide's last question (REHBER.md §3): the picture is here; would you move things? -->
+      <StudioGuide
+        :icon="shownVersion?.status === 'ready' ? 'check' : shownVersion?.status === 'failed' ? 'eye' : 'sparkle'"
+        :say="shownVersion?.status === 'ready'
+          ? 'Tasarımın hazır. Yerlerini değiştirmek ister misin?'
+          : shownVersion?.status === 'failed'
+            ? 'Bu sürümü çizemedim.'
+            : 'Tasarımını çiziyorum.'"
+        :detail="shownVersion?.status === 'ready'
+          ? 'Evet dersen bu yerleşimi 3B planda birebir açarım; ürünleri oklarla taşır, halkayla döndürürsün. Render al dediğinde yerleştirdiğin gibi çizerim.'
+          : shownVersion?.status === 'failed'
+            ? (shownVersion.failure_reason ?? 'Bir daha deneyelim; alttan yeni bir sürüm isteyebilirsin.')
+            : 'Ürünleri seçtim, odana yerleştiriyorum; bir-iki dakika. Buradayım.'"
+        :action="shownVersion?.status === 'ready' && canEdit
+          ? { label: 'Evet, düzenleyelim', to: `/projects/${projectId}/rooms/${roomId}/plan?compose=${shownVersionId ?? ''}` }
+          : null"
+        :secondary="shownVersion?.status === 'ready' ? { label: 'Hayır, böyle iyi — ürünlere bak', to: '#alisveris' } : null"
+        :busy="shownVersion?.status !== 'ready' && shownVersion?.status !== 'failed'"
+      />
+
       <header>
         <NuxtLink
           :to="`/projects/${projectId}/rooms/${roomId}`"
@@ -1029,7 +1049,7 @@ const statusTone: Record<string, string> = {
         right. Alternatives sit under the row that owns them rather than competing with it
         for the same shelf.
       -->
-      <section v-if="shoppingList && shoppingList.placements.length > 0" class="rc-card overflow-hidden">
+      <section v-if="shoppingList && shoppingList.placements.length > 0" id="alisveris" class="rc-card overflow-hidden">
         <div class="flex flex-wrap items-start justify-between gap-4 p-6 pb-5 sm:px-8 sm:pt-8">
           <div>
             <h2 class="text-xl font-medium">Alışveriş listesi</h2>

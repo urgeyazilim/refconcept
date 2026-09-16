@@ -347,6 +347,38 @@ it('hands the plan the size the customer typed on the room, before any geometry 
         ]);
 });
 
+it('draws a box the model gave in its own convention where the model meant it', function (): void {
+    $media = RoomMedia::query()->create([
+        'room_id' => $this->room->getKey(),
+        'disk' => 's3',
+        'storage_path' => 'rooms/'.$this->room->getKey().'/oda.jpg',
+        'original_name' => 'oda.jpg',
+        'mime_type' => 'image/jpeg',
+        'size_bytes' => 1_024,
+        'checksum_sha256' => hash('sha256', 'oda'),
+        'type' => 'photo',
+    ]);
+
+    RoomAnalysis::query()->create([
+        'room_id' => $this->room->getKey(),
+        'media_id' => $media->getKey(),
+        'payload' => [
+            'regions' => [
+                // [ymin, xmin, ymax, xmax] on the 0–1000 grid, as the model answers.
+                ['kind' => 'door', 'label' => '0.90 × 2.10 m', 'box_2d' => [220, 370, 660, 610]],
+                // An older reading, in our own [x1, y1, x2, y2] fractions.
+                ['kind' => 'window', 'box' => [0.1, 0.2, 0.4, 0.5]],
+            ],
+        ],
+        'is_current' => true,
+    ]);
+
+    $response = $this->actingAs($this->owner)->getJson("{$this->url}/layout")->assertOk();
+
+    expect($response->json('data.detected.regions.0.box'))->toBe([0.37, 0.22, 0.61, 0.66])
+        ->and($response->json('data.detected.regions.1.box'))->toBe([0.1, 0.2, 0.4, 0.5]);
+});
+
 it('keeps a stranger out of somebody elses plan', function (): void {
     confirmGeometry();
 

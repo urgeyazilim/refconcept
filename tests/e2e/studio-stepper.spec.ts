@@ -8,10 +8,10 @@ import { signInThrough } from './support/signin'
 /**
  * The studio's step strip says where the customer is.
  *
- * On a room with nothing in it the first step is lit; once a photograph is up and the room
- * is measured, those steps carry a tick and the strip points at the next thing; on the plan
- * the strip lights "Onay" until the geometry is confirmed, then "Düzenle". The strip is the
- * one part of the studio that is on every screen, so this is the one journey that reads it.
+ * On a room with nothing in it the first step is lit; once a photograph is up and the size
+ * is confirmed, those steps carry a tick; on the plan the strip knows the size was agreed
+ * and lights "Düzenle". The strip is the one part of the studio that is on every screen,
+ * so this is the one journey that reads it.
  */
 
 const STOREFRONT = process.env.E2E_STOREFRONT_URL ?? 'http://localhost:3000'
@@ -36,11 +36,11 @@ test.describe('studio stepper', () => {
     const strip = page.getByRole('navigation', { name: 'Oda stüdyosu adımları' })
 
     await expect(strip).toBeVisible()
-    await expect(strip.getByRole('link', { name: /1\s*Fotoğraf/ })).toHaveAttribute('aria-current', 'step')
+    await expect(strip.getByRole('button', { name: /1\s*Fotoğraf/ })).toHaveAttribute('aria-current', 'step')
     await expect(strip.getByText('Sıradaki:')).toBeVisible()
-    await expect(strip.getByRole('link', { name: 'Tanıma', exact: true })).toBeVisible()
+    await expect(strip.locator('span').filter({ hasText: /^Tanıma$/ })).toBeVisible()
 
-    // --- a photograph, and the room measured -----------------------------------------
+    // --- a photograph, then the size confirmed on the Onay step ----------------------
     await page.locator('input[type="file"]').setInputFiles({
       name: 'salon.png',
       mimeType: 'image/png',
@@ -48,31 +48,28 @@ test.describe('studio stepper', () => {
     })
     await expect(page.getByText('Tasarım bu fotoğraftan')).toBeVisible()
 
+    // The size lives on the Onay step; the strip opens it without waiting for the reading.
+    await strip.getByRole('button', { name: /Onay/ }).click()
     await fillStable(page, '#width', '420')
     await fillStable(page, '#length', '560')
     await fillStable(page, '#height', '270')
     await page.locator('#quality').selectOption('manual')
     await page.getByRole('button', { name: 'Ölçüleri kaydet' }).click()
-    await expect(page.getByText('23.52 m²')).toBeVisible()
+    await expect(page.getByText('23.52 m²').first()).toBeVisible()
 
-    // Fotoğraf and Tanıma are ticked; the empty room is what comes next.
-    await expect(strip.getByRole('link', { name: /✓\s*Fotoğraf/ })).toBeVisible()
-    await expect(strip.getByRole('link', { name: /✓\s*Tanıma/ })).toBeVisible()
-    await expect(strip.getByRole('link', { name: /4\s*Boş oda/ })).toHaveAttribute('aria-current', 'step')
+    // Fotoğraf and Onay are ticked; the guide has moved on to what it asks next.
+    await expect(strip.getByRole('button', { name: /✓\s*Fotoğraf/ })).toBeVisible()
+    await expect(strip.getByRole('button', { name: /✓\s*Onay/ })).toBeVisible()
 
     await page.screenshot({ path: 'test-results/studio-stepper-room.png', fullPage: true })
 
-    // --- the plan: confirming, then editing --------------------------------------------
-    await strip.getByRole('link', { name: /3\s*Onay/ }).click()
+    // --- the plan: the confirmed size is already there, and the strip says so ----------
+    await gotoInteractive(page, `${STOREFRONT}/projects/${projectId}/rooms/${roomId}/plan`)
     await waitForHydration(page)
 
     const planStrip = page.getByRole('navigation', { name: 'Oda stüdyosu adımları' })
 
-    await expect(planStrip.getByRole('link', { name: /3\s*Onay/ })).toHaveAttribute('aria-current', 'step')
-
-    await page.getByRole('button', { name: 'Kaydet ve devam et' }).click()
     await expect(page.locator('canvas')).toBeVisible({ timeout: 30_000 })
-
     await expect(planStrip.getByRole('link', { name: /✓\s*Onay/ })).toBeVisible()
     await expect(planStrip.getByRole('link', { name: /6\s*Düzenle/ })).toHaveAttribute('aria-current', 'step')
 
