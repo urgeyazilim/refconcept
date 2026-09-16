@@ -8,7 +8,7 @@ import type { Option, ProjectDetail } from '@refconcept/ui/types'
  * be designed yet and what is missing if not, because "add a room" followed by silence
  * is how somebody concludes the product does not work.
  */
-definePageMeta({ middleware: ['auth', 'verified'], layout: 'account' })
+definePageMeta({ middleware: ['auth', 'verified'], layout: 'default', chrome: 'studio' })
 
 const route = useRoute()
 const api = useApi()
@@ -120,51 +120,28 @@ async function setStatus(status: string) {
 </script>
 
 <template>
-  <div class="space-y-8">
+  <div class="rc-container rc-container--wide space-y-5 py-4">
+    <!-- The same frame as the room, the plan and the design: one left edge, one top gap, no sidebar. -->
     <RcAlert v-if="loadError" tone="danger">{{ loadError }}</RcAlert>
 
     <template v-else-if="project">
-      <header>
-        <NuxtLink to="/projects" class="text-sm text-ink-secondary hover:text-ink">
-          ← Projelerim
-        </NuxtLink>
-
-        <div class="mt-3 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div class="flex flex-wrap items-center gap-3">
-              <h1 class="text-2xl font-medium">{{ project.name }}</h1>
-              <RcStatusPill
-                v-if="project.status !== 'active'"
-                :status="project.status"
-                :label="project.status_label"
-              />
-            </div>
-            <p class="mt-1.5 text-sm text-ink-secondary">
-              {{ project.project_type_label }}
-              <span v-if="project.budget"> · Bütçe {{ project.budget.formatted }}</span>
-            </p>
-          </div>
-
-          <div v-if="project.is_owner" class="flex flex-wrap gap-2">
-            <RcButton
-              v-if="project.status === 'archived'"
-              size="sm"
-              variant="secondary"
-              @click="setStatus('active')"
-            >
-              Arşivden çıkar
-            </RcButton>
-            <RcButton
-              v-else
-              size="sm"
-              variant="ghost"
-              @click="setStatus('archived')"
-            >
-              Arşivle
-            </RcButton>
-          </div>
+      <!-- One line of chrome, like the room: where you came from, which house, what it costs. -->
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div class="flex min-w-0 items-center gap-2 text-sm">
+          <NuxtLink to="/projects" class="shrink-0 text-ink-secondary hover:text-ink">← Evlerim</NuxtLink>
+          <span class="text-muted" aria-hidden="true">·</span>
+          <h1 class="truncate font-medium">{{ project.name }}</h1>
+          <RcStatusPill v-if="project.status !== 'active'" :status="project.status" :label="project.status_label" />
+          <span class="hidden shrink-0 text-xs text-muted sm:inline">
+            {{ project.project_type_label }}<template v-if="project.budget"> · {{ project.budget.formatted }}</template>
+          </span>
         </div>
-      </header>
+
+        <div v-if="project.is_owner" class="ml-auto flex flex-wrap gap-2">
+          <RcButton v-if="project.status === 'archived'" size="sm" variant="secondary" @click="setStatus('active')">Arşivden çıkar</RcButton>
+          <RcButton v-else size="sm" variant="ghost" @click="setStatus('archived')">Arşivle</RcButton>
+        </div>
+      </div>
 
       <RcAlert v-if="project.status === 'archived'" tone="info">
         Bu proje arşivlendi. Düzenlemek için önce arşivden çıkarın.

@@ -5,6 +5,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed — One frame for the whole journey
+
+- **One left edge, one top gap, on every screen.** The home page, the house list, a house,
+  a room, the plan and the design each had their own margins: three different left edges and
+  three different distances to the first thing on the page, because the list and the house
+  still carried the account sidebar while the studio did not. They all use the wide container
+  now, the sidebar is gone from the journey (the account pages keep it, and the header menu
+  is how you reach them), and each screen opens with the same single line of chrome.
+- **No page in the journey has a heading block any more.** "Evlerim" with a paragraph and a
+  button, and the house with a breadcrumb, a title, a subtitle and its buttons, both said what
+  the guide band underneath was about to say. One line each now: where you came from, what
+  this is, and the numbers that matter.
+- The room screen no longer draws a card for a step that lives elsewhere; the guide band says
+  where it is and takes you there.
+
 ### Changed — The guide is a band, not a column
 
 - **The left column is gone from every studio screen.** The guide stood in a 380-pixel card

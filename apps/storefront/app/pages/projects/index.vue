@@ -8,7 +8,7 @@ import type { Option, Paginated, ProjectSummary } from '@refconcept/ui/types'
  * product actually does. It is deliberately not a dashboard of statistics: somebody
  * with one flat and one living room should see their living room, not a chart about it.
  */
-definePageMeta({ middleware: ['auth', 'verified'], layout: 'account' })
+definePageMeta({ middleware: ['auth', 'verified'], layout: 'default', chrome: 'studio' })
 useSeo({ title: 'Projelerim', noindex: true })
 
 const api = useApi()
@@ -77,18 +77,17 @@ async function create() {
 </script>
 
 <template>
-  <div class="space-y-8">
-    <header class="flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h1 class="text-2xl font-medium">Evlerim</h1>
-        <p class="mt-1.5 max-w-[62ch] text-sm leading-relaxed text-ink-secondary">
-          Her ev bir proje: içine odalarını ekle, fotoğraflarını çek; odanı tanıyıp
-          seninle birlikte tasarlayayım.
-        </p>
-      </div>
-
-      <RcButton v-if="!creating" @click="creating = true">Yeni proje</RcButton>
-    </header>
+  <div class="rc-container rc-container--wide space-y-5 py-4">
+    <!-- The same frame as the room, the plan and the design: one left edge, one top gap, no sidebar. -->
+    <!--
+      One line of chrome, the same as every other screen in the journey. The heading used to
+      carry a two-line explanation and a button of its own, above a guide band that said the
+      same thing with the same button — one page, two voices.
+    -->
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <h1 class="text-sm font-medium">Evlerim</h1>
+      <span class="text-xs text-muted">{{ projects.length }} ev</span>
+    </div>
 
     <RcAlert v-if="loadError" tone="danger">{{ loadError }}</RcAlert>
 

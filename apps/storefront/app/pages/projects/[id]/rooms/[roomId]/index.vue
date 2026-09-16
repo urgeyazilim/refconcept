@@ -1260,13 +1260,13 @@ function guideSecondary() {
             </section>
           </div>
 
-          <!-- Steps 5–10 live on the plan and design screens; the guide beside this is the way there. -->
-          <section v-else class="rc-card p-5 sm:p-6">
-            <h2 class="text-base font-medium">
-              {{ activeStep === 'edit' || activeStep === 'save' ? '3B oda' : activeStep === 'render' ? 'Render' : activeStep === 'video' ? '360 tur' : activeStep === 'buy' ? 'Satın alma' : 'Tasarım' }}
-            </h2>
-            <p class="mt-1 text-sm text-ink-secondary">Bu adım kendi ekranında; rehberden geç.</p>
-          </section>
+          <!--
+            Steps 5–10 live on the plan and the design screen. Nothing is drawn for them
+            here: the guide band above already says where the step is and has the button
+            that goes there, and a card repeating it in an empty screen is a dead end with
+            a heading on it.
+          -->
+          <div v-else />
         </div>
       </Transition>
     </template>

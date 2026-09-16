@@ -115,7 +115,7 @@ const openFaq = ref<number | null>(0)
       mirroring design_refs/hero_room.jpg. The photograph is composed with an empty
       left third so the copy sits on plain wall rather than on busy detail.
     -->
-    <section class="rc-container pt-6 lg:pt-8">
+    <section class="rc-container rc-container--wide pt-6 lg:pt-8">
       <div class="relative overflow-hidden rounded-2xl">
         <img
           src="/images/hero-living-room.webp"
@@ -185,7 +185,7 @@ const openFaq = ref<number | null>(0)
     </section>
 
     <!-- What RefConcept actually is -->
-    <section class="rc-container py-20 lg:py-28">
+    <section class="rc-container rc-container--wide py-20 lg:py-28">
       <div class="mx-auto max-w-[62ch] text-center">
         <p class="text-xs tracking-[0.16em] text-accent-700 uppercase">RefConcept nedir?</p>
         <h2 class="mt-5 text-[28px] sm:text-[36px]">
@@ -210,7 +210,7 @@ const openFaq = ref<number | null>(0)
 
     <!-- How it works, shown rather than only told -->
     <section id="nasil-calisir" class="border-y border-line bg-bg-muted">
-      <div class="rc-container py-20 lg:py-28">
+      <div class="rc-container rc-container--wide py-20 lg:py-28">
         <div class="mx-auto mb-16 max-w-[52ch] text-center">
           <p class="text-xs tracking-[0.16em] text-accent-700 uppercase">Nasıl çalışır</p>
           <h2 class="mt-5 text-[28px] sm:text-[36px]">Dört adımda bitiyor</h2>
@@ -263,7 +263,7 @@ const openFaq = ref<number | null>(0)
     </section>
 
     <!-- Room types -->
-    <section class="rc-container py-20 lg:py-28">
+    <section class="rc-container rc-container--wide py-20 lg:py-28">
       <div class="mb-12 flex flex-wrap items-end justify-between gap-6">
         <div class="max-w-[46ch]">
           <p class="text-xs tracking-[0.16em] text-accent-700 uppercase">Odalar</p>
@@ -294,7 +294,7 @@ const openFaq = ref<number | null>(0)
 
     <!-- Real products + budget -->
     <section class="border-y border-line bg-bg-muted">
-      <div class="rc-container py-20 lg:py-28">
+      <div class="rc-container rc-container--wide py-20 lg:py-28">
         <div class="grid gap-14 lg:grid-cols-[1fr_minmax(0,400px)] lg:gap-20">
           <div>
             <p class="text-xs tracking-[0.16em] text-accent-700 uppercase">Gerçek ürünler</p>
@@ -361,7 +361,7 @@ const openFaq = ref<number | null>(0)
     </section>
 
     <!-- FAQ -->
-    <section class="rc-container py-20 lg:py-28">
+    <section class="rc-container rc-container--wide py-20 lg:py-28">
       <div class="grid gap-12 lg:grid-cols-[minmax(0,340px)_1fr] lg:gap-20">
         <div>
           <p class="text-xs tracking-[0.16em] text-accent-700 uppercase">Sık sorulanlar</p>
@@ -400,7 +400,7 @@ const openFaq = ref<number | null>(0)
     </section>
 
     <!-- Closing call to action -->
-    <section class="rc-container pb-24 lg:pb-32">
+    <section class="rc-container rc-container--wide pb-24 lg:pb-32">
       <div class="relative overflow-hidden rounded-2xl">
         <img
           src="/images/room-dining.webp"

@@ -68,7 +68,8 @@ test.describe('project journey', () => {
     await expect(page.getByRole('heading', { name: 'Odanı gör, sonra karar ver' })).toBeVisible()
     // Two of them on an empty list — the header action and the empty-state call to
     // action — which is deliberate, so the test names which one it means.
-    await page.getByRole('button', { name: 'Yeni proje' }).first().click()
+    // The guide's own button: the heading no longer carries a second one beside it.
+    await page.getByRole('button', { name: /Evimi ekle|Yeni bir ev ekle/ }).first().click()
 
     await fillStable(page, '#name', projectName)
     await fillStable(page, '#budget', '150.000')
