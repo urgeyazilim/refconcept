@@ -1,6 +1,7 @@
 import { CollisionEngine, type CollisionState } from './CollisionEngine'
 import { ConstraintEngine } from './ConstraintEngine'
 import { DragController } from './DragController'
+import { OpeningDragController } from './OpeningDragController'
 import { GizmoController } from './GizmoController'
 import { type Measurement, MeasurementEngine, formatDistance } from './MeasurementEngine'
 import { SceneManager } from './SceneManager'
@@ -42,6 +43,8 @@ export interface RoomEditorOptions {
   onOverlay: (labels: OverlayLabel[]) => void
   /** Called after edits have settled. Absent in read-only contexts. */
   onPersist?: (items: LayoutItem[]) => void
+  /** A door or window was dragged and let go on a wall. Absent in read-only contexts. */
+  onMoveOpening?: (id: string, offsetMm: number, wall: WallName) => void
 }
 
 /**
@@ -71,6 +74,9 @@ export class RoomEditor {
   private readonly measurements: MeasurementEngine
 
   private readonly drag: DragController
+
+  /** Doors and windows, picked up and put on a wall. Only when the room may be edited. */
+  private readonly openingDrag: OpeningDragController | null
 
   /** The move and turn handles on the selected piece. */
   private readonly gizmo: GizmoController
@@ -137,8 +143,32 @@ export class RoomEditor {
       invalidate: () => this.scene.invalidate(),
     })
 
+    /*
+     * Registered before the furniture drag, so a press on a door is the door's: the opening
+     * controller stops the event from reaching the furniture controller, which would
+     * otherwise deselect whatever was selected under it.
+     */
+    this.openingDrag = options.onMoveOpening === undefined
+      ? null
+      : new OpeningDragController(canvas, {
+          openings: () => this.openings,
+          roomObjects: () => this.scene.roomObjects(),
+          walls: () => this.scene.walls(),
+          camera: () => this.scene.cameras.active,
+          setOrbitEnabled: enabled => this.scene.cameras.setOrbitEnabled(enabled),
+          onPreview: (id, wall, offsetMm) => {
+            this.scene.rebuildRoom(this.openings.map(opening => (opening.id === id ? { ...opening, wall, offset_mm: offsetMm } : opening)))
+          },
+          onCommit: (id, wall, offsetMm) => {
+            this.openings = this.openings.map(opening => (opening.id === id ? { ...opening, wall, offset_mm: offsetMm } : opening))
+            this.setRoom(this.geometry, this.openings)
+            options.onMoveOpening?.(id, offsetMm, wall)
+          },
+          onCancel: () => this.scene.rebuildRoom(this.openings),
+        })
+
     this.drag = new DragController(canvas, {
-      gizmoActive: () => this.gizmo.isActive(),
+      gizmoActive: () => this.gizmo.isActive() || (this.openingDrag?.isDragging() ?? false),
       items: () => this.items,
       pickable: () => this.scene.pickable(),
       camera: () => this.scene.cameras.active,
@@ -701,6 +731,7 @@ export class RoomEditor {
     this.flush()
 
     this.drag.dispose()
+    this.openingDrag?.dispose()
     this.gizmo.dispose()
     this.scene.dispose()
   }

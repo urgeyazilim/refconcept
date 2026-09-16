@@ -19,7 +19,7 @@
  */
 import { formatDistance } from '~/room3d/MeasurementEngine'
 import { type EditorState, type OverlayLabel, RoomEditor } from '~/room3d/RoomEditor'
-import type { DisplayMode, LayoutItem, RoomGeometry, RoomOpening, ViewMode } from '~/room3d/types'
+import type { DisplayMode, LayoutItem, RoomGeometry, RoomOpening, ViewMode, WallName } from '~/room3d/types'
 
 const props = withDefaults(defineProps<{
   geometry: RoomGeometry
@@ -42,9 +42,18 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   save: [items: LayoutItem[]]
   change: [items: LayoutItem[]]
-  /** A door or window was dragged along its wall on the plan. */
-  moveOpening: [id: string, offsetMm: number]
+  /** A door or window was dragged and let go on a wall — on the plan or in the room. */
+  moveOpening: [id: string, offsetMm: number, wall: WallName]
+  /** A door or window was picked from the palette: put one in the room to be dragged. */
+  addOpening: [type: 'door' | 'window' | 'balcony_door']
 }>()
+
+/** The palette: what a customer can put on a wall. */
+const PALETTE: Array<{ type: 'door' | 'window' | 'balcony_door', label: string, path: string }> = [
+  { type: 'door', label: 'Kapı', path: 'M6 3h12v18H6zM14 12h1M6 21h12' },
+  { type: 'window', label: 'Pencere', path: 'M4 4h16v16H4zM12 4v16M4 12h16' },
+  { type: 'balcony_door', label: 'Balkon kapısı', path: 'M5 3h14v18H5zM12 3v18M5 12h14M9 8h1M15 8h1' },
+]
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 const view = ref<ViewMode>('perspective')
@@ -188,6 +197,7 @@ onMounted(() => {
     // Read-only scenes pass no persist callback at all, so there is no path by which one can
     // write a layout — rather than a flag somewhere that has to stay false.
     onPersist: props.editable ? items => emit('save', items) : undefined,
+    onMoveOpening: props.editable ? (id, offsetMm, wall) => emit('moveOpening', id, offsetMm, wall) : undefined,
   })
 
   editor.value.setItems(props.items)
@@ -269,8 +279,28 @@ defineExpose({
         :selected-id="state.selectedId"
         :editable-openings="editable"
         @select="editor?.select($event)"
-        @move-opening="(id, offset) => emit('moveOpening', id, offset)"
+        @move-opening="(id, offset, wall) => emit('moveOpening', id, offset, wall)"
       />
+
+      <!--
+        The palette: a door, a window, a balcony door. One tap puts it in the room; then it is
+        picked up and put on a wall like anything else. Nobody types where a door is.
+      -->
+      <div v-if="editable" class="absolute top-4 left-4 flex flex-col gap-1 rounded-md bg-surface/90 p-1 backdrop-blur-sm" role="toolbar" aria-label="Kapı ve pencere ekle">
+        <button
+          v-for="entry in PALETTE"
+          :key="entry.type"
+          type="button"
+          class="flex flex-col items-center gap-0.5 rounded-sm px-2 py-1.5 text-[10px] text-ink-secondary transition-colors hover:bg-bg-muted"
+          :title="`${entry.label} ekle — sonra tutup duvara sürükle`"
+          @click="emit('addOpening', entry.type)"
+        >
+          <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path :d="entry.path" />
+          </svg>
+          {{ entry.label }}
+        </button>
+      </div>
 
       <!--
         Measurements as HTML over the canvas rather than text drawn into it. Text in WebGL is

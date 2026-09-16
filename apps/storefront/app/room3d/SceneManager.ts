@@ -6,6 +6,7 @@ import {
   Color,
   DirectionalLight,
   Group,
+  Mesh,
   Line,
   LineBasicMaterial,
   PCFSoftShadowMap,
@@ -229,6 +230,37 @@ export class SceneManager {
   /** The furniture, for the drag's raycaster. Walls are deliberately not in here. */
   pickable(): Object3D[] {
     return this.layout.children
+  }
+
+  /** The walls, casings and all, for a door or window being dragged onto one. */
+  walls(): Mesh[] {
+    return (this.room?.children ?? []).filter((child): child is Mesh => child instanceof Mesh && typeof child.userData.wall === 'string')
+  }
+
+  /** Everything in the room group, for finding the opening under the pointer. */
+  roomObjects(): Object3D[] {
+    return this.room?.children ?? []
+  }
+
+  /**
+   * Rebuilds the room with the openings where they are now, and leaves the camera alone.
+   *
+   * `setRoom` frames the camera on the room, which is right when the size changes and wrong
+   * while a door is being dragged: the view would jump on every pointer move.
+   */
+  rebuildRoom(openings: RoomOpening[]): void {
+    if (this.geometry === null) {
+      return
+    }
+
+    if (this.room !== null) {
+      this.scene.remove(this.room)
+      this.rooms.dispose(this.room)
+    }
+
+    this.room = this.rooms.build(this.geometry, openings)
+    this.scene.add(this.room)
+    this.invalidate()
   }
 
   /** One piece's group, for the gizmo to take hold of. */

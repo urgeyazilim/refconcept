@@ -19,7 +19,7 @@
  */
 import { formatDistance } from '~/room3d/MeasurementEngine'
 import { footprintOf, isMeasured } from '~/room3d/footprint'
-import type { LayoutItem, RoomGeometry, RoomOpening } from '~/room3d/types'
+import type { LayoutItem, RoomGeometry, RoomOpening, WallName } from '~/room3d/types'
 
 const props = withDefaults(defineProps<{
   geometry: RoomGeometry
@@ -37,7 +37,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   select: [id: string | null]
   /** A door or window was dragged along its wall and let go at this offset. */
-  moveOpening: [id: string, offsetMm: number]
+  moveOpening: [id: string, offsetMm: number, wall: WallName]
 }>()
 
 const svg = ref<SVGSVGElement | null>(null)
@@ -49,7 +49,26 @@ const svg = ref<SVGSVGElement | null>(null)
  * wall and the customer, who can see it is in the middle, slides it there. Along the wall
  * only — an opening cannot leave its wall by being dragged, and the corners stop it.
  */
-const dragging = ref<{ id: string, wall: string, startOffset: number, startAlong: number, offset: number } | null>(null)
+const dragging = ref<{ id: string, wall: WallName, startWall: WallName, startOffset: number, startAlong: number, offset: number } | null>(null)
+
+/**
+ * The wall nearest the pointer. A door dragged towards another wall goes onto it — the
+ * customer is not asked to name walls, they put things where they are.
+ */
+function nearestWall(point: { x: number, y: number }): WallName {
+  const { width_mm: width, length_mm: length } = props.geometry
+
+  const distances: Array<[WallName, number]> = [
+    ['north', Math.abs(point.y)],
+    ['south', Math.abs(length - point.y)],
+    ['west', Math.abs(point.x)],
+    ['east', Math.abs(width - point.x)],
+  ]
+
+  distances.sort((a, b) => a[1] - b[1])
+
+  return distances[0]![0]
+}
 
 /** Where the pointer is, in the plan's own millimetres. */
 function planPoint(event: PointerEvent): { x: number, y: number } | null {
@@ -88,6 +107,7 @@ function startOpeningDrag(event: PointerEvent, opening: RoomOpening): void {
   dragging.value = {
     id: opening.id,
     wall: opening.wall,
+    startWall: opening.wall,
     startOffset: opening.offset_mm,
     startAlong: along(opening.wall, point),
     offset: opening.offset_mm,
@@ -110,10 +130,17 @@ function moveOpeningDrag(event: PointerEvent): void {
     return
   }
 
-  const span = drag.wall === 'north' || drag.wall === 'south' ? props.geometry.width_mm : props.geometry.length_mm
-  const desired = drag.startOffset + (along(drag.wall, point) - drag.startAlong)
+  const wall = nearestWall(point)
+  const span = wall === 'north' || wall === 'south' ? props.geometry.width_mm : props.geometry.length_mm
+
+  // Along the wall it started on the grab keeps its offset; on another wall the opening
+  // sits centred under the pointer, which is where somebody dragging it expects it.
+  const desired = wall === drag.startWall
+    ? drag.startOffset + (along(wall, point) - drag.startAlong)
+    : along(wall, point) - opening.width_mm / 2
 
   // Inside its wall, to the corners and no further; rounded to the centimetre a plan works in.
+  drag.wall = wall
   drag.offset = Math.round(Math.max(0, Math.min(span - opening.width_mm, desired)) / 10) * 10
 }
 
@@ -130,14 +157,19 @@ function endOpeningDrag(event: PointerEvent): void {
     svg.value.releasePointerCapture(event.pointerId)
   }
 
-  if (drag.offset !== drag.startOffset) {
-    emit('moveOpening', drag.id, drag.offset)
+  if (drag.offset !== drag.startOffset || drag.wall !== drag.startWall) {
+    emit('moveOpening', drag.id, drag.offset, drag.wall)
   }
 }
 
 /** An opening's offset as it is being dragged, or as it is. */
 function offsetOf(opening: RoomOpening): number | null {
   return dragging.value?.id === opening.id ? dragging.value.offset : opening.offset_mm
+}
+
+/** An opening's wall as it is being dragged, or as it is. */
+function wallOf(opening: RoomOpening): WallName | null {
+  return dragging.value?.id === opening.id ? dragging.value.wall : opening.wall
 }
 
 /** Room for the dimension lines and wall thickness outside the floor itself. */
@@ -197,7 +229,7 @@ function cut(
   toSegment: (along: { from: number, to: number }) => Segment,
 ): Segment[] {
   const gaps = props.openings
-    .filter(opening => opening.wall === wall && offsetOf(opening) !== null && opening.width_mm !== null)
+    .filter(opening => wallOf(opening) === wall && offsetOf(opening) !== null && opening.width_mm !== null)
     .map(opening => ({
       from: offsetOf(opening) ?? 0,
       to: (offsetOf(opening) ?? 0) + (opening.width_mm ?? 0),
@@ -238,7 +270,7 @@ const gaps = computed<Opening[]>(() => {
 
     const swings = opening.type === 'door' || opening.type === 'balcony_door'
 
-    switch (opening.wall) {
+    switch (wallOf(opening)) {
       case 'north':
         drawn.push({ opening, x1: offset, y1: 0, x2: offset + span, y2: 0, swings })
         break

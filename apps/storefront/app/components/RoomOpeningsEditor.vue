@@ -120,13 +120,6 @@ async function remove(id: string) {
 
 const cm = (mm: number | null): string => (mm === null ? '' : String(Math.round(mm / 10)))
 
-function onCm(id: string, field: 'offset_mm' | 'width_mm', value: string) {
-  const parsed = Number(value.replace(',', '.'))
-
-  if (!Number.isFinite(parsed)) return
-
-  void patch(id, { [field]: Math.round(parsed * 10) })
-}
 </script>
 
 <template>
@@ -135,8 +128,8 @@ function onCm(id: string, field: 'offset_mm' | 'width_mm', value: string) {
       <div>
         <h3 class="font-medium">Kapılar ve pencereler</h3>
         <p class="mt-1 max-w-[60ch] text-sm leading-relaxed text-ink-secondary">
-          Fotoğraftan okuduklarımı buraya koydum; yanlışsa planda sürükle, duvarını değiştir
-          ya da yenisini ekle. Kapının önüne bir şey koymam, pencereyi kapatmam.
+          Fotoğraftan okuduklarımı buraya koydum; yanlışsa planda tut, doğru duvara sürükle.
+          Yenisini + Kapı / + Pencere ile ekle, sonra yerine taşı. Kapının önüne bir şey koymam.
         </p>
       </div>
 
@@ -162,10 +155,10 @@ function onCm(id: string, field: 'offset_mm' | 'width_mm', value: string) {
             :items="[]"
             :states="new Map()"
             :editable-openings="canEdit"
-            @move-opening="(id, offsetMm) => patch(id, { offset_mm: offsetMm })"
+            @move-opening="(id, offsetMm, wall) => patch(id, { offset_mm: offsetMm, wall })"
           />
         </div>
-        <p class="mt-2 text-center text-[11px] leading-relaxed text-muted">Kapı ya da pencereyi tutup duvar boyunca kaydır; duvarını sağdaki listeden değiştir.</p>
+        <p class="mt-2 text-center text-[11px] leading-relaxed text-muted">Kapı ya da pencereyi tutup kaydır; başka bir duvara da bırakabilirsin.</p>
       </div>
 
       <ul class="space-y-2">
@@ -184,39 +177,11 @@ function onCm(id: string, field: 'offset_mm' | 'width_mm', value: string) {
             <button v-if="canEdit" type="button" class="text-xs text-danger hover:underline" @click="remove(opening.id)">Kaldır</button>
           </div>
 
-          <div class="mt-2 grid grid-cols-3 gap-2 text-xs">
-            <label class="block">
-              <span class="mb-1 block text-muted">Duvar</span>
-              <select
-                :value="opening.wall ?? 'north'"
-                :disabled="!canEdit"
-                class="w-full rounded-sm border border-line bg-surface px-2 py-1.5"
-                @change="patch(opening.id, { wall: ($event.target as HTMLSelectElement).value })"
-              >
-                <option v-for="wall in WALLS" :key="wall.value" :value="wall.value">{{ wall.label }}</option>
-              </select>
-            </label>
-            <label class="block">
-              <span class="mb-1 block text-muted">Köşeden (cm)</span>
-              <input
-                type="number"
-                :value="cm(opening.offset_mm)"
-                :disabled="!canEdit"
-                class="w-full rounded-sm border border-line bg-surface px-2 py-1.5"
-                @change="onCm(opening.id, 'offset_mm', ($event.target as HTMLInputElement).value)"
-              >
-            </label>
-            <label class="block">
-              <span class="mb-1 block text-muted">Genişlik (cm)</span>
-              <input
-                type="number"
-                :value="cm(opening.width_mm)"
-                :disabled="!canEdit"
-                class="w-full rounded-sm border border-line bg-surface px-2 py-1.5"
-                @change="onCm(opening.id, 'width_mm', ($event.target as HTMLInputElement).value)"
-              >
-            </label>
-          </div>
+          <p class="mt-1 text-xs text-muted">
+            {{ WALLS.find(wall => wall.value === opening.wall)?.label ?? 'Duvarı belli değil' }}
+            <span v-if="opening.offset_mm !== null"> · köşeden {{ cm(opening.offset_mm) }} cm</span>
+            — planda tutup taşı
+          </p>
         </li>
       </ul>
     </div>

@@ -31,6 +31,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   expected price and the ceiling before it queues anything, and saying plainly when the
   task is still routed to the simulator.
 
+### Added — doors and windows you pick up and put on a wall
+
+- **In the 3D room too.** A door or window is picked up where it is (its casing, its glass)
+  and follows the pointer onto whichever wall it is over — the same wall or another — and
+  sits where the pointer is along it; the room redraws as it moves and the camera stays put.
+  `OpeningDragController`, registered ahead of the furniture drag so a press on a door is the
+  door's.
+- **A palette, not a form.** Three icons at the left of the scene — Kapı, Pencere, Balkon
+  kapısı — put one in the room at a sensible size on a wall with space for it; then it is
+  dragged into place. Nobody types where a door is; the numeric form on the plan is gone. A
+  room may have as many doors as it has.
+- On the plan, dragging an opening towards another wall moves it onto that wall.
+
 ### Added — doors and windows you can drag
 
 - **`RoomOpeningsEditor`** on the Onay step: the room from above with every door and window

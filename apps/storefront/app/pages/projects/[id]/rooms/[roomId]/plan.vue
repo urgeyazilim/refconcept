@@ -12,7 +12,7 @@
  * sixty requests a second; not on a button either, because a plan somebody spent twenty
  * minutes on and lost to a closed tab is a plan they do not make again.
  */
-import type { LayoutItem, RoomGeometry, RoomOpening } from '~/room3d/types'
+import type { LayoutItem, RoomGeometry, RoomOpening, WallName } from '~/room3d/types'
 
 definePageMeta({ middleware: ['auth', 'verified'], layout: 'account' })
 
@@ -188,15 +188,15 @@ function asOpening(raw: Record<string, unknown>): RoomOpening {
   }
 }
 
-async function moveOpening(id: string, offsetMm: number): Promise<void> {
+async function moveOpening(id: string, offsetMm: number, wall: WallName): Promise<void> {
   const previous = openings.value
 
   // Moved on screen first, put back if the server refuses: a window that snaps back a second
   // after being dragged is honest, and a window that waits a second to move feels broken.
-  openings.value = openings.value.map(opening => (opening.id === id ? { ...opening, offset_mm: offsetMm } : opening))
+  openings.value = openings.value.map(opening => (opening.id === id ? { ...opening, offset_mm: offsetMm, wall } : opening))
 
   try {
-    await api.patch(`${base}/constraints/${id}`, { offset_mm: offsetMm })
+    await api.patch(`${base}/constraints/${id}`, { offset_mm: offsetMm, wall, notes: 'Sizin düzelttiğiniz.' })
   }
   catch (error) {
     openings.value = previous
@@ -204,21 +204,32 @@ async function moveOpening(id: string, offsetMm: number): Promise<void> {
   }
 }
 
-async function addOpening(): Promise<void> {
+/**
+ * A door or window from the palette: put into the room at a sensible size, on a wall with
+ * room for it, to be dragged where it belongs. Nobody types where a door is.
+ */
+async function addOpening(type: 'door' | 'window' | 'balcony_door' = newOpening.type): Promise<void> {
   openingBusy.value = true
   openingNotice.value = null
 
-  const isDoor = newOpening.type !== 'window'
+  const isDoor = type !== 'window'
+  const width = type === 'window' ? 1_200 : 900
+  const geometryNow = confirmed.value
+
+  const spanOf = (wall: WallName): number => (wall === 'north' || wall === 'south' ? geometryNow?.width_mm ?? 4_000 : geometryNow?.length_mm ?? 5_000)
+  const wall = (['north', 'east', 'south', 'west'] as WallName[])
+    .find(candidate => spanOf(candidate) >= width + 600 && openings.value.every(opening => opening.wall !== candidate)) ?? 'north'
 
   try {
     const response = await api.post<{ data: Record<string, unknown> }>(`${base}/constraints`, {
-      type: newOpening.type,
-      label: TYPE_LABELS[newOpening.type],
-      wall: newOpening.wall,
-      offset_mm: Math.round(newOpening.offset_cm * 10),
-      width_mm: Math.round(newOpening.width_cm * 10),
-      height_mm: Math.round(newOpening.height_cm * 10),
-      sill_height_mm: isDoor ? 0 : Math.round(newOpening.sill_cm * 10),
+      type,
+      label: TYPE_LABELS[type],
+      wall,
+      offset_mm: Math.max(0, Math.round((spanOf(wall) - width) / 2)),
+      width_mm: width,
+      height_mm: type === 'window' ? 1_400 : 2_100,
+      sill_height_mm: isDoor ? 0 : 900,
+      notes: 'Sizin eklediğiniz.',
     })
 
     openings.value = [...openings.value, asOpening(response.data)]
@@ -1103,6 +1114,7 @@ onMounted(async () => {
         @save="save"
         @change="liveItems = $event"
         @move-opening="moveOpening"
+        @add-opening="addOpening"
       />
 
       <!--
@@ -1118,7 +1130,7 @@ onMounted(async () => {
           Kapılar ve pencereler
         </h2>
         <p class="mt-1 text-xs text-muted">
-          Plan görünümünde bir kapıyı ya da pencereyi duvar boyunca sürükleyerek yerini düzeltebilirsiniz.
+          Kapıyı ya da pencereyi tutup duvar boyunca kaydır; başka bir duvara da bırakabilirsin.
         </p>
 
         <p v-if="openingNotice" class="mt-3 rounded-sm bg-warning-subtle p-2 text-xs text-warning-strong">
@@ -1140,39 +1152,7 @@ onMounted(async () => {
         </ul>
         <p v-else class="mt-3 text-xs text-muted">Bu odada kayıtlı kapı ya da pencere yok.</p>
 
-        <form class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-6" @submit.prevent="addOpening">
-          <select v-model="newOpening.type" class="rounded-sm border border-line bg-surface px-2 py-1.5 text-xs">
-            <option value="window">Pencere</option>
-            <option value="door">Kapı</option>
-            <option value="balcony_door">Balkon kapısı</option>
-          </select>
-          <select v-model="newOpening.wall" class="rounded-sm border border-line bg-surface px-2 py-1.5 text-xs">
-            <option v-for="(label, wall) in WALL_LABELS" :key="wall" :value="wall">{{ label }}</option>
-          </select>
-          <label class="text-xs text-muted">
-            konum (cm)
-            <input v-model.number="newOpening.offset_cm" type="number" min="0" class="mt-0.5 w-full rounded-sm border border-line bg-surface px-2 py-1 text-xs text-ink">
-          </label>
-          <label class="text-xs text-muted">
-            genişlik (cm)
-            <input v-model.number="newOpening.width_cm" type="number" min="10" class="mt-0.5 w-full rounded-sm border border-line bg-surface px-2 py-1 text-xs text-ink">
-          </label>
-          <label class="text-xs text-muted">
-            yükseklik (cm)
-            <input v-model.number="newOpening.height_cm" type="number" min="10" class="mt-0.5 w-full rounded-sm border border-line bg-surface px-2 py-1 text-xs text-ink">
-          </label>
-          <label v-if="newOpening.type === 'window'" class="text-xs text-muted">
-            denizlik (cm)
-            <input v-model.number="newOpening.sill_cm" type="number" min="0" class="mt-0.5 w-full rounded-sm border border-line bg-surface px-2 py-1 text-xs text-ink">
-          </label>
-          <button
-            type="submit"
-            class="col-span-2 rounded-pill border border-line px-3 py-1.5 text-xs hover:bg-bg-muted disabled:opacity-50 sm:col-span-1 sm:self-end"
-            :disabled="openingBusy"
-          >
-            Ekle
-          </button>
-        </form>
+        <p class="mt-3 text-xs text-muted">Yenisini eklemek için sahnenin solundaki simgeleri kullan; sonra tutup duvara sürükle.</p>
       </section>
 
       <!--

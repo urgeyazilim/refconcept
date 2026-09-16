@@ -216,6 +216,8 @@ export class RoomGeometryBuilder {
     const mesh = new Mesh(wallGeometry, this.wallMaterial)
     mesh.name = `wall-${name}`
     mesh.receiveShadow = true
+    // Named for the pointer: a drag that lands on this mesh lands on this wall.
+    mesh.userData.wall = name
 
     /*
      * Everything that belongs to the wall is a child of it: the skirting, the door and
@@ -403,6 +405,12 @@ export class RoomGeometryBuilder {
 
       sky.position.set(toUnits(spanMm) / 2, toUnits(wallHeightMm) / 2, innerZ - inward * (thickness + 0.35))
       parts.push(sky)
+    }
+
+    // Every part of a door or window answers to the opening, so a press on the casing or
+    // the glass picks the opening up rather than the wall behind it.
+    for (const part of parts) {
+      part.userData.openingId = opening.id
     }
 
     return parts

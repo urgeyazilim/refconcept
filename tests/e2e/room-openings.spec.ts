@@ -19,7 +19,7 @@ const API = process.env.E2E_API_URL ?? 'http://localhost:58000'
 test.describe.configure({ timeout: 300_000 })
 
 test.describe('room openings', () => {
-  test('a window added from the form can be dragged along its wall on the plan', async ({ page, request }) => {
+  test('a window from the palette can be dragged along its wall on the plan', async ({ page, request }) => {
     const account = await createVerifiedAccount('openings-customer')
     const headers = { Authorization: `Bearer ${account.token}`, Accept: 'application/json' }
 
@@ -42,8 +42,9 @@ test.describe('room openings', () => {
     const section = page.locator('section', { hasText: 'Kapılar ve pencereler' })
 
     await expect(section.getByText('Bu odada kayıtlı kapı ya da pencere yok.')).toBeVisible()
-    await section.getByRole('button', { name: 'Ekle', exact: true }).click()
-    await expect(section.getByText(/Pencere · kuzey duvarı · 100 cm'de, 120 cm geniş/)).toBeVisible({ timeout: 15_000 })
+    // From the palette at the left of the scene: a window lands centred on a free wall.
+    await page.getByRole('toolbar', { name: 'Kapı ve pencere ekle' }).getByRole('button', { name: 'Pencere' }).click()
+    await expect(section.getByText(/Pencere · kuzey duvarı · 18\d cm'de, 120 cm geniş/)).toBeVisible({ timeout: 15_000 })
 
     // --- drag it along the wall on the plan ------------------------------------------
     await page.getByRole('button', { name: 'Plan', exact: true }).click()
@@ -71,14 +72,14 @@ test.describe('room openings', () => {
     await page.mouse.up()
 
     // The list says where it went, and so does the room itself.
-    await expect(section.getByText(/Pencere · kuzey duvarı · (1[1-9]\d|[2-9]\d\d) cm'de/)).toBeVisible({ timeout: 15_000 })
+    await expect(section.getByText(/Pencere · kuzey duvarı · (19\d|[2-9]\d\d) cm'de/)).toBeVisible({ timeout: 15_000 })
 
     const layout = await request.get(`${API}/api/v1/projects/${projectId}/rooms/${roomId}/layout`, { headers })
     const openings = (await layout.json()).data.openings as Array<{ wall: string, offset_mm: number, width_mm: number }>
 
     expect(openings).toHaveLength(1)
     expect(openings[0]!.wall).toBe('north')
-    expect(openings[0]!.offset_mm).toBeGreaterThan(1_000)
+    expect(openings[0]!.offset_mm).toBeGreaterThan(1_825)
     expect(openings[0]!.offset_mm).toBeLessThanOrEqual(4_850 - 1_200)
 
     // --- and gone again ------------------------------------------------------------
