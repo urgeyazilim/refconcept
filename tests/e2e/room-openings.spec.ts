@@ -11,6 +11,7 @@ import { signInThrough } from './support/signin'
  * really is. This adds a window from the form, switches to the plan, drags it along the
  * north wall with a real pointer, and reads the room back from the API to see that the wall
  * — the same rows the 3D scene, the collision rules and the render use — now has it there.
+ * Then it is widened by its end, taken hold of in the 3D room and put on the left wall.
  */
 
 const STOREFRONT = process.env.E2E_STOREFRONT_URL ?? 'http://localhost:3000'
@@ -75,7 +76,7 @@ test.describe('room openings', () => {
     await expect(section.getByText(/Pencere · kuzey duvarı · (19\d|[2-9]\d\d) cm'de/)).toBeVisible({ timeout: 15_000 })
 
     const layout = await request.get(`${API}/api/v1/projects/${projectId}/rooms/${roomId}/layout`, { headers })
-    const openings = (await layout.json()).data.openings as Array<{ wall: string, offset_mm: number, width_mm: number }>
+    const openings = (await layout.json()).data.openings as Array<{ id: string, wall: string, offset_mm: number, width_mm: number }>
 
     expect(openings).toHaveLength(1)
     expect(openings[0]!.wall).toBe('north')
@@ -96,6 +97,36 @@ test.describe('room openings', () => {
     await page.mouse.up()
 
     await expect(section.getByText(/Pencere · kuzey duvarı · \d+ cm'de, (1[3-9]\d|[2-9]\d\d) cm geniş/)).toBeVisible({ timeout: 15_000 })
+
+    // --- picked up in the 3D room and put on the left wall ---------------------------
+    // The Plan button is a switch: pressed again it shows the 3D room.
+    await page.getByRole('button', { name: 'Plan', exact: true }).click()
+    await page.waitForFunction(() => (window as unknown as { __rcEditor?: unknown }).__rcEditor !== undefined)
+    await page.waitForTimeout(800)
+
+    const canvasBox = (await page.locator('canvas').boundingBox())!
+    const screen = async (call: string) => {
+      const point = await page.evaluate((expression) => {
+        const editor = (window as unknown as { __rcEditor: Record<string, (...args: unknown[]) => unknown> }).__rcEditor
+        // eslint-disable-next-line no-new-func
+        return new Function('editor', `return editor.${expression}`)(editor) as { x: number, y: number } | null
+      }, call)
+
+      expect(point, `${call} must be on screen`).not.toBeNull()
+
+      return { x: canvasBox.x + point!.x, y: canvasBox.y + point!.y }
+    }
+
+    const grab = await screen(`openingScreenPoint('${openings[0]!.id}')`)
+    const west = await screen(`wallScreenPoint('west', 2600, 1700)`)
+
+    await page.mouse.move(grab.x, grab.y)
+    await page.mouse.down()
+    await page.mouse.move((grab.x + west.x) / 2, (grab.y + west.y) / 2, { steps: 8 })
+    await page.mouse.move(west.x, west.y, { steps: 8 })
+    await page.mouse.up()
+
+    await expect(section.getByText(/Pencere · batı duvarı · \d+ cm'de/)).toBeVisible({ timeout: 15_000 })
 
     // --- and gone again ------------------------------------------------------------
     await section.getByRole('button', { name: 'Kaldır' }).click()
