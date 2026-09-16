@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domains\Projects\Services;
 
 use App\Domains\Projects\Enums\ConstraintType;
+use App\Domains\Projects\Models\Room;
 use App\Domains\Projects\Models\RoomAnalysis;
 use App\Domains\Projects\Models\RoomConstraint;
 use App\Domains\Projects\Models\RoomGeometryVersion;
@@ -68,6 +69,14 @@ final class RoomGeometryProposer
             ->exists();
 
         if ($confirmed) {
+            /*
+             * The size is settled, but the doors and windows a later reading found are still
+             * worth having: a customer who agreed to the size before the reading had placed
+             * the door would otherwise be left with a sealed box and a door in a photograph.
+             * Only into a room that has none of its own, as always.
+             */
+            $this->adopt($room, $this->openings($analysis));
+
             return null;
         }
 
@@ -118,6 +127,21 @@ final class RoomGeometryProposer
         $openings = $version->payload['openings'] ?? null;
 
         if (! is_array($openings) || $openings === []) {
+            return 0;
+        }
+
+        return $this->adopt($room, $openings);
+    }
+
+    /**
+     * Writes openings into a room that has none, as constraints the plan can draw.
+     *
+     * @param  list<array<string, mixed>>  $openings
+     * @return int how many were added
+     */
+    private function adopt(Room $room, array $openings): int
+    {
+        if ($openings === []) {
             return 0;
         }
 

@@ -181,3 +181,27 @@ it('leaves a room alone when it already has openings of its own', function (): v
     expect($this->proposer->adoptOpenings($version))->toBe(0)
         ->and(RoomConstraint::query()->where('room_id', $this->room->getKey())->count())->toBe(1);
 });
+
+it('puts the door a later reading found into a room whose size was already agreed', function (): void {
+    // The size was agreed before any reading placed a door: a sealed box, so far.
+    RoomGeometryVersion::query()->create([
+        'room_id' => $this->room->getKey(),
+        'version' => 1,
+        'source' => 'user',
+        'width_mm' => 4_850,
+        'length_mm' => 5_200,
+        'height_mm' => 2_720,
+    ])->forceFill(['is_confirmed' => true, 'confirmed_at' => now()])->save();
+
+    $proposal = $this->proposer->propose(analysed([
+        'estimated_dimensions' => ['width_mm' => 3_800, 'length_mm' => 5_000, 'height_mm' => 2_600],
+        'openings' => [
+            ['type' => 'door', 'wall' => 'east', 'offset_mm' => 1_800, 'width_mm' => 900, 'height_mm' => 2_100],
+            ['type' => 'window', 'wall' => 'north', 'offset_mm' => 200, 'width_mm' => 3_400, 'height_mm' => 1_600, 'sill_height_mm' => 900],
+        ],
+    ]));
+
+    // No second size to agree to — but the door and the window are in the room now.
+    expect($proposal)->toBeNull()
+        ->and(RoomConstraint::query()->where('room_id', $this->room->getKey())->count())->toBe(2);
+});
