@@ -34,10 +34,16 @@ const props = withDefaults(defineProps<{
    * keep the room above its panels.
    */
   workspace?: boolean
+  /**
+   * Only the doors and windows. The room step confirms the shell, so the furniture
+   * inspector and the product list beside it are somebody else's step and are hidden.
+   */
+  openingsOnly?: boolean
 }>(), {
   items: () => [],
   editable: false,
   workspace: false,
+  openingsOnly: false,
 })
 
 /**
@@ -499,8 +505,8 @@ defineExpose({
       <!-- What the page wants done first, above the selection: arranging by the design. -->
       <slot name="side-start" />
 
-      <!-- What is selected, and everything that can be done to it. -->
-      <div class="rounded-md border border-line bg-surface p-4">
+      <!-- What is selected, and everything that can be done to it. Furniture only, so the room step hides it. -->
+      <div v-if="!openingsOnly" class="rounded-md border border-line bg-surface p-4">
         <template v-if="selected === null">
           <p class="text-sm text-muted">
             Taşımak istediğiniz ürüne tıklayın. Yön tuşlarıyla santimetre santimetre
@@ -636,7 +642,7 @@ defineExpose({
       </div>
 
       <!-- Everything in the room, and anything wrong with it. -->
-      <div class="rounded-md border border-line bg-surface p-4">
+      <div v-if="!openingsOnly" class="rounded-md border border-line bg-surface p-4">
         <div class="flex items-center justify-between">
           <p class="text-sm font-medium text-ink">
             Odadaki ürünler ({{ state.items.length }})

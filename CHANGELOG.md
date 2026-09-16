@@ -5,6 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed — The room step shows the room
+
+- **In three dimensions, not as a rectangle.** Step three drew the customer's room as a flat
+  black outline in SVG beside a heading, a paragraph of instructions and a row of pills — the
+  product owner's verdict was "cin ali gibi", a child's primer. The 3D room already existed
+  one step further on. It is the room step now: walls, floor, the doors and windows on them,
+  the palette of kinds down the left, and a door dragged onto a wall with the pointer.
+- **The question is asked once.** The size was written out under the guide band with the same
+  two buttons the band already carried. The band asks; the panel is the room. The measuring
+  form appears only when somebody is typing a size, and it is one row.
+- **Nothing that belongs to another step.** The furniture inspector and the product list are
+  hidden here (), and the "Boş oda" card with only a heading in it is gone.
+
 ### Fixed — The studio stopped on step one
 
 - **The room reading stood down whenever the primary photograph changed.** The job compares

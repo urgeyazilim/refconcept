@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { RoomConstraintItem } from '@refconcept/ui/types'
-import { OPENING_TYPES, type OpeningKind, TYPE_LABELS, describeKind, hasSwing, hingeIsLeft, kindsFor, opensIn, otherJamb, otherWay, swingOf, variantOf } from '~/room3d/openings'
+import { OPENING_TYPES, type OpeningKind, describeKind, hasSwing, hingeIsLeft, kindsFor, opensIn, otherJamb, otherWay, swingOf, variantOf } from '~/room3d/openings'
 import type { RoomOpening, WallName } from '~/room3d/types'
 
 /**
@@ -29,9 +29,6 @@ const WALLS: Array<{ value: WallName, label: string }> = [
   { value: 'south', label: 'Alt duvar' },
   { value: 'west', label: 'Sol duvar' },
 ]
-
-/** What can be put on a wall, grouped as the customer thinks of them. */
-const PALETTE = OPENING_TYPES.map(type => ({ type, label: TYPE_LABELS[type], kinds: kindsFor(type) }))
 
 /** Doors and windows only; a radiator is a note the plan draws differently. */
 const openings = computed<RoomOpening[]>(() =>
@@ -143,60 +140,37 @@ const cm = (mm: number | null): string => (mm === null ? '' : String(Math.round(
 </script>
 
 <template>
-  <div>
-    <div>
-      <h3 class="font-medium">Kapılar ve pencereler</h3>
-      <p class="mt-1 max-w-[60ch] text-sm leading-relaxed text-ink-secondary">
-        Fotoğraftan okuduklarımı buraya koydum; yanlışsa planda tut, doğru duvara sürükle.
-        Yenisini aşağıdan seç, sonra yerine taşı. Kapının önüne bir şey koymam.
-      </p>
-    </div>
+  <!--
+    The room, in three dimensions, with its doors and windows on it.
 
-    <!-- What can be added: the kinds a customer would name, one tap each. -->
-    <div v-if="canEdit" class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2" role="toolbar" aria-label="Kapı ve pencere ekle">
-      <div v-for="group in PALETTE" :key="group.type" class="flex flex-wrap items-center gap-1">
-        <span class="text-xs text-muted">{{ group.label }}:</span>
-        <button
-          v-for="kind in group.kinds"
-          :key="kind.variant"
-          type="button"
-          class="rounded-pill border border-line px-2.5 py-1 text-xs text-ink-secondary hover:bg-bg-muted disabled:opacity-40"
-          :disabled="busy !== null"
-          :aria-label="`${kind.label} ${group.label.toLocaleLowerCase('tr-TR')} ekle`"
-          @click="add(kind)"
-        >
-          + {{ kind.label }}
-        </button>
-      </div>
-    </div>
+    It was a flat black rectangle in SVG beside a heading, a paragraph and a row of "+ Tek
+    kanat" pills — the product owner's verdict was "cin ali gibi". The 3D room already
+    existed one step further on; there is no reason a customer should meet their room as a
+    child's drawing first. The palette of kinds lives inside the scene, on its left, and a
+    door is dragged onto a wall with the pointer.
+  -->
+  <div class="flex min-h-0 flex-1 flex-col gap-2">
+    <RcAlert v-if="notice" tone="danger">{{ notice }}</RcAlert>
 
-    <RcAlert v-if="notice" tone="danger" class="mt-4">{{ notice }}</RcAlert>
-
-    <div class="mt-4 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-      <!-- The room from above; each door and window is a handle on its wall. -->
-      <div>
-        <!-- Height-bound, so a long room does not push the page past the window. -->
-        <div class="h-[440px] overflow-hidden rounded-md border border-line bg-surface p-3">
-          <RoomPlanSvg
-            :geometry="{ id: 'room', width_mm: geometry.width_mm, length_mm: geometry.length_mm, height_mm: geometry.height_mm }"
-            :openings="openings"
-            :items="[]"
-            :states="new Map()"
-            :editable-openings="canEdit"
-            @move-opening="(id, offsetMm, wall) => patch(id, { offset_mm: offsetMm, wall })"
-            @resize-opening="(id, offsetMm, widthMm) => patch(id, { offset_mm: offsetMm, width_mm: widthMm })"
-          />
-        </div>
-        <p class="mt-2 text-center text-[11px] leading-relaxed text-muted">Kapı ya da pencereyi tutup kaydır, başka bir duvara da bırakabilirsin; uçlarındaki noktalardan genişlet ya da daralt.</p>
-      </div>
-
-      <ul class="space-y-2">
-        <li v-if="openings.length === 0" class="rounded-md bg-bg-muted p-4 text-sm text-ink-secondary">
-          Henüz kapı ya da pencere yok. Yukarıdan türünü seç, sonra planda yerine sürükle.
-        </li>
-
-        <li
-          v-for="opening in openings"
+    <Room3DScene
+      workspace
+      openings-only
+      class="min-h-0 flex-1 lg:min-h-[420px]"
+      :geometry="{ id: 'room', width_mm: geometry.width_mm, length_mm: geometry.length_mm, height_mm: geometry.height_mm }"
+      :openings="openings"
+      :items="[]"
+      :editable="canEdit"
+      @add-opening="add"
+      @move-opening="(id: string, offsetMm: number, wall: string) => patch(id, { offset_mm: offsetMm, wall })"
+      @resize-opening="(id: string, offsetMm: number, widthMm: number) => patch(id, { offset_mm: offsetMm, width_mm: widthMm })"
+    >
+      <template #side-start>
+        <ul class="space-y-2">
+          <li v-if="openings.length === 0" class="rounded-md bg-bg-muted p-3 text-xs leading-relaxed text-ink-secondary">
+            Fotoğraftan kapı ya da pencere çıkaramadım. Soldaki simgelerden türünü seç, sonra odada tutup duvara sürükle.
+          </li>
+          <li
+            v-for="opening in openings"
           :key="opening.id"
           class="rounded-md border border-line p-3"
           :class="{ 'opacity-60': busy === opening.id }"
@@ -251,7 +225,8 @@ const cm = (mm: number | null): string => (mm === null ? '' : String(Math.round(
             </button>
           </div>
         </li>
-      </ul>
-    </div>
+        </ul>
+      </template>
+    </Room3DScene>
   </div>
 </template>

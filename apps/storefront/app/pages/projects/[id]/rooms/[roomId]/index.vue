@@ -1043,76 +1043,43 @@ function guideSecondary() {
           </div>
 
           <!-- 3 · Oda: the size as read, and the doors and windows -->
-          <section v-else-if="activeStep === 'recognise'" id="oda" class="rc-card p-5 sm:p-6">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <h2 class="text-base font-medium">Odanın ölçüleri</h2>
-              <button
-                v-if="canEdit && hasPhoto && !analysing && room.analysis !== null"
-                type="button"
-                class="text-xs text-ink-secondary underline-offset-4 hover:underline"
-                @click="analyse(true)"
-              >
-                Fotoğrafları yeniden oku
-              </button>
-            </div>
+          <!--
+            The room itself, in three dimensions.
 
-            <div v-if="measured && !editingSize" class="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-md bg-bg-muted p-4">
-              <p class="text-sm">
-                <span class="font-medium">{{ mm(room.width_mm) }} × {{ mm(room.length_mm) }} m</span>
-                <span v-if="room.height_mm" class="text-ink-secondary"> · tavan {{ mm(room.height_mm) }} m</span>
-                <span v-if="room.floor_area_m2" class="text-muted"> · {{ room.floor_area_m2 }} m²</span>
-              </p>
-              <button v-if="canEdit" type="button" class="text-sm text-ink-secondary underline-offset-4 hover:underline" @click="editingSize = true">
-                Düzelt
-              </button>
-            </div>
-
-            <div v-else-if="proposedSize && !editingSize" class="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-md bg-bg-muted p-4">
-              <p class="text-sm">
-                Okuduğum: <span class="font-medium">{{ proposedSize.text }}</span>
-                <span class="text-muted"> — tahmin; onaylayınca kesinleşir.</span>
-              </p>
-              <div v-if="canEdit" class="flex items-center gap-2">
-                <RcButton size="sm" :loading="confirmingSize" :disabled="confirmingSize" @click="acceptProposal">Evet, doğru</RcButton>
-                <RcButton size="sm" variant="ghost" @click="editingSize = true">Düzelt</RcButton>
-              </div>
-            </div>
-
-            <form v-if="editingSize || (!measured && !proposedSize)" class="mt-5 space-y-5" @submit.prevent="submitSize">
-              <p class="max-w-[62ch] text-sm leading-relaxed text-ink-secondary">
-                Santimetre cinsinden yaz; duvar diplerinden ölçmek en doğrusu. Ölçü doğru olunca
-                önerdiğim her şey gerçekten sığar.
-              </p>
-              <div class="grid gap-4 sm:grid-cols-3">
-                <RcField v-model="sizeForm.width" label="Genişlik (cm)" name="width" :disabled="!canEdit" />
-                <RcField v-model="sizeForm.length" label="Uzunluk (cm)" name="length" :disabled="!canEdit" />
-                <RcField v-model="sizeForm.height" label="Tavan yüksekliği (cm)" name="height" :disabled="!canEdit" />
-              </div>
-
-              <div>
-                <label for="quality" class="mb-1.5 block text-sm font-medium">Ölçüler nereden geliyor?</label>
-                <select
-                  id="quality"
-                  v-model="sizeForm.quality"
-                  :disabled="!canEdit"
-                  class="w-full max-w-sm rounded-sm border border-line bg-surface px-4 py-2.5 text-sm disabled:opacity-60"
-                >
-                  <option v-for="quality in qualities" :key="quality.value" :value="quality.value">
-                    {{ quality.label }}
-                  </option>
+            It used to be a heading, the size written out with the same two buttons the guide
+            band already carries, three lines of instructions and the room as a flat black
+            rectangle. The product owner's verdict was "cin ali gibi" — a child's primer —
+            and they were right: we have a 3D room and were not showing it. The size question
+            is the band's; this is the room, with its doors and windows on it.
+          -->
+          <section v-else-if="activeStep === 'recognise'" id="oda" class="flex min-h-0 flex-col gap-3">
+            <!-- The size, only when somebody is typing it, and on one line: the room below is the point. -->
+            <form v-if="editingSize || (!measured && !proposedSize)" class="rc-card flex flex-wrap items-end gap-3 p-3" @submit.prevent="submitSize">
+              <label class="w-28">
+                <span class="mb-1 block text-xs text-muted">Genişlik (cm)</span>
+                <input id="width" v-model="sizeForm.width" :disabled="!canEdit" inputmode="numeric" class="w-full rounded-sm border border-line bg-surface px-3 py-2 text-sm tabular-nums">
+              </label>
+              <label class="w-28">
+                <span class="mb-1 block text-xs text-muted">Uzunluk (cm)</span>
+                <input id="length" v-model="sizeForm.length" :disabled="!canEdit" inputmode="numeric" class="w-full rounded-sm border border-line bg-surface px-3 py-2 text-sm tabular-nums">
+              </label>
+              <label class="w-28">
+                <span class="mb-1 block text-xs text-muted">Tavan (cm)</span>
+                <input id="height" v-model="sizeForm.height" :disabled="!canEdit" inputmode="numeric" class="w-full rounded-sm border border-line bg-surface px-3 py-2 text-sm tabular-nums">
+              </label>
+              <label class="w-44">
+                <span class="mb-1 block text-xs text-muted">Nereden geliyor?</span>
+                <select id="quality" v-model="sizeForm.quality" :disabled="!canEdit" class="w-full rounded-sm border border-line bg-surface px-3 py-2 text-sm">
+                  <option v-for="quality in qualities" :key="quality.value" :value="quality.value">{{ quality.label }}</option>
                 </select>
-              </div>
+              </label>
 
-              <div class="flex items-center gap-3">
-                <RcButton v-if="canEdit" type="submit" size="sm" :loading="savingSize || confirmingSize" :disabled="savingSize || confirmingSize">
-                  Ölçüleri kaydet
-                </RcButton>
-                <RcButton v-if="editingSize" size="sm" variant="ghost" @click="editingSize = false">Vazgeç</RcButton>
-              </div>
+              <RcButton v-if="canEdit" type="submit" size="sm" :loading="savingSize || confirmingSize" :disabled="savingSize || confirmingSize">Ölçüleri kaydet</RcButton>
+              <RcButton v-if="editingSize" size="sm" variant="ghost" @click="editingSize = false">Vazgeç</RcButton>
             </form>
 
-            <!-- Doors and windows: dragged into place, added with a click (K6). -->
-            <div class="mt-8 border-t border-line pt-6">
+            <!-- Doors and windows, on the room itself: dragged into place, added with a click (K6). -->
+            <div class="flex min-h-0 flex-1 flex-col">
               <RoomOpeningsEditor
                 :base="base"
                 :geometry="editorGeometry"
@@ -1211,7 +1178,8 @@ function guideSecondary() {
           </section>
 
           <!-- 2 · Eşyalar: the room emptied, shown against the photograph -->
-          <section v-else-if="activeStep === 'plate'" id="esyalar" class="rc-card p-5 sm:p-6">
+          <!-- Nothing to show until there is an emptied room: the band asks the question, and a card with only a heading in it is a dead panel. -->
+          <section v-else-if="activeStep === 'plate' && (plateLinks || clearingPlate || primaryPlate)" id="esyalar" class="rc-card p-5 sm:p-6">
             <h2 class="text-base font-medium">Boş oda</h2>
 
             <RoomPlateCompare
