@@ -5,6 +5,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — The renderer painted fixtures it had only been told about
+
+- **A radiator and a window across the television wall.** The reading looks at every
+  photograph of the room and names the fixtures it saw in each; the renderer edits one
+  photograph and was handed the whole list — "preserve: radiator, air_conditioner" — with
+  the radiator on a wall it could not see. It painted one. Now the renderer is named only
+  the fixtures the reading saw in the photograph being edited (`preservedElements($index)`),
+  and the room's other photographs go with it as references, up to three, each labelled
+  "REFERANS n: aynı odanın başka bir açıdan fotoğrafı … bu bir ürün değildir, çizilmeyecek".
+- **Render prompt v8** (`image_render_draft`, `image_render_premium`): the fourth rule no
+  longer says every image after the first is a product — the role list says which are —
+  and a sixth rule says what a reference is for and that nothing is drawn for a wall the
+  first photograph does not show. `render_inputs.view_count` records how many went.
+- The fidelity check is told the same, visible-only list.
+
 ### Changed — The plan is a workspace, not a page
 
 - **The room fills the window.** The plan screen stacked the stepper, a title, a banner, the

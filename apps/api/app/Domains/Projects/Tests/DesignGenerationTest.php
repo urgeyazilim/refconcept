@@ -467,15 +467,19 @@ it('leaves an earlier good version alone when a refinement fails', function (): 
         ->and($this->design->fresh()?->status->value)->toBe('ready');
 });
 
-/** A deterministic room analysis, in the shape the schema asks for. */
-function analysisAnswer(): AiResult
+/**
+ * A deterministic room analysis, in the shape the schema asks for.
+ *
+ * @param  array<int, array<string, mixed>>|null  $fixed  the fixtures it saw, when a test cares which
+ */
+function analysisAnswer(?array $fixed = null): AiResult
 {
     $structured = [
         'room_type' => 'living_room',
         'confidence' => 0.91,
         'style' => ['modern'],
         'dominant_colors' => ['warm_white'],
-        'fixed_elements' => [
+        'fixed_elements' => $fixed ?? [
             ['type' => 'window', 'preserve' => true],
             ['type' => 'radiator', 'preserve' => true],
         ],
@@ -982,4 +986,53 @@ it('makes the picture again, once, when the check says it is not the room', func
         ->and($finished?->fidelity['faithful'])->toBeTrue()
         // One picture, not two: the unfaithful one is gone.
         ->and($finished?->assets()->where('type', 'render')->count())->toBe(1);
+});
+
+it('shows the renderer the other photographs and names only the fixtures in the one it edits', function (): void {
+    // A second photograph of the same room, from another corner.
+    $other = RoomMedia::query()->create([
+        'room_id' => $this->room->getKey(),
+        'type' => 'photo',
+        'disk' => 's3',
+        'storage_path' => 'room-media/'.$this->room->getKey().'/'.Str::uuid7().'.jpg',
+        'original_name' => 'salon-2.jpg',
+        'mime_type' => 'image/jpeg',
+        'size_bytes' => 230_000,
+        'width' => 2_048,
+        'height' => 1_536,
+        'checksum_sha256' => hash('sha256', 'salon-2'),
+        'position' => 1,
+    ]);
+
+    Storage::disk('s3')->put((string) $this->room->primaryMedia?->storage_path, pixel());
+    Storage::disk('s3')->put($other->storage_path, pixel());
+
+    /*
+     * The reading saw the window in the photograph being edited and the radiator only in
+     * the other one. Told to preserve a radiator it could not see, the renderer painted one
+     * across the customer's television wall; now it is told about the window and shown the
+     * other photograph, where the radiator is, as a reference it must not draw from.
+     */
+    FakeAiProvider::script(
+        analysisAnswer([
+            ['type' => 'window', 'preserve' => true, 'photo_index' => 0],
+            ['type' => 'radiator', 'preserve' => true, 'photo_index' => 1],
+            ['type' => 'ceiling_lighting', 'preserve' => true],
+        ]),
+        planAnswer(),
+        renderAnswer(),
+    );
+
+    $version = $this->launcher->launch($this->design, null, $this->owner);
+
+    expect($version->fresh()?->status)->toBe(DesignVersionStatus::Ready);
+
+    $render = AiJob::query()->where('task', AiTask::ImageRenderDraft->value)->firstOrFail();
+    $roles = (array) $render->input['image_roles'];
+
+    expect($render->input['preserve'])->toBe(['window', 'ceiling_lighting'])
+        ->and(collect($render->input['image_sources'])->pluck('path')->all())->toContain($other->storage_path)
+        ->and($roles[0])->toContain('düzenlenecek mekân')
+        ->and($roles[1])->toContain('REFERANS 1')
+        ->and($version->fresh()?->render_inputs['view_count'])->toBe(1);
 });

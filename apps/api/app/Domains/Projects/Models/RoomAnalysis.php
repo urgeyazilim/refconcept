@@ -113,7 +113,7 @@ class RoomAnalysis extends Model
      *
      * @return array<int, string>
      */
-    public function preservedElements(): array
+    public function preservedElements(?int $seenInPhoto = null): array
     {
         $preserved = [];
 
@@ -125,6 +125,19 @@ class RoomAnalysis extends Model
             // `preserve` absent means preserve. A model that forgets the flag must not
             // thereby give the renderer permission to brick up a window.
             if (($element['preserve'] ?? true) === false) {
+                continue;
+            }
+
+            /*
+             * Only what is in the photograph being edited, when asked for one.
+             *
+             * The reading looks at every photograph and says which one it saw each fixture
+             * in. The renderer edits one of them. Told to "preserve the radiator" while
+             * looking at the wall the radiator is not on, it painted one there — a radiator
+             * and a window across the customer's television unit. An element the reading
+             * did not place in any photograph is kept, as before.
+             */
+            if ($seenInPhoto !== null && is_int($element['photo_index'] ?? null) && $element['photo_index'] !== $seenInPhoto) {
                 continue;
             }
 

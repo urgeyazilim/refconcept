@@ -394,6 +394,23 @@ final class DesignGenerationPipeline
             $images[] = $layout;
         }
 
+        /*
+         * Then the room's other photographs, as references.
+         *
+         * A customer who photographs the room from four corners expects the result to know
+         * the room. The reading did; the renderer did not — it was handed one picture and a
+         * list of fixtures the reading had seen in the others, and told to keep a radiator it
+         * could not see, it painted one across the television wall. The other views go in
+         * named as references: for knowing the walls, the door and the window, never for
+         * changing the picture's frame, and never to be drawn as products.
+         */
+        $views = $this->otherViews($room, $photograph);
+        $images = array_merge($images, $views);
+
+        // Only the fixtures the reading saw in the photograph being edited are named to the
+        // renderer; the rest are in the other views, where it can see them for itself.
+        $baseIndex = $this->photoIndexOf($analysis, $photograph);
+
         // Then the products the customer will actually be offered, so the sofa in the
         // picture is the sofa in the shopping list underneath it.
         $images = array_merge($images, $this->productImages($matches));
@@ -418,6 +435,7 @@ final class DesignGenerationPipeline
             'render_inputs' => [
                 'base' => ['media_id' => $base->getKey(), 'kind' => $base->isPlate() ? 'plate' : 'photograph'],
                 'photograph_media_id' => $photograph->getKey(),
+                'view_count' => count($views),
                 'layout' => $currentLayout === null ? null : [
                     'id' => $currentLayout->getKey(),
                     'version' => $currentLayout->version,
@@ -437,9 +455,9 @@ final class DesignGenerationPipeline
          * better answer than another minute and another charge.
          */
         foreach (range(1, self::RENDER_ATTEMPTS) as $attempt) {
-            [$ran, $asset] = $this->renderOnce($version, $room, $analysis, $plan, $matches, $quality, $purchasable, $images, $layout !== null);
+            [$ran, $asset] = $this->renderOnce($version, $room, $analysis, $plan, $matches, $quality, $purchasable, $images, $layout !== null, count($views), $baseIndex);
 
-            $verdict = $this->check($version, $asset, $layout, $purchasable, $analysis);
+            $verdict = $this->check($version, $asset, $layout, $purchasable, $analysis, $baseIndex);
 
             $version->forceFill([
                 'ai_job_id' => $ran->getKey(),
@@ -486,6 +504,8 @@ final class DesignGenerationPipeline
         array $purchasable,
         array $images,
         bool $hasLayout,
+        int $views = 0,
+        ?int $baseIndex = null,
     ): array {
         $ran = $this->dispatcher->runInline(
             task: $quality->task(),
@@ -529,11 +549,11 @@ final class DesignGenerationPipeline
                  * from the photograph. "Keep the window" is a sentence a model follows;
                  * "look at the picture and work out what not to change" is not.
                  */
-                'preserve' => $analysis->preservedElements(),
+                'preserve' => $analysis->preservedElements($baseIndex),
                 'instruction' => $version->user_prompt,
                 // What each supplied image is. Unlabelled, a model has no way to tell the
                 // room it must preserve from the furniture it must place into it.
-                'image_roles' => $this->imageRoles($matches, $hasLayout),
+                'image_roles' => $this->imageRoles($matches, $hasLayout, $views),
                 'image_sources' => $images,
             ],
             subject: $version,
@@ -593,6 +613,7 @@ final class DesignGenerationPipeline
         ?array $layout,
         array $purchasable,
         RoomAnalysis $analysis,
+        ?int $baseIndex = null,
     ): ?array {
         $expected = [];
 
@@ -618,7 +639,7 @@ final class DesignGenerationPipeline
                 input: [
                     'room_type' => $analysis->detected_room_type ?? 'room',
                     'expected' => $expected === [] ? 'nothing in particular' : implode(', ', $expected),
-                    'openings' => implode(', ', $analysis->preservedElements()) ?: 'none recorded',
+                    'openings' => implode(', ', $analysis->preservedElements($baseIndex)) ?: 'none recorded',
                     'image_roles' => $roles,
                     'image_sources' => $sources,
                 ],
@@ -1006,7 +1027,7 @@ final class DesignGenerationPipeline
      * @param  Collection<int, DesignMatch>  $matches
      * @return list<string>
      */
-    private function imageRoles(Collection $matches, bool $hasLayout = false): array
+    private function imageRoles(Collection $matches, bool $hasLayout = false, int $views = 0): array
     {
         $roles = ['Müşterinin odasının fotoğrafı — düzenlenecek mekân budur.'];
 
@@ -1023,6 +1044,18 @@ final class DesignGenerationPipeline
                 .'ürün şemada durduğu yerde duracak. Şemayı çizme, yalnızca yerleşim için kullan.';
         }
 
+        // The other photographs of the same room: references, and said to be references,
+        // or the fourth rule — "every image after the first is a product" — would put them in
+        // the room as furniture.
+        for ($view = 1; $view <= $views; $view++) {
+            $roles[] = sprintf(
+                'REFERANS %d: aynı odanın başka bir açıdan fotoğrafı. Duvarları, kapıyı, pencereyi ve '
+                .'sabit öğeleri doğru tanımak için bak; kadraj ve bakış açısı ilk görseldir. Bu bir ürün '
+                .'değildir, çizilmeyecek.',
+                $view,
+            );
+        }
+
         foreach ($matches->sortBy('placement_index')->take(self::MAX_PRODUCT_REFERENCES) as $match) {
             $media = $match->product?->media?->first();
 
@@ -1036,6 +1069,50 @@ final class DesignGenerationPipeline
         }
 
         return $roles;
+    }
+
+    /** How many other views of the room go to the renderer: enough for the other walls, not a payload. */
+    private const MAX_VIEW_REFERENCES = 3;
+
+    /**
+     * The room's other photographs, for the renderer to know the walls it cannot see.
+     *
+     * @return array<int, array{disk: string, path: string}>
+     */
+    private function otherViews(Room $room, RoomMedia $base): array
+    {
+        $sources = [];
+
+        foreach ($this->analyser->photographs($room) as $photo) {
+            if ($photo->getKey() === $base->getKey() || $photo->storage_path === '') {
+                continue;
+            }
+
+            $sources[] = ['disk' => $photo->disk, 'path' => $photo->storage_path];
+
+            if (count($sources) === self::MAX_VIEW_REFERENCES) {
+                break;
+            }
+        }
+
+        return $sources;
+    }
+
+    /**
+     * Which of the photographs the reading looked at is the one being edited, or null when
+     * the reading did not say which photographs it read — every reading before 2026-09-16.
+     */
+    private function photoIndexOf(RoomAnalysis $analysis, RoomMedia $base): ?int
+    {
+        $ids = $analysis->payload['photo_ids'] ?? null;
+
+        if (! is_array($ids)) {
+            return null;
+        }
+
+        $index = array_search((string) $base->getKey(), array_map('strval', $ids), true);
+
+        return $index === false ? null : (int) $index;
     }
 
     // --- internals -----------------------------------------------------------
