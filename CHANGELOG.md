@@ -5,6 +5,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed — The room, the plan and the design are one workspace each
+
+- **No footer, no sidebar, one line of chrome.** The room, plan and design pages leave
+  the account layout and say `chrome: 'studio'`; the default layout keeps its footer off
+  them. Where you came from, which room, its size and the step strip share one line; the
+  title, subtitle and header block that took a screen's worth above the work are gone.
+- **The guide stands beside the work.** On the room and design pages the guide is a sticky
+  column on the left and the step's panel is on the right, so a laptop shows both without
+  a scroll. The product owner's verdict on the stacked version: "üst bölgeler gereksiz
+  bilgilerle dolu, sürekli mouse ile aşağıya iniyorum".
+- The photograph panel lost its second voice: the "Boş oda" card with its paragraph and
+  button only appears once an emptied photograph exists, because the guide already asks
+  "Eşyaları kaldırayım mı?" on its own step. The plan on the confirmation step is
+  height-bound so a long room does not push the page past the window.
+
 ### Changed — The 3D room is furnished the moment the design is ready
 
 - **Nobody presses "Tasarıma göre yerleştir" any more.** The product owner opened the plan

@@ -14,7 +14,7 @@ import type { DesignDetail, DesignTreeNode } from '@refconcept/ui/types'
  * about as providers vary; one fed by stage boundaries moves predictably, which is what
  * somebody watching a render for fifty seconds actually wants from it.
  */
-definePageMeta({ middleware: ['auth', 'verified'], layout: 'account' })
+definePageMeta({ middleware: ['auth', 'verified'], layout: 'default', chrome: 'studio' })
 
 const route = useRoute()
 const api = useApi()
@@ -682,12 +682,36 @@ const statusTone: Record<string, string> = {
 </script>
 
 <template>
-  <div class="space-y-8">
+  <div class="rc-container rc-container--wide space-y-4 py-4">
+  <!--
+    A workspace like the room and the plan: one line of chrome, the guide beside the picture
+    rather than above it, no footer. The name, the version count, the credits and the status
+    pill used to take a header of their own above the strip; they are one line now.
+  -->
     <RcAlert v-if="loadError" tone="danger">{{ loadError }}</RcAlert>
 
     <template v-else-if="design">
-      <StudioStepper :project-id="projectId" :room-id="roomId" current="render" :done="studioDone" />
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div class="flex min-w-0 items-center gap-2 text-sm">
+          <NuxtLink :to="`/projects/${projectId}/rooms/${roomId}`" class="shrink-0 text-ink-secondary hover:text-ink">
+            ← Odaya dön
+          </NuxtLink>
+          <span class="text-muted" aria-hidden="true">·</span>
+          <h1 class="truncate font-medium">{{ design.name }}</h1>
+          <RcStatusPill
+            :status="design.status === 'ready' ? 'approved' : design.status === 'failed' ? 'rejected' : 'in_review'"
+            :label="design.status_label"
+          />
+          <span class="hidden shrink-0 text-xs text-muted sm:inline">
+            {{ design.version_count }} sürüm<template v-if="design.total_credit_cost > 0"> · {{ design.total_credit_cost }} kredi</template>
+          </span>
+        </div>
 
+        <StudioStepper class="min-w-0 flex-1" :project-id="projectId" :room-id="roomId" current="render" :done="studioDone" />
+      </div>
+
+      <div class="grid gap-4 lg:grid-cols-[minmax(320px,380px)_minmax(0,1fr)] lg:items-start">
+      <div class="space-y-3 lg:sticky lg:top-24">
       <!-- The guide's last question (REHBER.md §3): the picture is here; would you move things? -->
       <StudioGuide
         :icon="shownVersion?.status === 'ready' ? 'check' : shownVersion?.status === 'failed' ? 'eye' : 'sparkle'"
@@ -708,45 +732,15 @@ const statusTone: Record<string, string> = {
         :busy="shownVersion?.status !== 'ready' && shownVersion?.status !== 'failed'"
       />
 
-      <header>
-        <NuxtLink
-          :to="`/projects/${projectId}/rooms/${roomId}`"
-          class="text-sm text-ink-secondary hover:text-ink"
-        >
-          ← Odaya dön
-        </NuxtLink>
-
-        <!--
-          The name carries the page, and the metadata gets out of its way.
-          A heading competing with a status pill and a credit count for the same line reads
-          as three equal things, and only one of them is what somebody came to look at.
-        -->
-        <div class="mt-3 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-          <div>
-            <h1 class="text-3xl font-medium tracking-[-0.01em]">{{ design.name }}</h1>
-
-            <p class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
-              <span>{{ design.version_count }} sürüm</span>
-              <span v-if="design.total_credit_cost > 0">· {{ design.total_credit_cost }} kredi</span>
-              <span v-if="shoppingList" class="text-ink-secondary">
-                · {{ shoppingList.placements.length }} parça planlandı
-              </span>
-            </p>
-          </div>
-
-          <RcStatusPill
-            :status="design.status === 'ready' ? 'approved' : design.status === 'failed' ? 'rejected' : 'in_review'"
-            :label="design.status_label"
-          />
-        </div>
-      </header>
-
       <RcAlert v-if="actionError" tone="danger">{{ actionError }}</RcAlert>
 
       <RcAlert v-if="pollStalled" tone="warning">
-        Durum bilgisi alınamıyor. Tasarımınız arka planda çalışmaya devam ediyor;
-        sayfayı yenileyerek son durumu görebilirsiniz.
+        Durum bilgisi alınamıyor. Tasarımın arka planda çalışmaya devam ediyor;
+        sayfayı yenileyerek son durumu görebilirsin.
       </RcAlert>
+      </div>
+
+      <div class="min-w-0 space-y-6">
 
       <!--
         The versions as pictures, above the picture. Only once there is more than one: a strip
@@ -1376,6 +1370,8 @@ const statusTone: Record<string, string> = {
           </li>
         </ul>
       </section>
+      </div>
+      </div>
     </template>
 
     <!--

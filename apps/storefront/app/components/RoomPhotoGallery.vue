@@ -191,10 +191,9 @@ onBeforeUnmount(() => {
   <section class="rc-card p-6 sm:p-8">
     <header class="flex flex-wrap items-start justify-between gap-4">
       <div>
-        <h2 class="text-lg font-medium">Fotoğraflar</h2>
-        <p class="mt-1.5 max-w-[60ch] text-sm leading-relaxed text-ink-secondary">
-          Gündüz çek, odanın tamamı görünsün; birkaç köşeden çekersen daha iyi anlarım.
-          Fotoğrafların yalnızca sana ait; kimseyle paylaşılmaz, arama motorlarına açılmaz.
+        <h2 class="text-base font-medium">Fotoğraflar</h2>
+        <p class="mt-1 max-w-[60ch] text-xs leading-relaxed text-muted">
+          Gündüz, birkaç köşeden. Fotoğrafların yalnızca sana ait.
         </p>
       </div>
 
@@ -287,28 +286,14 @@ onBeforeUnmount(() => {
       doors with nothing standing in front of them. Made once per photograph, in the
       background, at no charge; shown as before/after because the point is what stayed.
     -->
-    <div v-if="primary" class="mt-6 rounded-md border border-line p-4">
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 class="text-sm font-medium">Boş oda</h3>
-          <p class="mt-1 max-w-[60ch] text-xs leading-relaxed text-ink-secondary">
-            Tasarım, odanızın eşyaları kaldırılmış haline yapılır: duvarlar, zemin, pencere ve
-            kapı sizin; mobilya yalnızca seçtikleriniz. Render, etiketli ana fotoğrafın boş
-            hâlinden başlar; diğer fotoğrafları da kendi kartlarından boşaltabilirsiniz.
-          </p>
-        </div>
-
-        <button
-          v-if="canEdit && !plateOf(primary)"
-          type="button"
-          class="rounded-pill bg-charcoal px-4 py-2 text-sm text-white disabled:opacity-50"
-          :disabled="clearing !== null"
-          @click="clear(primary)"
-        >
-          <span v-if="clearing === primary.id">Eşyalar kaldırılıyor…</span>
-          <span v-else>Ana fotoğrafın eşyalarını kaldır</span>
-        </button>
-      </div>
+    <!--
+      Only once there is an emptied photograph to show, or one on the way. The card used to
+      open with a heading, three lines of explanation and a button of its own — the guide
+      asks "Eşyaları kaldırayım mı?" on its own step, and the paragraph was a second voice
+      saying the same thing under the photographs.
+    -->
+    <div v-if="primary && (emptied.length > 0 || clearing !== null)" class="mt-6 rounded-md border border-line p-4">
+      <h3 class="text-sm font-medium">Boş oda</h3>
 
       <!--
         The primary photograph has no plate but another one does: said plainly, with the two

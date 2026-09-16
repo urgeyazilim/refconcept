@@ -175,7 +175,8 @@ const cm = (mm: number | null): string => (mm === null ? '' : String(Math.round(
     <div class="mt-4 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <!-- The room from above; each door and window is a handle on its wall. -->
       <div>
-        <div class="overflow-hidden rounded-md border border-line bg-surface p-3">
+        <!-- Height-bound, so a long room does not push the page past the window. -->
+        <div class="h-[440px] overflow-hidden rounded-md border border-line bg-surface p-3">
           <RoomPlanSvg
             :geometry="{ id: 'room', width_mm: geometry.width_mm, length_mm: geometry.length_mm, height_mm: geometry.height_mm }"
             :openings="openings"

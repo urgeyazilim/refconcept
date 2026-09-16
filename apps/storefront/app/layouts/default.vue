@@ -15,6 +15,13 @@
  */
 const { isAuthenticated, displayName, logout } = useAuth()
 
+/**
+ * The studio pages — a room, its plan, its designs — are a workspace, not a page: the
+ * product owner kept scrolling past a footer nobody needs while working on a room. A page
+ * says `chrome: 'studio'` in its meta and the footer stays away.
+ */
+const studio = computed(() => useRoute().meta.chrome === 'studio')
+
 const nav = [
   { label: 'Ürünler', to: '/catalog' },
   { label: 'Projelerim', to: '/projects' },
@@ -270,7 +277,7 @@ function onKeydown(event: KeyboardEvent) {
       <slot />
     </main>
 
-    <footer class="border-t border-line bg-bg-muted">
+    <footer v-if="!studio" class="border-t border-line bg-bg-muted">
       <div class="rc-container py-10">
         <div class="flex flex-col gap-6 sm:flex-row sm:justify-between">
           <div>

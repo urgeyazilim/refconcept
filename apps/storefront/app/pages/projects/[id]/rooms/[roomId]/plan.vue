@@ -15,7 +15,7 @@
 import { type DoorSwing, type OpeningKind, describeKind, hasSwing, hingeIsLeft, kindsFor, opensIn, otherJamb, otherWay, swingOf, variantOf } from '~/room3d/openings'
 import type { LayoutItem, RoomGeometry, RoomOpening, WallName } from '~/room3d/types'
 
-definePageMeta({ middleware: ['auth', 'verified'], layout: 'default' })
+definePageMeta({ middleware: ['auth', 'verified'], layout: 'default', chrome: 'studio' })
 
 interface GeometryVersion {
   id: string

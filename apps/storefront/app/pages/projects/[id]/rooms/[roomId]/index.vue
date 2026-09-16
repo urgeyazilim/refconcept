@@ -18,7 +18,7 @@ import type {
  * Measurements are entered in centimetres because that is how people measure rooms,
  * and converted to the millimetres the API stores at exactly one place — on submit.
  */
-definePageMeta({ middleware: ['auth', 'verified'], layout: 'account' })
+definePageMeta({ middleware: ['auth', 'verified'], layout: 'default', chrome: 'studio' })
 
 const route = useRoute()
 const api = useApi()
@@ -845,66 +845,71 @@ function guideSecondary() {
 </script>
 
 <template>
-  <div class="space-y-8">
+  <div class="rc-container rc-container--wide space-y-4 py-4">
+  <!--
+    A workspace: one line of chrome — where you came from, which room, which step — then the
+    guide standing beside the step's work rather than above it. The first version stacked a
+    back link, a title, a subtitle, the strip, the guide and the panel and put a footer under
+    the lot; the product owner's verdict was "üst bölgeler gereksiz bilgilerle dolu, sürekli
+    mouse ile aşağıya iniyorum". Nothing here needs the page to scroll on a laptop.
+  -->
     <RcAlert v-if="loadError" tone="danger">{{ loadError }}</RcAlert>
 
     <template v-else-if="room && project">
-      <header>
-        <NuxtLink :to="`/projects/${projectId}`" class="text-sm text-ink-secondary hover:text-ink">
-          ← {{ project.name }}
-        </NuxtLink>
-
-        <div class="mt-3 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 class="text-2xl font-medium">{{ room.name }}</h1>
-            <p class="mt-1.5 text-sm text-ink-secondary">
-              {{ room.room_type_label }}
-              <span v-if="room.floor_area_m2"> · {{ room.floor_area_m2 }} m²</span>
-            </p>
-          </div>
-
-          <!--
-            No shortcut here. A "Hadi tasarlayalım" button in the header jumped straight to
-            the proposal and skipped the guide's questions — the empty room, the size — which
-            is exactly the wizard-with-a-different-hat the owner asked us not to build. The
-            guide is the only way forward; the strip is the way back.
-          -->
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div class="flex min-w-0 items-center gap-2 text-sm">
+          <NuxtLink :to="`/projects/${projectId}`" class="shrink-0 text-ink-secondary hover:text-ink">
+            ← {{ project.name }}
+          </NuxtLink>
+          <span class="text-muted" aria-hidden="true">·</span>
+          <h1 class="truncate font-medium">{{ room.name }}</h1>
+          <span v-if="room.floor_area_m2" class="shrink-0 text-xs text-muted">{{ room.floor_area_m2 }} m²</span>
         </div>
-      </header>
 
-      <StudioStepper
-        :project-id="projectId"
-        :room-id="roomId"
-        :current="activeStep"
-        :done="studioDone"
-        selectable
-        @select="goTo"
-      />
+        <!--
+          No shortcut here. A "Hadi tasarlayalım" button in the header jumped straight to
+          the proposal and skipped the guide's questions — the empty room, the size — which
+          is exactly the wizard-with-a-different-hat the owner asked us not to build. The
+          guide is the only way forward; the strip is the way back.
+        -->
+        <StudioStepper
+          class="min-w-0 flex-1"
+          :project-id="projectId"
+          :room-id="roomId"
+          :current="activeStep"
+          :done="studioDone"
+          selectable
+          @select="goTo"
+        />
+      </div>
 
-      <!-- The guide: the one voice that says what comes next (REHBER.md). -->
-      <StudioGuide
-        :icon="guide.icon"
-        :say="guide.say"
-        :detail="guide.detail"
-        :action="canEdit ? guide.action : null"
-        :secondary="canEdit ? guide.secondary : null"
-        :tips="guide.tips"
-        :choices="canEdit ? guide.choices : []"
-        :busy="guide.busy"
-        @act="guideAct"
-        @secondary="guideSecondary"
-        @toggle="toggleRemoval"
-      />
+      <div class="grid gap-4 lg:grid-cols-[minmax(320px,380px)_minmax(0,1fr)] lg:items-start">
+        <!-- The guide: the one voice that says what comes next (REHBER.md). Beside the work, and it stays put while the work scrolls. -->
+        <div class="space-y-3 lg:sticky lg:top-24">
+          <StudioGuide
+            :icon="guide.icon"
+            :say="guide.say"
+            :detail="guide.detail"
+            :action="canEdit ? guide.action : null"
+            :secondary="canEdit ? guide.secondary : null"
+            :tips="guide.tips"
+            :choices="canEdit ? guide.choices : []"
+            :busy="guide.busy"
+            @act="guideAct"
+            @secondary="guideSecondary"
+            @toggle="toggleRemoval"
+          />
 
-      <RcAlert v-if="actionError" tone="danger">{{ actionError }}</RcAlert>
+          <RcAlert v-if="actionError" tone="danger">{{ actionError }}</RcAlert>
+        </div>
 
       <!--
         One step on the screen at a time. The strip says where we are, the guide says what
-        to do, and the panel below is only that step's work — nothing to scroll past,
+        to do, and the panel beside it is only that step's work — nothing to scroll past,
         nothing to discover at the bottom of the page.
       -->
       <Transition name="step" mode="out-in">
-        <div :key="activeStep">
+        <div :key="activeStep" class="min-w-0">
           <!-- 1 · Fotoğraf -->
           <div v-if="activeStep === 'photo'" id="fotograf">
             <RoomPhotoGallery
@@ -1226,6 +1231,7 @@ function guideSecondary() {
           </section>
         </div>
       </Transition>
+      </div>
     </template>
   </div>
 </template>
