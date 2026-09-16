@@ -494,7 +494,8 @@ defineExpose({
       </p>
     </div>
 
-    <div v-if="editable" :class="workspace ? 'flex min-h-0 flex-col gap-3 overflow-y-auto pr-1' : 'grid gap-3 md:grid-cols-2'">
+    <!-- Column children must not shrink: a flex column with overflow squeezes them and the guide's sentence gets clipped. -->
+    <div v-if="editable" :class="workspace ? 'flex min-h-0 flex-col gap-3 overflow-y-auto pr-1 [&>*]:shrink-0' : 'grid gap-3 md:grid-cols-2'">
       <!-- What the page wants done first, above the selection: arranging by the design. -->
       <slot name="side-start" />
 
