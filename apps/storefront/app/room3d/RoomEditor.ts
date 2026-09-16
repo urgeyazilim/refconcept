@@ -721,6 +721,41 @@ export class RoomEditor {
   }
 
   /** The canvas as a PNG, for the render pipeline and for thumbnails. */
+  /** The doors and windows as the editor has them now, for the browser tests. */
+  openingsNow(): RoomOpening[] {
+    return this.openings
+  }
+
+  /**
+   * Where a point on a wall is on the screen, in CSS pixels: `alongMm` along the wall's own
+   * axis, `heightMm` above the floor. For the browser tests, which have to take hold of a
+   * door somewhere and let go of it somewhere else.
+   */
+  wallScreenPoint(wall: WallName, alongMm: number, heightMm: number): { x: number, y: number } | null {
+    const point = wall === 'north'
+      ? { x: alongMm, y: heightMm, z: 0 }
+      : wall === 'south'
+        ? { x: alongMm, y: heightMm, z: this.geometry.length_mm }
+        : wall === 'west'
+          ? { x: 0, y: heightMm, z: alongMm }
+          : { x: this.geometry.width_mm, y: heightMm, z: alongMm }
+
+    return this.scene.projectToScreen(point)
+  }
+
+  /** Where an opening's middle is on the screen, or null when it cannot be placed. */
+  openingScreenPoint(id: string): { x: number, y: number } | null {
+    const opening = this.openings.find(candidate => candidate.id === id)
+
+    if (opening === undefined || opening.wall === null || opening.offset_mm === null || opening.width_mm === null) {
+      return null
+    }
+
+    const height = (opening.sill_height_mm ?? 0) + (opening.height_mm ?? 2_000) / 2
+
+    return this.wallScreenPoint(opening.wall, opening.offset_mm + opening.width_mm / 2, height)
+  }
+
   snapshot(): string {
     return this.scene.snapshot()
   }

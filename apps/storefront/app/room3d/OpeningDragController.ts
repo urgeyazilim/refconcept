@@ -158,11 +158,37 @@ export class OpeningDragController {
     this.raycaster.setFromCamera(this.pointer, this.delegate.camera())
   }
 
+  /**
+   * Whether a hit is on something the customer can see.
+   *
+   * The walls between the camera and the room are hidden so the room can be looked into,
+   * but a hidden wall still stops a ray: without this, every press landed on the invisible
+   * near wall and no door could be picked up, and every drag put the door on the wall
+   * nearest the camera rather than the one under the pointer.
+   */
+  private static visible(object: Object3D): boolean {
+    let current: Object3D | null = object
+
+    while (current !== null) {
+      if (!current.visible) {
+        return false
+      }
+
+      current = current.parent
+    }
+
+    return true
+  }
+
   /** The opening whose casing, leaf or glass is under the pointer. */
   private openingUnder(event: PointerEvent): RoomOpening | undefined {
     this.aim(event)
 
     for (const hit of this.raycaster.intersectObjects(this.delegate.roomObjects(), true)) {
+      if (!OpeningDragController.visible(hit.object)) {
+        continue
+      }
+
       let object: Object3D | null = hit.object
 
       while (object !== null) {
@@ -194,6 +220,10 @@ export class OpeningDragController {
     this.aim(event)
 
     for (const hit of this.raycaster.intersectObjects(this.delegate.walls(), true)) {
+      if (!OpeningDragController.visible(hit.object)) {
+        continue
+      }
+
       let object: Object3D | null = hit.object
 
       while (object !== null) {

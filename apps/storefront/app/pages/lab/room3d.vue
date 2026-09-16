@@ -134,7 +134,14 @@ function onSave(next: LayoutItem[]): void {
         </p>
       </header>
 
-      <Room3DScene :geometry="geometry" :openings="openings" :items="items" editable @save="onSave" />
+      <Room3DScene
+        :geometry="geometry"
+        :openings="openings"
+        :items="items"
+        editable
+        @save="onSave"
+        @move-opening="(id, offset, wall) => { openings = openings.map(opening => (opening.id === id ? { ...opening, offset_mm: offset, wall } : opening)) }"
+      />
 
       <p class="rounded-sm bg-surface p-3 text-xs text-muted">
         Son kaydedilecek yerleşim: {{ saved }}
