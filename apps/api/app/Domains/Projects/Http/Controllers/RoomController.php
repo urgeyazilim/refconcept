@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Domains\Projects\Http\Controllers;
 
+use App\Domains\Ai\Enums\AiJobStatus;
+use App\Domains\Ai\Enums\AiTask;
+use App\Domains\Ai\Models\AiJob;
 use App\Domains\Catalog\Enums\RoomType;
 use App\Domains\Projects\Enums\ConstraintType;
 use App\Domains\Projects\Enums\MeasurementQuality;
@@ -314,7 +317,36 @@ final class RoomController
              * boxes drawn on the photograph belong to the plan screen; this is the summary.
              */
             'analysis' => $this->analysis($room),
+            /*
+             * Why the last reading did not happen, when it did not. A reading that failed
+             * leaves the room with no analysis and the screen with nothing to say; the job
+             * knows, and the customer is owed the sentence.
+             */
+            'analysis_failure' => $this->analysisFailure($room),
         ];
+    }
+
+    private function analysisFailure(Room $room): ?string
+    {
+        $job = AiJob::query()
+            ->where('task', AiTask::RoomAnalysis->value)
+            ->where('subject_type', $room->getMorphClass())
+            ->where('subject_id', $room->getKey())
+            ->orderByDesc('created_at')
+            ->first();
+
+        if ($job === null || $job->status !== AiJobStatus::Failed) {
+            return null;
+        }
+
+        $current = RoomAnalysis::query()->where('room_id', $room->getKey())->current()->first();
+
+        // A failure older than the reading the room has is history, not news.
+        if ($current !== null && $current->created_at !== null && $job->created_at !== null && $job->created_at->lt($current->created_at)) {
+            return null;
+        }
+
+        return $job->failure_kind?->label() ?? 'Fotoğraflar okunamadı.';
     }
 
     /**

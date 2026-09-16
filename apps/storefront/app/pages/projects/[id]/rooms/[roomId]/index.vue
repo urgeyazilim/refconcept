@@ -270,7 +270,9 @@ async function analyse(force = false) {
 
     const now = room.value?.analysis
 
-    if ((now !== null && now !== undefined && now.id !== before && !now.is_stale) || Date.now() - analysingSince > 180_000) {
+    const failed = room.value?.analysis_failure !== null && room.value?.analysis_failure !== undefined && (now === null || now === undefined || now.id === before)
+
+    if ((now !== null && now !== undefined && now.id !== before && !now.is_stale) || failed || Date.now() - analysingSince > 180_000) {
       stopWatchingAnalysis()
     }
   }, 4_000)
@@ -435,6 +437,7 @@ onBeforeUnmount(stopWatchingAnalysis)
             <p class="mt-1.5 max-w-[62ch] text-sm leading-relaxed text-ink-secondary">
               <template v-if="!hasPhoto">Fotoğraf yüklendiğinde oda otomatik olarak okunur.</template>
               <template v-else-if="analysing">Fotoğraflar okunuyor; yaklaşık bir dakika sürer, sayfada kalabilirsiniz.</template>
+              <template v-else-if="room.analysis === null && room.analysis_failure !== null">Son okuma tamamlanamadı: {{ room.analysis_failure }}. Yeniden deneyebilirsiniz.</template>
               <template v-else-if="room.analysis === null">Fotoğraflar yüklendikten kısa süre sonra okunur. Beklemek istemezseniz şimdi başlatın.</template>
               <template v-else-if="room.analysis.is_stale">Fotoğraflar değişti; okuma {{ room.analysis.photo_count }} fotoğraf üzerinden yapılmıştı. Yeniden okutabilirsiniz.</template>
               <template v-else>{{ room.analysis.photo_count }} fotoğraf tek oda olarak okundu. Ölçüler ve açıklıklar plan ekranında onayınızı bekler.</template>

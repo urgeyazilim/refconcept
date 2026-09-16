@@ -570,9 +570,10 @@ final class AiGatewaySeeder extends Seeder
                 'temperature_bps' => 2000,
                 'description' => 'Oda fotoğrafını yapısal bir tanıma çevirir.',
                 'prompt' => [
-                    'system' => 'Sen bir iç mimarlık asistanısın. Sana verilen oda fotoğrafını incele ve '
+                    'system' => 'Sen bir iç mimarlık asistanısın. Sana verilen oda fotoğraflarını incele ve '
                         .'yalnızca istenen JSON yapısında yanıt ver. Tahmin ettiğin ölçüleri kesinmiş gibi '
-                        .'sunma; emin olmadığın alanları warnings içinde belirt.',
+                        .'sunma; emin olmadığın alanları warnings içinde belirt. label, warnings ve serbest '
+                        .'metinleri Türkçe yaz; type alanları İngilizce anahtar olarak kalsın.',
                     'template' => "Oda türü ipucu: {{ room_type }}\n"
                         ."Kullanıcı notu: {{ notes }}\n"
                         ."Bildirilen ölçüler (mm): {{ dimensions }}\n"
@@ -581,6 +582,12 @@ final class AiGatewaySeeder extends Seeder
                         .'eşyaları ve yüzeyleri çıkar. Birden çok fotoğraf varsa aynı odanın farklı '
                         .'köşelerinden çekilmiştir: her öğeyi bir kez say, hangi duvarda olduğunu '
                         .'ana fotoğrafa göre ver.',
+                    /*
+                     * Every array says what it holds and every object what it has. Google
+                     * enforces the schema it is given and drops what it cannot express, so
+                     * a bare `array` here was a field the model was never asked for — and
+                     * then refused for not answering.
+                     */
                     'schema' => [
                         'required' => ['room_type', 'fixed_elements', 'surfaces'],
                         'properties' => [
@@ -588,11 +595,41 @@ final class AiGatewaySeeder extends Seeder
                             'confidence' => ['type' => 'number'],
                             'style' => ['type' => 'array', 'items' => ['type' => 'string']],
                             'dominant_colors' => ['type' => 'array', 'items' => ['type' => 'string']],
-                            'fixed_elements' => ['type' => 'array'],
-                            'movable_objects' => ['type' => 'array'],
-                            'surfaces' => ['type' => 'object'],
+                            'fixed_elements' => [
+                                'type' => 'array',
+                                'items' => [
+                                    'type' => 'object',
+                                    'properties' => [
+                                        'type' => ['type' => 'string'],
+                                        'label' => ['type' => 'string'],
+                                        'wall' => ['type' => 'string'],
+                                        'preserve' => ['type' => 'boolean'],
+                                        'photo_index' => ['type' => 'integer'],
+                                    ],
+                                ],
+                            ],
+                            'movable_objects' => [
+                                'type' => 'array',
+                                'items' => [
+                                    'type' => 'object',
+                                    'properties' => [
+                                        'type' => ['type' => 'string'],
+                                        'label' => ['type' => 'string'],
+                                        'condition' => ['type' => 'string'],
+                                        'photo_index' => ['type' => 'integer'],
+                                    ],
+                                ],
+                            ],
+                            'surfaces' => [
+                                'type' => 'object',
+                                'properties' => [
+                                    'floor' => ['type' => 'object', 'properties' => ['material' => ['type' => 'string'], 'color' => ['type' => 'string'], 'change_allowed' => ['type' => 'boolean']]],
+                                    'walls' => ['type' => 'object', 'properties' => ['material' => ['type' => 'string'], 'color' => ['type' => 'string'], 'change_allowed' => ['type' => 'boolean']]],
+                                    'ceiling' => ['type' => 'object', 'properties' => ['material' => ['type' => 'string'], 'color' => ['type' => 'string'], 'change_allowed' => ['type' => 'boolean']]],
+                                ],
+                            ],
                             'measurement_quality' => ['type' => 'string'],
-                            'warnings' => ['type' => 'array'],
+                            'warnings' => ['type' => 'array', 'items' => ['type' => 'string']],
                         ],
                     ],
                 ],

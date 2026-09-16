@@ -382,4 +382,38 @@ describe('structured output schemas', function (): void {
                 && ! array_key_exists('responseSchema', $config);
         });
     });
+
+    /*
+     * Worse than a broken schema is a reduced one. `fixed_elements: array` cannot be told
+     * to Google without an item type, so it was dropped from the schema — and a model held
+     * to what remained left the field out, exactly as told, and was then refused by the
+     * validator for lacking it. After three such refusals the simulator answered a real
+     * customer's room. A schema missing one of its own required fields is not sent at all.
+     */
+    it('sends no schema at all when a required field could not be translated', function (): void {
+        Http::fake(['*' => Http::response(['candidates' => [[
+            'content' => ['parts' => [['text' => '{"room_type":"living_room","fixed_elements":[]}']]],
+            'finishReason' => 'STOP',
+        ]]], 200)]);
+
+        app(GoogleAiProvider::class)->execute(callFor(
+            $this->provider,
+            AiModality::Text,
+            AiTask::DesignPlan,
+            [
+                'required' => ['room_type', 'fixed_elements'],
+                'properties' => [
+                    'room_type' => ['type' => 'string'],
+                    'fixed_elements' => ['type' => 'array'],
+                ],
+            ],
+        ));
+
+        Http::assertSent(function (Request $request) {
+            $config = $request->data()['generationConfig'] ?? [];
+
+            return ($config['responseMimeType'] ?? null) === 'application/json'
+                && ! array_key_exists('responseSchema', $config);
+        });
+    });
 });

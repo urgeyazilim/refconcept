@@ -624,6 +624,8 @@ export interface RoomDetail {
   constraints: RoomConstraintItem[]
   /** What the reading of the photographs found; null until the room has been read. */
   analysis: RoomAnalysisSummary | null
+  /** Why the last reading failed, when it did and nothing newer succeeded. */
+  analysis_failure: string | null
 }
 
 export interface RoomAnalysisSummary {

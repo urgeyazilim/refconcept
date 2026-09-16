@@ -459,7 +459,26 @@ final class GoogleAiProvider implements AiProvider
 
         $translated = $this->translateSchema($schema, 'object');
 
-        return $translated === null || ($translated['properties'] ?? []) === [] ? null : $translated;
+        if ($translated === null || ($translated['properties'] ?? []) === []) {
+            return null;
+        }
+
+        /*
+         * A schema Google would enforce with a required field missing is worse than no
+         * schema at all. The translation drops what it cannot express — an array with no
+         * item type, an object with no properties — and a model held to the reduced schema
+         * leaves those fields out, exactly as told; the validator then rejects every answer
+         * for lacking them, and after three attempts the fallback answers instead. A room
+         * was read by the simulator that way. With no schema the model still returns JSON
+         * and is free to answer the whole prompt.
+         */
+        foreach ((array) ($schema['required'] ?? []) as $key) {
+            if (is_string($key) && isset($schema['properties'][$key]) && ! isset($translated['properties'][$key])) {
+                return null;
+            }
+        }
+
+        return $translated;
     }
 
     /**

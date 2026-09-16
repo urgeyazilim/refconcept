@@ -133,6 +133,21 @@ const plateOf = (photo: RoomMediaItem): RoomMediaItem | undefined =>
 /** The photograph a design is made from — the one whose plate matters. */
 const primary = computed(() => props.media.find(item => item.is_primary && item.type === 'photo') ?? tiles.value.find(item => item.type === 'photo'))
 
+/**
+ * Every photograph that has been emptied, the primary first.
+ *
+ * All of them, not only the primary: a customer who emptied the second corner and then made
+ * another picture the primary one could not find the plate they had paid a minute for — it
+ * existed and was shown nowhere.
+ */
+const emptied = computed(() =>
+  tiles.value
+    .filter(item => item.type === 'photo' && plateOf(item) !== undefined)
+    .sort((a, b) => Number(b.id === primary.value?.id) - Number(a.id === primary.value?.id)),
+)
+
+const photoNumber = (item: RoomMediaItem): number => tiles.value.filter(tile => tile.type === 'photo').findIndex(tile => tile.id === item.id) + 1
+
 /** Which photograph is being emptied right now, while the queue works on it. */
 const clearing = ref<string | null>(null)
 let clearingTimer: ReturnType<typeof setInterval> | null = null
@@ -292,28 +307,47 @@ onBeforeUnmount(() => {
           @click="clear(primary)"
         >
           <span v-if="clearing === primary.id">Eşyalar kaldırılıyor…</span>
-          <span v-else>Eşyaları kaldır</span>
-        </button>
-        <button
-          v-else-if="canEdit && plateOf(primary)"
-          type="button"
-          class="rounded-sm border border-line px-3 py-1.5 text-xs text-ink-secondary hover:bg-bg-muted disabled:opacity-40"
-          :disabled="busyId !== null"
-          @click="remove(plateOf(primary)!)"
-        >
-          Boş odayı kaldır
+          <span v-else>Ana fotoğrafın eşyalarını kaldır</span>
         </button>
       </div>
 
-      <RoomPlateCompare
-        v-if="plateOf(primary) && links[primary.id] && links[plateOf(primary)!.id]"
-        class="mt-4"
-        :before="links[primary.id]!"
-        :after="links[plateOf(primary)!.id]!"
-      />
-      <p v-else-if="clearing === primary.id" class="mt-3 text-xs text-muted">
+      <!--
+        The primary photograph has no plate but another one does: said plainly, with the two
+        ways out, because a render made from the furnished photograph when an emptied one is
+        sitting right there is the kind of surprise nobody forgives.
+      -->
+      <RcAlert v-if="!plateOf(primary) && emptied.length > 0" tone="warning" class="mt-4">
+        Ana fotoğrafın boş hâli henüz yok; render dolu fotoğraftan yapılır. Ana fotoğrafın
+        eşyalarını kaldırın ya da boşaltılmış fotoğrafı "Bunu kullan" ile ana fotoğraf yapın.
+      </RcAlert>
+
+      <p v-if="clearing !== null" class="mt-3 text-xs text-muted">
         Yaklaşık bir dakika sürer; bu sırada sayfada kalabilirsiniz.
       </p>
+
+      <div v-for="photo in emptied" :key="photo.id" class="mt-4">
+        <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <p class="text-xs text-ink-secondary">
+            Fotoğraf {{ photoNumber(photo) }}
+            <span v-if="photo.id === primary.id" class="ml-1 rounded-pill bg-charcoal px-2 py-0.5 text-[10px] text-white">Render bundan başlar</span>
+          </p>
+          <button
+            v-if="canEdit"
+            type="button"
+            class="rounded-sm border border-line px-2.5 py-1 text-[11px] text-ink-secondary hover:bg-bg-muted disabled:opacity-40"
+            :disabled="busyId !== null"
+            @click="remove(plateOf(photo)!)"
+          >
+            Boş odayı kaldır
+          </button>
+        </div>
+
+        <RoomPlateCompare
+          v-if="links[photo.id] && links[plateOf(photo)!.id]"
+          :before="links[photo.id]!"
+          :after="links[plateOf(photo)!.id]!"
+        />
+      </div>
     </div>
 
     <div v-if="canEdit" class="mt-6">

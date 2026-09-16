@@ -119,10 +119,24 @@ class AiTaskRoute extends Model
     {
         $this->loadMissing(['primaryModel.provider', 'fallbackModel.provider']);
 
-        return array_values(array_filter(
+        $models = array_values(array_filter(
             [$this->primaryModel, $this->fallbackModel],
             static fn (?AiModel $model): bool => $model !== null && $model->isUsable(),
         ));
+
+        /*
+         * The simulator stands in for a model that cannot be reached, never for one that
+         * answered badly. A route whose real primary is usable and whose fallback is the
+         * local simulator is a development convenience — no key, no bill, something on the
+         * screen — and it must not become the answer a customer gets when the real model
+         * fails three times: a room was "read" that way and got the simulator's stock
+         * sofa, window and radiator, presented as its own.
+         */
+        if (count($models) === 2 && $models[0]->provider?->driver !== 'fake' && $models[1]->provider?->driver === 'fake') {
+            return [$models[0]];
+        }
+
+        return $models;
     }
 
     /** @param  Builder<$this>  $query */

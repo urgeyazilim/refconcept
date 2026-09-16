@@ -31,6 +31,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   expected price and the ceiling before it queues anything, and saying plainly when the
   task is still routed to the simulator.
 
+### Fixed — a real room was "read" by the simulator
+
+- **The simulator can no longer answer for a real model that failed.** A route whose
+  primary is real and whose fallback is the local simulator is a development convenience;
+  when Gemini failed three times on the owner's living room, the simulator answered with its
+  stock sofa, window and radiator, and the room screen presented them as the customer's own.
+  `AiTaskRoute::candidateModels()` now drops a simulator fallback behind a real primary, so
+  the job fails and the room says so (`analysis_failure`) instead.
+- **Why Gemini failed: a schema it could not be given.** `fixed_elements: array` and
+  `surfaces: object` had no item type or properties, so the Google adapter dropped them from
+  the enforced schema — and the model, held to what remained, left them out exactly as told;
+  the validator then refused every answer for lacking the fields it was never asked for.
+  Prompt v5 (migration 000052) types every array and object, and the adapter now sends no
+  schema at all rather than one missing a required field.
+- **Every emptied photograph is shown**, not only the primary's: a customer who emptied one
+  corner and then made another picture the primary had a plate that existed and appeared
+  nowhere. The card also says when the primary photograph itself has no plate yet.
+
 ### Added — Oda Stüdyosu: every photograph is read, and the reading is a step of its own
 
 - **All of a room's photographs go to the analysis as one room** (primary first, up to six),

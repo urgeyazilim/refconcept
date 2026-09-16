@@ -8,6 +8,8 @@ use App\Domains\Ai\Enums\AiJobStatus;
 use App\Domains\Ai\Enums\AiTask;
 use App\Domains\Ai\Models\AiCostRate;
 use App\Domains\Ai\Models\AiFailure;
+use App\Domains\Ai\Models\AiModel;
+use App\Domains\Ai\Models\AiProvider as AiProviderModel;
 use App\Domains\Ai\Models\AiRequest;
 use App\Domains\Ai\Models\AiUsage;
 use App\Domains\Ai\Models\PromptTemplate;
@@ -419,3 +421,37 @@ function publishPrompt(
 
     return $version;
 }
+
+it('never lets the simulator answer for a real model that failed', function (): void {
+    [$route] = makeAiRoute(AiTask::SupportAssist, ['max_attempts' => 1], withFallback: true);
+
+    // Two simulator models: a development route with no key on file. Both may answer.
+    expect($route->fresh()?->candidateModels())->toHaveCount(2);
+
+    $google = AiProviderModel::query()->create(['code' => 'google-test', 'name' => 'Google', 'driver' => 'google', 'is_active' => true]);
+    $google->credentials()->create(['label' => 'test', 'secret_encrypted' => 'g-0000000000', 'secret_hint' => '0000', 'is_active' => true]);
+
+    $real = AiModel::query()->create([
+        'provider_id' => $google->getKey(),
+        'code' => 'gemini-test',
+        'name' => 'Gemini test',
+        'modality' => AiTask::SupportAssist->modality(),
+        'max_output_tokens' => 1_000,
+        'supports_structured_output' => true,
+        'supports_image_input' => true,
+        'is_active' => true,
+    ]);
+
+    $route->forceFill(['primary_model_id' => $real->getKey()])->save();
+
+    /*
+     * A real primary with the simulator as its fallback is a development convenience, not
+     * a route. When the real model fails three times the customer must get a failure, not
+     * the simulator's stock answer presented as a reading of their own room — which is
+     * what happened, once, to a real living room.
+     */
+    $models = $route->fresh()?->candidateModels() ?? [];
+
+    expect($models)->toHaveCount(1)
+        ->and($models[0]->getKey())->toBe($real->getKey());
+});
