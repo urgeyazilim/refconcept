@@ -5,6 +5,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed — The plan is a workspace, not a page
+
+- **The room fills the window.** The plan screen stacked the stepper, a title, a banner, the
+  scene, the selection panel, the product list, the openings and the catalogue one under the
+  other; the product owner's verdict was a screen full of empty space and a mouse wheel that
+  never stopped. Now the room is as tall as the window allows and everything that acts on it
+  stands in one scrolling column beside it: "Tasarıma göre yerleştir" first, then the
+  selection, the products and the total, the doors and windows, the catalogue. The page
+  itself does not scroll. It also leaves the account layout's sidebar behind and uses the
+  wide container, which is a third more room for the room.
+- **The scene watches its own box.** A `ResizeObserver` on the canvas, since a column
+  appearing or a page giving a different height never fires a window resize; and when the
+  box changes shape the room is refitted once, so a wide box does not cut the ceiling and a
+  tall one does not leave the room small in the middle.
+- `Room3DScene` has a `workspace` prop and `side-start` / `side` slots for the column.
+
 ### Fixed — The browser suite was quietly billing the real providers
 
 - **Readings fired after the routing was restored.** A photograph uploaded by a test queues

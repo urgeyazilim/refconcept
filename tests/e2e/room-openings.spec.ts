@@ -72,8 +72,9 @@ test.describe('room openings', () => {
 
     await page.mouse.move(from.x, from.y)
     await page.mouse.down()
-    await page.mouse.move(from.x + 80, from.y, { steps: 10 })
-    await page.mouse.move(from.x + 160, from.y, { steps: 10 })
+    // Half the box is the plan, so a hundred pixels is about a metre; enough to be seen, short of the corner.
+    await page.mouse.move(from.x + 50, from.y, { steps: 10 })
+    await page.mouse.move(from.x + 100, from.y, { steps: 10 })
     await page.mouse.up()
 
     // The list says where it went, and so does the room itself.
@@ -89,7 +90,8 @@ test.describe('room openings', () => {
 
     // --- wider, by its end -----------------------------------------------------------
     const handle = await page.evaluate(() => {
-      const circles = document.querySelectorAll('svg circle')
+      // The handles only: the default layout's footer has icons with circles of their own.
+      const circles = document.querySelectorAll('svg circle.cursor-ew-resize')
       const rect = circles[circles.length - 1]!.getBoundingClientRect()
 
       return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }

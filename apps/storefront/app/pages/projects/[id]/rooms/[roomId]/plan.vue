@@ -15,7 +15,7 @@
 import { type DoorSwing, type OpeningKind, describeKind, hasSwing, hingeIsLeft, kindsFor, opensIn, otherJamb, otherWay, swingOf, variantOf } from '~/room3d/openings'
 import type { LayoutItem, RoomGeometry, RoomOpening, WallName } from '~/room3d/types'
 
-definePageMeta({ middleware: ['auth', 'verified'], layout: 'account' })
+definePageMeta({ middleware: ['auth', 'verified'], layout: 'default' })
 
 interface GeometryVersion {
   id: string
@@ -880,20 +880,19 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-5xl space-y-6 p-6">
-    <StudioStepper :project-id="projectId" :room-id="roomId" :current="studioCurrent" :done="studioDone" />
-
-    <header class="flex items-center justify-between gap-4">
-      <div>
-        <h1 class="text-xl font-medium">
-          Oda planı
-        </h1>
-        <p class="mt-1 text-sm text-muted">
-          Ürünleri sürükleyerek yerleştirin. Mesafeler santimetre olarak yanınızda görünür.
-        </p>
-      </div>
+  <div class="rc-container rc-container--wide space-y-3 py-4">
+  <!--
+    A workspace rather than a page: the room fills the height of the window and everything
+    that acts on it stands in one column beside it. The first version stacked the stepper, a
+    title, a banner, the scene, the selection panel, the product list, the openings and the
+    catalogue one under the other, and the product owner's verdict was a screen full of empty
+    space and a mouse wheel that never stopped. Nothing here needs the page to scroll.
+  -->
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <StudioStepper :project-id="projectId" :room-id="roomId" :current="studioCurrent" :done="studioDone" class="min-w-0 flex-1" />
 
       <div class="flex items-center gap-4">
+        <h1 class="sr-only">Oda planı</h1>
         <!--
           Sharing is a property of the project, not of this screen.
 
@@ -909,7 +908,7 @@ onMounted(async () => {
           Odaya dön
         </NuxtLink>
       </div>
-    </header>
+    </div>
 
     <p v-if="loadError" class="rounded-sm bg-danger-subtle p-3 text-sm text-danger-strong">
       {{ loadError }}
@@ -1080,56 +1079,15 @@ onMounted(async () => {
 
     <template v-else>
       <!--
-        Arranging costs nothing. The design was paid for; this is arithmetic against the room
-        the customer confirmed, so it is a button rather than a purchase.
+        The room, as tall as the window allows; beside it, in one scrolling column: what is
+        selected, what is in the room and what it costs, then the doors and windows, then the
+        catalogue. Arranging costs nothing — the design was paid for; this is arithmetic
+        against the room the customer confirmed — so it is the first button in the column.
       -->
-      <div class="flex flex-wrap items-center gap-3 rounded-md border border-line bg-surface p-4">
-        <button
-          type="button"
-          class="rounded-pill bg-charcoal px-4 py-2 text-sm text-white disabled:opacity-50"
-          :disabled="composing"
-          @click="composeLayout()"
-        >
-          {{ liveItems.length === 0 ? 'Tasarıma göre yerleştir' : 'Yeniden yerleştir' }}
-        </button>
-
-        <p class="text-xs text-muted">
-          Son tasarımda seçilen ürünler, odanın ölçülerine göre dizilir. Sonra
-          istediğiniz gibi taşıyabilirsiniz.
-        </p>
-
-
-      </div>
-
-      <p v-if="cartNotice" class="rounded-sm bg-bg-muted p-3 text-sm text-ink-secondary">
-        {{ cartNotice }}
-        <NuxtLink to="/cart" class="ml-1 underline">
-          Sepete git
-        </NuxtLink>
-      </p>
-
-      <!-- The question the 409 exists to ask. -->
-      <div v-if="overwrite" class="rounded-md border border-line bg-warning-subtle p-4">
-        <p class="text-sm text-warning-strong">
-          Bu odada kayıtlı bir yerleşim var. Üzerine yazılsın mı?
-        </p>
-
-        <div class="mt-3 flex gap-2">
-          <button type="button" class="rounded-pill bg-charcoal px-4 py-2 text-sm text-white" @click="composeLayout(true)">
-            Evet, yeniden diz
-          </button>
-          <button type="button" class="rounded-pill border border-line px-4 py-2 text-sm" @click="overwrite = false">
-            Vazgeç
-          </button>
-        </div>
-      </div>
-
-      <p v-if="composeNotice" class="rounded-sm bg-warning-subtle p-3 text-sm text-warning-strong">
-        {{ composeNotice }}
-      </p>
-
       <Room3DScene
         ref="scene"
+        workspace
+        class="h-[calc(100vh-11.5rem)] min-h-[480px]"
         :geometry="geometry"
         :openings="openings"
         :items="items"
@@ -1166,176 +1124,226 @@ onMounted(async () => {
             Odadakileri sepete ekle
           </button>
         </template>
-      </Room3DScene>
 
-      <!--
-        Doors and windows, by hand.
-
-        The analysis reads them off the photograph; this is where they get corrected. Drag one
-        along its wall on the plan view, add the one the photograph did not show, remove the
-        "window" that turned out to be a mirror. The 3D room, the collision rules and the
-        final picture all read the same rows.
-      -->
-      <section class="rounded-md border border-line bg-surface p-4">
-        <h2 class="text-sm font-medium text-ink">
-          Kapılar ve pencereler
-        </h2>
-        <p class="mt-1 text-xs text-muted">
-          Kapıyı ya da pencereyi tutup duvar boyunca kaydır; başka bir duvara da bırakabilirsin.
-        </p>
-
-        <p v-if="openingNotice" class="mt-3 rounded-sm bg-warning-subtle p-2 text-xs text-warning-strong">
-          {{ openingNotice }}
-        </p>
-
-        <ul v-if="openings.length > 0" class="mt-3 divide-y divide-line text-sm">
-          <li v-for="opening in openings" :key="opening.id" class="py-2">
-            <div class="flex items-center justify-between gap-3">
-              <span>
-                {{ describeKind(opening) }} ·
-                {{ opening.wall ? WALL_LABELS[opening.wall] : '—' }} duvarı ·
-                {{ opening.offset_mm === null ? '?' : Math.round(opening.offset_mm / 10) }} cm'de,
-                {{ opening.width_mm === null ? '?' : Math.round(opening.width_mm / 10) }} cm geniş
-              </span>
-              <button type="button" class="text-xs text-danger hover:underline" @click="removeOpening(opening.id)">
-                Kaldır
-              </button>
-            </div>
-            <!-- The same opening as another kind: the reading said "window", the customer says "double". -->
-            <div class="mt-1.5 flex flex-wrap gap-1" role="group" :aria-label="`${describeKind(opening)} türü`">
-              <button
-                v-for="kind in kindsFor(opening.type as OpeningKind['type'])"
-                :key="kind.variant"
-                type="button"
-                class="rounded-pill border px-2 py-0.5 text-[11px] transition-colors"
-                :class="variantOf(opening) === kind.variant ? 'border-charcoal bg-charcoal text-white' : 'border-line text-ink-secondary hover:bg-bg-muted'"
-                :aria-pressed="variantOf(opening) === kind.variant"
-                @click="rekindOpening(opening.id, kind)"
-              >
-                {{ kind.label }}
-              </button>
-            </div>
-            <!-- Which jamb it hangs on and which way it opens: the quarter of floor a door needs. -->
-            <div v-if="hasSwing(opening)" class="mt-1.5 flex flex-wrap gap-1" role="group" :aria-label="`${describeKind(opening)} yönü`">
-              <button
-                v-if="variantOf(opening) !== 'double_door'"
-                type="button"
-                class="rounded-pill border border-line px-2 py-0.5 text-[11px] text-ink-secondary transition-colors hover:bg-bg-muted"
-                :title="'Menteşeyi öbür tarafa al'"
-                @click="setSwing(opening.id, otherJamb(swingOf(opening)))"
-              >
-                Menteşe {{ hingeIsLeft(opening.wall, swingOf(opening)) ? 'solda' : 'sağda' }} ⇄
-              </button>
-              <button
-                type="button"
-                class="rounded-pill border border-line px-2 py-0.5 text-[11px] text-ink-secondary transition-colors hover:bg-bg-muted"
-                :title="'Öbür yöne açılsın'"
-                @click="setSwing(opening.id, otherWay(swingOf(opening)))"
-              >
-                {{ opensIn(swingOf(opening)) ? 'İçeri açılır' : 'Dışarı açılır' }} ⇄
-              </button>
-            </div>
-          </li>
-        </ul>
-        <p v-else class="mt-3 text-xs text-muted">Bu odada kayıtlı kapı ya da pencere yok.</p>
-
-        <p class="mt-3 text-xs text-muted">Yenisini eklemek için sahnenin solundaki simgeleri kullan; sonra tutup duvara sürükle.</p>
-      </section>
-
-      <!--
-        The catalogue, in the room.
-
-        Only measured variants are offered. A plan is a promise that these things fit, and a
-        product whose size nobody recorded cannot be part of that promise — it would go in as
-        a placeholder and mean nothing. It is still in the shop, where its size is not
-        load-bearing.
-      -->
-      <section class="rounded-md border border-line bg-surface p-4">
-        <h2 class="text-sm font-medium text-ink">
-          Odaya ürün ekle
-        </h2>
-
-        <form class="mt-3 flex gap-2" @submit.prevent="findProducts(null)">
-          <input
-            v-model="search"
-            type="search"
-            placeholder="Kanepe, sehpa, kitaplık…"
-            class="w-full rounded-sm border border-line bg-surface px-3 py-2 text-sm"
-          >
-          <button
-            type="submit"
-            class="shrink-0 rounded-pill bg-charcoal px-4 py-2 text-sm text-white disabled:opacity-50"
-            :disabled="searching || search.trim().length < 2"
-          >
-            Ara
-          </button>
-        </form>
-
-        <!--
-          Browsing, for the customer who does not know what to call it yet.
-
-          A search box is a blank page to somebody furnishing a room: they know they want
-          "something for the corner", not "kitaplık". The categories come from the taxonomy
-          for this room type, so a new one appears here without a deploy.
-        -->
-        <div v-if="categories.length > 0" class="mt-3 flex flex-wrap gap-1.5">
-          <button
-            v-for="category in categories"
-            :key="category.slug"
-            type="button"
-            class="rounded-pill border px-3 py-1 text-xs transition-colors"
-            :class="activeCategory === category.slug
-              ? 'border-charcoal bg-charcoal text-white'
-              : 'border-line text-ink-secondary hover:bg-bg-muted'"
-            @click="findProducts(category.slug)"
-          >
-            {{ category.name }}
-          </button>
-        </div>
-
-        <ul v-if="candidates.length > 0" class="mt-3 grid gap-2 sm:grid-cols-2">
-          <li v-for="candidate in candidates" :key="candidate.sku_id">
+        <template #side-start>
+          <div class="space-y-2 rounded-md border border-line bg-surface p-3">
             <button
               type="button"
-              class="flex w-full items-center gap-3 rounded-sm border border-line p-2 text-left transition-colors hover:bg-bg-muted"
-              @click="addProduct(candidate)"
+              class="w-full rounded-pill bg-charcoal px-4 py-2 text-sm text-white disabled:opacity-50"
+              :disabled="composing"
+              @click="composeLayout()"
             >
-              <img
-                v-if="candidate.image_url"
-                :src="candidate.image_url"
-                alt=""
-                class="size-12 shrink-0 rounded-sm object-cover"
-              >
-
-              <span class="min-w-0">
-                <span class="block truncate text-sm text-ink">{{ candidate.name }}</span>
-                <span class="block text-xs text-muted tabular-nums">
-                  {{ Math.round((candidate.width_mm ?? 0) / 10) }} × {{ Math.round((candidate.depth_mm ?? 0) / 10) }} cm
-                  <template v-if="candidate.price"> · {{ candidate.price }}</template>
-                </span>
-              </span>
+              {{ liveItems.length === 0 ? 'Tasarıma göre yerleştir' : 'Yeniden yerleştir' }}
             </button>
-          </li>
-        </ul>
+    
+            <p class="text-xs text-muted">
+              Son tasarımda seçilen ürünler, odanın ölçülerine göre dizilir. Sonra
+              istediğiniz gibi taşıyabilirsiniz.
+            </p>
+    
+    
+          </div>
+    
+          <p v-if="cartNotice" class="rounded-sm bg-bg-muted p-3 text-sm text-ink-secondary">
+            {{ cartNotice }}
+            <NuxtLink to="/cart" class="ml-1 underline">
+              Sepete git
+            </NuxtLink>
+          </p>
+    
+          <!-- The question the 409 exists to ask. -->
+          <div v-if="overwrite" class="rounded-md border border-line bg-warning-subtle p-4">
+            <p class="text-sm text-warning-strong">
+              Bu odada kayıtlı bir yerleşim var. Üzerine yazılsın mı?
+            </p>
+    
+            <div class="mt-3 flex gap-2">
+              <button type="button" class="rounded-pill bg-charcoal px-4 py-2 text-sm text-white" @click="composeLayout(true)">
+                Evet, yeniden diz
+              </button>
+              <button type="button" class="rounded-pill border border-line px-4 py-2 text-sm" @click="overwrite = false">
+                Vazgeç
+              </button>
+            </div>
+          </div>
+    
+          <p v-if="composeNotice" class="rounded-sm bg-warning-subtle p-3 text-sm text-warning-strong">
+            {{ composeNotice }}
+          </p>
+    
+        </template>
 
-        <p v-else-if="searched && !searching" class="mt-3 text-xs text-muted">
-          Ölçüsü girilmiş ürün bulunamadı. Plana ancak ölçüsü bilinen ürünler konabilir.
-        </p>
-      </section>
-
-      <p v-if="saveError" class="rounded-sm bg-danger-subtle p-3 text-sm text-danger-strong">
-        {{ saveError }}
-      </p>
-
-      <div class="flex items-center justify-between gap-4 text-xs text-muted">
-        <p>
-          Ölçüler: {{ summary }}
-        </p>
-
-        <button type="button" class="hover:underline" @click="correcting = true; confirmed = null">
-          Ölçüleri düzelt
-        </button>
-      </div>
+        <template #side>
+          <!--
+            Doors and windows, by hand.
+    
+            The analysis reads them off the photograph; this is where they get corrected. Drag one
+            along its wall on the plan view, add the one the photograph did not show, remove the
+            "window" that turned out to be a mirror. The 3D room, the collision rules and the
+            final picture all read the same rows.
+          -->
+          <section class="rounded-md border border-line bg-surface p-4">
+            <h2 class="text-sm font-medium text-ink">
+              Kapılar ve pencereler
+            </h2>
+            <p class="mt-1 text-xs text-muted">
+              Kapıyı ya da pencereyi tutup duvar boyunca kaydır; başka bir duvara da bırakabilirsin.
+            </p>
+    
+            <p v-if="openingNotice" class="mt-3 rounded-sm bg-warning-subtle p-2 text-xs text-warning-strong">
+              {{ openingNotice }}
+            </p>
+    
+            <ul v-if="openings.length > 0" class="mt-3 divide-y divide-line text-sm">
+              <li v-for="opening in openings" :key="opening.id" class="py-2">
+                <div class="flex items-center justify-between gap-3">
+                  <span>
+                    {{ describeKind(opening) }} ·
+                    {{ opening.wall ? WALL_LABELS[opening.wall] : '—' }} duvarı ·
+                    {{ opening.offset_mm === null ? '?' : Math.round(opening.offset_mm / 10) }} cm'de,
+                    {{ opening.width_mm === null ? '?' : Math.round(opening.width_mm / 10) }} cm geniş
+                  </span>
+                  <button type="button" class="text-xs text-danger hover:underline" @click="removeOpening(opening.id)">
+                    Kaldır
+                  </button>
+                </div>
+                <!-- The same opening as another kind: the reading said "window", the customer says "double". -->
+                <div class="mt-1.5 flex flex-wrap gap-1" role="group" :aria-label="`${describeKind(opening)} türü`">
+                  <button
+                    v-for="kind in kindsFor(opening.type as OpeningKind['type'])"
+                    :key="kind.variant"
+                    type="button"
+                    class="rounded-pill border px-2 py-0.5 text-[11px] transition-colors"
+                    :class="variantOf(opening) === kind.variant ? 'border-charcoal bg-charcoal text-white' : 'border-line text-ink-secondary hover:bg-bg-muted'"
+                    :aria-pressed="variantOf(opening) === kind.variant"
+                    @click="rekindOpening(opening.id, kind)"
+                  >
+                    {{ kind.label }}
+                  </button>
+                </div>
+                <!-- Which jamb it hangs on and which way it opens: the quarter of floor a door needs. -->
+                <div v-if="hasSwing(opening)" class="mt-1.5 flex flex-wrap gap-1" role="group" :aria-label="`${describeKind(opening)} yönü`">
+                  <button
+                    v-if="variantOf(opening) !== 'double_door'"
+                    type="button"
+                    class="rounded-pill border border-line px-2 py-0.5 text-[11px] text-ink-secondary transition-colors hover:bg-bg-muted"
+                    :title="'Menteşeyi öbür tarafa al'"
+                    @click="setSwing(opening.id, otherJamb(swingOf(opening)))"
+                  >
+                    Menteşe {{ hingeIsLeft(opening.wall, swingOf(opening)) ? 'solda' : 'sağda' }} ⇄
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-pill border border-line px-2 py-0.5 text-[11px] text-ink-secondary transition-colors hover:bg-bg-muted"
+                    :title="'Öbür yöne açılsın'"
+                    @click="setSwing(opening.id, otherWay(swingOf(opening)))"
+                  >
+                    {{ opensIn(swingOf(opening)) ? 'İçeri açılır' : 'Dışarı açılır' }} ⇄
+                  </button>
+                </div>
+              </li>
+            </ul>
+            <p v-else class="mt-3 text-xs text-muted">Bu odada kayıtlı kapı ya da pencere yok.</p>
+    
+            <p class="mt-3 text-xs text-muted">Yenisini eklemek için sahnenin solundaki simgeleri kullan; sonra tutup duvara sürükle.</p>
+          </section>
+    
+          <!--
+            The catalogue, in the room.
+    
+            Only measured variants are offered. A plan is a promise that these things fit, and a
+            product whose size nobody recorded cannot be part of that promise — it would go in as
+            a placeholder and mean nothing. It is still in the shop, where its size is not
+            load-bearing.
+          -->
+          <section class="rounded-md border border-line bg-surface p-4">
+            <h2 class="text-sm font-medium text-ink">
+              Odaya ürün ekle
+            </h2>
+    
+            <form class="mt-3 flex gap-2" @submit.prevent="findProducts(null)">
+              <input
+                v-model="search"
+                type="search"
+                placeholder="Kanepe, sehpa, kitaplık…"
+                class="w-full rounded-sm border border-line bg-surface px-3 py-2 text-sm"
+              >
+              <button
+                type="submit"
+                class="shrink-0 rounded-pill bg-charcoal px-4 py-2 text-sm text-white disabled:opacity-50"
+                :disabled="searching || search.trim().length < 2"
+              >
+                Ara
+              </button>
+            </form>
+    
+            <!--
+              Browsing, for the customer who does not know what to call it yet.
+    
+              A search box is a blank page to somebody furnishing a room: they know they want
+              "something for the corner", not "kitaplık". The categories come from the taxonomy
+              for this room type, so a new one appears here without a deploy.
+            -->
+            <div v-if="categories.length > 0" class="mt-3 flex flex-wrap gap-1.5">
+              <button
+                v-for="category in categories"
+                :key="category.slug"
+                type="button"
+                class="rounded-pill border px-3 py-1 text-xs transition-colors"
+                :class="activeCategory === category.slug
+                  ? 'border-charcoal bg-charcoal text-white'
+                  : 'border-line text-ink-secondary hover:bg-bg-muted'"
+                @click="findProducts(category.slug)"
+              >
+                {{ category.name }}
+              </button>
+            </div>
+    
+            <ul v-if="candidates.length > 0" class="mt-3 grid gap-2 sm:grid-cols-2">
+              <li v-for="candidate in candidates" :key="candidate.sku_id">
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-3 rounded-sm border border-line p-2 text-left transition-colors hover:bg-bg-muted"
+                  @click="addProduct(candidate)"
+                >
+                  <img
+                    v-if="candidate.image_url"
+                    :src="candidate.image_url"
+                    alt=""
+                    class="size-12 shrink-0 rounded-sm object-cover"
+                  >
+    
+                  <span class="min-w-0">
+                    <span class="block truncate text-sm text-ink">{{ candidate.name }}</span>
+                    <span class="block text-xs text-muted tabular-nums">
+                      {{ Math.round((candidate.width_mm ?? 0) / 10) }} × {{ Math.round((candidate.depth_mm ?? 0) / 10) }} cm
+                      <template v-if="candidate.price"> · {{ candidate.price }}</template>
+                    </span>
+                  </span>
+                </button>
+              </li>
+            </ul>
+    
+            <p v-else-if="searched && !searching" class="mt-3 text-xs text-muted">
+              Ölçüsü girilmiş ürün bulunamadı. Plana ancak ölçüsü bilinen ürünler konabilir.
+            </p>
+          </section>
+    
+          <p v-if="saveError" class="rounded-sm bg-danger-subtle p-3 text-sm text-danger-strong">
+            {{ saveError }}
+          </p>
+    
+          <div class="flex items-center justify-between gap-4 text-xs text-muted">
+            <p>
+              Ölçüler: {{ summary }}
+            </p>
+    
+            <button type="button" class="hover:underline" @click="correcting = true; confirmed = null">
+              Ölçüleri düzelt
+            </button>
+          </div>
+        </template>
+      </Room3DScene>
     </template>
   </div>
 </template>

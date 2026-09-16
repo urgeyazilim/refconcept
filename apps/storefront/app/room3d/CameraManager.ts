@@ -416,8 +416,23 @@ export class CameraManager {
      * both filled rather than one being a speck and the other cropped.
      */
     const reach = Math.max(width, length) * 1.5
+    const from = new Vector3(width / 2 + reach * 0.7, height * 1.6, length / 2 + reach * 0.8)
 
-    this.perspective.position.set(width / 2 + reach * 0.7, height * 1.6, length / 2 + reach * 0.8)
+    /*
+     * The same viewpoint, at whatever distance shows the whole room in this canvas. The
+     * distance used to be fixed by the room alone, which filled a 4:3 box and cut the near
+     * edge of the floor in a wide one — the plan workspace is as tall as the window and
+     * rarely 4:3. The room's bounding sphere is fitted into the narrower of the two fields
+     * of view, so a wide box shows the room with air at the sides and a tall one with air
+     * above, and the floor is in the picture either way.
+     */
+    const radius = Math.sqrt(width * width + length * length + height * height) / 2
+    const vertical = (this.perspective.fov * Math.PI) / 360
+    const horizontal = Math.atan(Math.tan(vertical) * Math.max(this.perspective.aspect, 0.1))
+    const distance = (radius * 0.95) / Math.sin(Math.min(vertical, horizontal))
+    const direction = from.clone().sub(this.target).normalize()
+
+    this.perspective.position.copy(this.target).addScaledVector(direction, Math.max(distance, radius * 1.2))
 
     this.controls.object = this.perspective
     this.controls.enableRotate = true

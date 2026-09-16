@@ -84,6 +84,11 @@ export class SceneManager {
 
   private readonly resize: () => void
 
+  private observer: ResizeObserver | null = null
+
+  /** The last aspect the cameras were told, so a change of box refits the room once. */
+  private aspect = 0
+
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.renderer = new WebGLRenderer({
       canvas,
@@ -116,6 +121,16 @@ export class SceneManager {
 
     this.resize = () => this.handleResize()
     window.addEventListener('resize', this.resize)
+
+    /*
+     * The box the canvas sits in changes size without the window doing so — a side column
+     * appearing, a workspace filling whatever height the page gives it — and a window
+     * `resize` event never fires for that. The observer sees the box itself.
+     */
+    if (typeof ResizeObserver !== 'undefined') {
+      this.observer = new ResizeObserver(() => this.handleResize())
+      this.observer.observe(this.canvas)
+    }
 
     this.handleResize()
     this.start()
@@ -417,6 +432,8 @@ export class SceneManager {
     }
 
     window.removeEventListener('resize', this.resize)
+    this.observer?.disconnect()
+    this.observer = null
 
     if (this.room !== null) {
       this.rooms.dispose(this.room)
@@ -521,7 +538,17 @@ export class SceneManager {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.setSize(clientWidth, clientHeight, false)
 
-    this.cameras.setAspect(clientWidth / clientHeight)
+    const aspect = clientWidth / clientHeight
+
+    this.cameras.setAspect(aspect)
+
+    // A box of a different shape shows a different amount of room: a wide one cuts the
+    // ceiling, a tall one leaves the room small in the middle. Refit it, once per change.
+    if (this.aspect !== 0 && Math.abs(aspect - this.aspect) > 0.01) {
+      this.cameras.reframe()
+    }
+
+    this.aspect = aspect
     this.invalidate()
   }
 }

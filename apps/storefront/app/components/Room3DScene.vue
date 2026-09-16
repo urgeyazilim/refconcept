@@ -28,9 +28,16 @@ const props = withDefaults(defineProps<{
   items?: LayoutItem[]
   /** Read-only shows the room and the furniture and lets nobody move anything. */
   editable?: boolean
+  /**
+   * Fill the height given by the parent, with the panels in one scrolling column beside the
+   * room rather than under it. For a page that is a workspace; the lab and the design page
+   * keep the room above its panels.
+   */
+  workspace?: boolean
 }>(), {
   items: () => [],
   editable: false,
+  workspace: false,
 })
 
 /**
@@ -299,8 +306,9 @@ defineExpose({
 </script>
 
 <template>
-  <div class="space-y-3">
-    <div class="relative aspect-[4/3] w-full overflow-hidden rounded-md bg-bg-muted">
+  <div :class="workspace ? 'grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px] lg:grid-rows-[minmax(0,1fr)]' : 'space-y-3'">
+    <!-- Workspace: the page gives the height; one explicit row of that height, or the taller column would stretch the row and the room with it. -->
+    <div class="relative overflow-hidden rounded-md bg-bg-muted" :class="workspace ? 'h-full min-h-0' : 'aspect-[4/3] w-full'">
       <!--
         `block` because a canvas is inline by default, which leaves a few pixels of line-height
         underneath it and a scrollbar that appears at some window sizes and not others.
@@ -326,14 +334,16 @@ defineExpose({
       -->
       <p
         v-else-if="display === '3d' && editable && selected === null"
-        class="pointer-events-none absolute bottom-3 left-3 max-w-[46ch] rounded-pill bg-charcoal/80 px-3 py-1 text-[11px] leading-relaxed text-white"
+        class="pointer-events-none absolute bottom-3 left-1/2 max-w-[46ch] -translate-x-1/2 rounded-pill bg-charcoal/80 px-3 py-1 text-center text-[11px] leading-relaxed text-white"
       >
-        <template v-if="state.items.length === 0">Odan boş. Aşağıdan ürün ekle ya da "Tasarıma göre yerleştir" de; kapıyı ve pencereyi tutup duvara sürükleyebilirsin.</template>
+        <template v-if="state.items.length === 0">Odan boş. {{ workspace ? 'Sağdan' : 'Aşağıdan' }} ürün ekle ya da "Tasarıma göre yerleştir" de; kapıyı ve pencereyi tutup duvara sürükleyebilirsin.</template>
         <template v-else>Bir ürüne tıkla: oklarla taşı, halkayla döndür. Kapı ve pencereyi tutup duvara sürükle.</template>
       </p>
 
+      <!-- Padded below the toolbars, which float over the top corners of the box. -->
       <RoomPlanSvg
         v-if="display === 'plan'"
+        class="px-4 pt-16 pb-4"
         :geometry="geometry"
         :openings="openings"
         :items="state.items"
@@ -484,7 +494,10 @@ defineExpose({
       </p>
     </div>
 
-    <div v-if="editable" class="grid gap-3 md:grid-cols-2">
+    <div v-if="editable" :class="workspace ? 'flex min-h-0 flex-col gap-3 overflow-y-auto pr-1' : 'grid gap-3 md:grid-cols-2'">
+      <!-- What the page wants done first, above the selection: arranging by the design. -->
+      <slot name="side-start" />
+
       <!-- What is selected, and everything that can be done to it. -->
       <div class="rounded-md border border-line bg-surface p-4">
         <template v-if="selected === null">
@@ -678,6 +691,9 @@ defineExpose({
           <slot name="actions" />
         </div>
       </div>
+
+      <!-- Whatever else the page wants beside the room: doors and windows, the catalogue. -->
+      <slot name="side" />
     </div>
   </div>
 </template>
