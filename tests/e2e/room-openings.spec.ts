@@ -82,6 +82,21 @@ test.describe('room openings', () => {
     expect(openings[0]!.offset_mm).toBeGreaterThan(1_825)
     expect(openings[0]!.offset_mm).toBeLessThanOrEqual(4_850 - 1_200)
 
+    // --- wider, by its end -----------------------------------------------------------
+    const handle = await page.evaluate(() => {
+      const circles = document.querySelectorAll('svg circle')
+      const rect = circles[circles.length - 1]!.getBoundingClientRect()
+
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+    })
+
+    await page.mouse.move(handle.x, handle.y)
+    await page.mouse.down()
+    await page.mouse.move(handle.x + 60, handle.y, { steps: 8 })
+    await page.mouse.up()
+
+    await expect(section.getByText(/Pencere · kuzey duvarı · \d+ cm'de, (1[3-9]\d|[2-9]\d\d) cm geniş/)).toBeVisible({ timeout: 15_000 })
+
     // --- and gone again ------------------------------------------------------------
     await section.getByRole('button', { name: 'Kaldır' }).click()
     await expect(section.getByText('Bu odada kayıtlı kapı ya da pencere yok.')).toBeVisible({ timeout: 15_000 })

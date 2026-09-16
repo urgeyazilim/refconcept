@@ -46,6 +46,8 @@ const emit = defineEmits<{
   moveOpening: [id: string, offsetMm: number, wall: WallName]
   /** A door or window was picked from the palette: put one in the room to be dragged. */
   addOpening: [type: 'door' | 'window' | 'balcony_door']
+  /** A door or window's end was dragged on the plan: this wide now, starting here. */
+  resizeOpening: [id: string, offsetMm: number, widthMm: number]
 }>()
 
 /** The palette: what a customer can put on a wall. */
@@ -317,6 +319,18 @@ defineExpose({
         Sürükleyerek etrafa bakın · W A S D ile yürüyün
       </p>
 
+      <!--
+        The guide's one line in the room (REHBER.md): what to do with the hand, said once,
+        gone the moment something is picked up. An empty room says how to fill it.
+      -->
+      <p
+        v-else-if="display === '3d' && editable && selected === null"
+        class="pointer-events-none absolute bottom-3 left-3 max-w-[46ch] rounded-pill bg-charcoal/80 px-3 py-1 text-[11px] leading-relaxed text-white"
+      >
+        <template v-if="state.items.length === 0">Odan boş. Aşağıdan ürün ekle ya da "Tasarıma göre yerleştir" de; kapıyı ve pencereyi tutup duvara sürükleyebilirsin.</template>
+        <template v-else>Bir ürüne tıkla: oklarla taşı, halkayla döndür. Kapı ve pencereyi tutup duvara sürükle.</template>
+      </p>
+
       <RoomPlanSvg
         v-if="display === 'plan'"
         :geometry="geometry"
@@ -327,6 +341,7 @@ defineExpose({
         :editable-openings="editable"
         @select="editor?.select($event)"
         @move-opening="(id, offset, wall) => emit('moveOpening', id, offset, wall)"
+        @resize-opening="(id, offset, width) => emit('resizeOpening', id, offset, width)"
       />
 
       <!--

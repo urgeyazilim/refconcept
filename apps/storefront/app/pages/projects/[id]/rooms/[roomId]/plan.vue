@@ -204,6 +204,21 @@ async function moveOpening(id: string, offsetMm: number, wall: WallName): Promis
   }
 }
 
+/** A door or window made wider or narrower by one of its ends on the plan. */
+async function resizeOpening(id: string, offsetMm: number, widthMm: number): Promise<void> {
+  const previous = openings.value
+
+  openings.value = openings.value.map(opening => (opening.id === id ? { ...opening, offset_mm: offsetMm, width_mm: widthMm } : opening))
+
+  try {
+    await api.patch(`${base}/constraints/${id}`, { offset_mm: offsetMm, width_mm: widthMm, notes: 'Sizin düzelttiğiniz.' })
+  }
+  catch (error) {
+    openings.value = previous
+    openingNotice.value = error instanceof ApiError ? error.message : 'Açıklık boyutlandırılamadı.'
+  }
+}
+
 /**
  * A door or window from the palette: put into the room at a sensible size, on a wall with
  * room for it, to be dragged where it belongs. Nobody types where a door is.
@@ -1083,6 +1098,7 @@ onMounted(async () => {
         @change="liveItems = $event"
         @move-opening="moveOpening"
         @add-opening="addOpening"
+        @resize-opening="resizeOpening"
       >
         <!--
           The end of the module, beside the total: the final picture, which spends credits and

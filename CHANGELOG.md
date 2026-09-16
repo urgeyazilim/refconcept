@@ -31,6 +31,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   expected price and the ceiling before it queues anything, and saying plainly when the
   task is still routed to the simulator.
 
+### Added — doors and windows sized by hand
+
+- On the plan, a handle at each end of a door or window makes it wider or narrower; the far
+  end stays, the end in the hand slides, nothing narrower than 40 cm and nothing past the
+  corner. Saved as the customer's own. The room says what to do when nothing is selected,
+  and what to do when it is empty.
+
 ### Changed — the room keeps a running total
 
 - Every piece in the room's list shows its photograph, its size and its price, and the list

@@ -156,9 +156,10 @@ const cm = (mm: number | null): string => (mm === null ? '' : String(Math.round(
             :states="new Map()"
             :editable-openings="canEdit"
             @move-opening="(id, offsetMm, wall) => patch(id, { offset_mm: offsetMm, wall })"
+            @resize-opening="(id, offsetMm, widthMm) => patch(id, { offset_mm: offsetMm, width_mm: widthMm })"
           />
         </div>
-        <p class="mt-2 text-center text-[11px] leading-relaxed text-muted">Kapı ya da pencereyi tutup kaydır; başka bir duvara da bırakabilirsin.</p>
+        <p class="mt-2 text-center text-[11px] leading-relaxed text-muted">Kapı ya da pencereyi tutup kaydır, başka bir duvara da bırakabilirsin; uçlarındaki noktalardan genişlet ya da daralt.</p>
       </div>
 
       <ul class="space-y-2">

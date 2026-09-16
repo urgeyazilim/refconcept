@@ -38,6 +38,8 @@ const emit = defineEmits<{
   select: [id: string | null]
   /** A door or window was dragged along its wall and let go at this offset. */
   moveOpening: [id: string, offsetMm: number, wall: WallName]
+  /** A door or window's end was dragged: it is this wide now, starting here. */
+  resizeOpening: [id: string, offsetMm: number, widthMm: number]
 }>()
 
 const svg = ref<SVGSVGElement | null>(null)
@@ -164,12 +166,105 @@ function endOpeningDrag(event: PointerEvent): void {
 
 /** An opening's offset as it is being dragged, or as it is. */
 function offsetOf(opening: RoomOpening): number | null {
+  if (resizing.value?.id === opening.id) {
+    return resizing.value.offset
+  }
+
   return dragging.value?.id === opening.id ? dragging.value.offset : opening.offset_mm
 }
 
 /** An opening's wall as it is being dragged, or as it is. */
 function wallOf(opening: RoomOpening): WallName | null {
   return dragging.value?.id === opening.id ? dragging.value.wall : opening.wall
+}
+
+/**
+ * A door or window being made wider or narrower by one of its ends.
+ *
+ * The far end stays where it is; the end in the hand slides along the wall. A door narrower
+ * than 40 cm is not a door, and nothing grows past the corner.
+ */
+const resizing = ref<{ id: string, wall: WallName, end: 'start' | 'end', startOffset: number, startWidth: number, startAlong: number, offset: number, width: number } | null>(null)
+
+const MIN_OPENING_MM = 400
+
+function startOpeningResize(event: PointerEvent, opening: RoomOpening, end: 'start' | 'end'): void {
+  if (!props.editableOpenings || opening.wall === null || opening.offset_mm === null || opening.width_mm === null) {
+    return
+  }
+
+  const point = planPoint(event)
+
+  if (point === null) {
+    return
+  }
+
+  resizing.value = {
+    id: opening.id,
+    wall: opening.wall,
+    end,
+    startOffset: opening.offset_mm,
+    startWidth: opening.width_mm,
+    startAlong: along(opening.wall, point),
+    offset: opening.offset_mm,
+    width: opening.width_mm,
+  }
+
+  svg.value?.setPointerCapture(event.pointerId)
+}
+
+function moveOpeningResize(event: PointerEvent): boolean {
+  const resize = resizing.value
+
+  if (resize === null) {
+    return false
+  }
+
+  const point = planPoint(event)
+
+  if (point === null) {
+    return true
+  }
+
+  const span = resize.wall === 'north' || resize.wall === 'south' ? props.geometry.width_mm : props.geometry.length_mm
+  const delta = along(resize.wall, point) - resize.startAlong
+  const far = resize.startOffset + resize.startWidth
+
+  if (resize.end === 'end') {
+    resize.width = Math.round(Math.max(MIN_OPENING_MM, Math.min(span - resize.startOffset, resize.startWidth + delta)) / 10) * 10
+  }
+  else {
+    const offset = Math.round(Math.max(0, Math.min(far - MIN_OPENING_MM, resize.startOffset + delta)) / 10) * 10
+    resize.offset = offset
+    resize.width = far - offset
+  }
+
+  return true
+}
+
+function endOpeningResize(event: PointerEvent): boolean {
+  const resize = resizing.value
+
+  if (resize === null) {
+    return false
+  }
+
+  resizing.value = null
+
+  if (svg.value?.hasPointerCapture(event.pointerId)) {
+    svg.value.releasePointerCapture(event.pointerId)
+  }
+
+  if (resize.offset !== resize.startOffset || resize.width !== resize.startWidth) {
+    emit('resizeOpening', resize.id, resize.offset, resize.width)
+  }
+
+  return true
+}
+
+/** An opening's width as it is being resized, or as it is. */
+function widthOf(opening: RoomOpening): number | null {
+  return resizing.value?.id === opening.id ? resizing.value.width : opening.width_mm
 }
 
 /** Room for the dimension lines and wall thickness outside the floor itself. */
@@ -232,7 +327,7 @@ function cut(
     .filter(opening => wallOf(opening) === wall && offsetOf(opening) !== null && opening.width_mm !== null)
     .map(opening => ({
       from: offsetOf(opening) ?? 0,
-      to: (offsetOf(opening) ?? 0) + (opening.width_mm ?? 0),
+      to: (offsetOf(opening) ?? 0) + (widthOf(opening) ?? 0),
     }))
     .sort((a, b) => a.from - b.from)
 
@@ -262,7 +357,7 @@ const gaps = computed<Opening[]>(() => {
 
   for (const opening of props.openings) {
     const offset = offsetOf(opening)
-    const span = opening.width_mm
+    const span = widthOf(opening)
 
     if (offset === null || span === null) {
       continue
@@ -338,9 +433,9 @@ const LABEL_MM = 150
     role="img"
     :aria-label="`Oda planı, ${(geometry.width_mm / 1000).toFixed(2)} metreye ${(geometry.length_mm / 1000).toFixed(2)} metre`"
     @click="emit('select', null)"
-    @pointermove="moveOpeningDrag"
-    @pointerup="endOpeningDrag"
-    @pointercancel="endOpeningDrag"
+    @pointermove="moveOpeningResize($event) || moveOpeningDrag($event)"
+    @pointerup="endOpeningResize($event) || endOpeningDrag($event)"
+    @pointercancel="endOpeningResize($event) || endOpeningDrag($event)"
   >
     <!-- The floor. Clicking it is how somebody deselects. -->
     <rect x="0" y="0" :width="geometry.width_mm" :height="geometry.length_mm" class="fill-surface" />
@@ -380,6 +475,13 @@ const LABEL_MM = 150
         @pointerdown.stop="startOpeningDrag($event, gap.opening)"
         @click.stop
       />
+      <!-- A handle at each end: take it to make the door or window wider or narrower. -->
+      <template v-if="editableOpenings">
+        <template v-for="gap in gaps" :key="`r${gap.opening.id}`">
+          <circle :cx="gap.x1" :cy="gap.y1" :r="WALL_MM * 0.9" class="cursor-ew-resize fill-surface stroke-accent-600" :stroke-width="WALL_MM * 0.25" @pointerdown.stop="startOpeningResize($event, gap.opening, 'start')" @click.stop />
+          <circle :cx="gap.x2" :cy="gap.y2" :r="WALL_MM * 0.9" class="cursor-ew-resize fill-surface stroke-accent-600" :stroke-width="WALL_MM * 0.25" @pointerdown.stop="startOpeningResize($event, gap.opening, 'end')" @click.stop />
+        </template>
+      </template>
     </g>
 
     <!-- Furniture. -->
