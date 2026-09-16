@@ -84,6 +84,8 @@ export interface LayoutItem {
   depth_mm: number | null
   /** A photograph. Its dominant colour is what the placeholder shape is drawn in. */
   image_url: string | null
+  /** What it costs now; null when the room has no price for it (a test fixture, an old row). */
+  price?: { amount_minor: number, currency: string, formatted: string } | null
   /** A glTF or GLB, when the catalogue has one. Most of it does not, yet. */
   model_url: string | null
   /**

@@ -109,6 +109,8 @@ function item(
     height_mm: height,
     depth_mm: depth,
     image_url: null,
+    // A price, so the lab shows the running total the way a real room does.
+    price: width === 0 ? null : { amount_minor: width * 20, currency: 'TRY', formatted: `${Math.round(width * 20 / 100).toLocaleString('tr-TR')} ₺` },
     model_url: null,
   }
 }

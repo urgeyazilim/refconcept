@@ -1043,39 +1043,7 @@ onMounted(async () => {
           istediğiniz gibi taşıyabilirsiniz.
         </p>
 
-        <!--
-          The end of the module: a plan is a list of real products at real sizes in a room
-          they have been checked against, and asking somebody to find each of them again in
-          the shop is asking them to do the work twice.
-        -->
-        <!--
-          The final image, from the plan.
 
-          The renderer is handed a picture of this room and asked to photograph it, so this
-          is the one button on the screen that spends credits — and it says so. Only offered
-          when there is a design to branch from; a button that answers with an error is worse
-          than no button.
-        -->
-        <button
-          v-if="design !== null && liveItems.length > 0"
-          type="button"
-          class="ml-auto rounded-pill border border-line px-4 py-2 text-sm hover:bg-bg-muted disabled:opacity-50"
-          :disabled="rendering"
-          @click="renderFinal"
-        >
-          Final görseli üret
-        </button>
-
-        <button
-          v-if="liveItems.length > 0"
-          type="button"
-          class="rounded-pill border border-line px-4 py-2 text-sm hover:bg-bg-muted disabled:opacity-50"
-          :class="design === null ? 'ml-auto' : ''"
-          :disabled="adding"
-          @click="addLayoutToCart"
-        >
-          Odadakileri sepete ekle
-        </button>
       </div>
 
       <p v-if="cartNotice" class="rounded-sm bg-bg-muted p-3 text-sm text-ink-secondary">
@@ -1115,7 +1083,34 @@ onMounted(async () => {
         @change="liveItems = $event"
         @move-opening="moveOpening"
         @add-opening="addOpening"
-      />
+      >
+        <!--
+          The end of the module, beside the total: the final picture, which spends credits and
+          says so, and the basket — a plan is a list of real products at real sizes in a room
+          they have been checked against, and finding each again in the shop is doing the work
+          twice.
+        -->
+        <template #actions>
+          <button
+            v-if="design !== null && liveItems.length > 0"
+            type="button"
+            class="rounded-pill bg-charcoal px-4 py-2 text-xs text-white disabled:opacity-50"
+            :disabled="rendering"
+            @click="renderFinal"
+          >
+            {{ rendering ? 'Render alınıyor…' : 'Render al' }}
+          </button>
+          <button
+            v-if="liveItems.length > 0"
+            type="button"
+            class="rounded-pill border border-line px-4 py-2 text-xs hover:bg-bg-muted disabled:opacity-50"
+            :disabled="adding"
+            @click="addLayoutToCart"
+          >
+            Odadakileri sepete ekle
+          </button>
+        </template>
+      </Room3DScene>
 
       <!--
         Doors and windows, by hand.

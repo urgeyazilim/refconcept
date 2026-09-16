@@ -114,6 +114,23 @@ const problems = computed(() =>
   state.value.items.filter(item => state.value.states.get(item.id) !== 'ok'),
 )
 
+/**
+ * What the room costs as it stands (K20): every piece that has a price, summed, in the
+ * currency of the first one. A piece without a price is counted as none and said so.
+ */
+const total = computed(() => {
+  const priced = state.value.items.filter(item => item.price !== null && item.price !== undefined)
+  const currency = priced[0]?.price?.currency ?? 'TRY'
+  const minor = priced.reduce((sum, item) => sum + (item.price?.amount_minor ?? 0), 0)
+
+  return {
+    minor,
+    currency,
+    formatted: new Intl.NumberFormat('tr-TR', { style: 'currency', currency, maximumFractionDigits: 0 }).format(minor / 100),
+    unpriced: state.value.items.length - priced.length,
+  }
+})
+
 /** How far an arrow key moves something: a centimetre, or ten with shift held. */
 const NUDGE_MM = 10
 const NUDGE_COARSE_MM = 100
@@ -592,28 +609,53 @@ defineExpose({
           <span v-if="state.unsaved" class="text-xs text-muted">Kaydediliyor…</span>
         </div>
 
-        <ul class="mt-2 max-h-48 space-y-1 overflow-y-auto">
+        <ul class="mt-2 max-h-64 space-y-1 overflow-y-auto">
           <li v-for="item in state.items" :key="item.id">
             <button
               type="button"
-              class="flex w-full items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-left text-xs transition-colors"
+              class="flex w-full items-center gap-2.5 rounded-sm px-2 py-1.5 text-left text-xs transition-colors"
               :class="item.id === state.selectedId ? 'bg-bg-muted' : 'hover:bg-bg-muted'"
               @click="editor?.select(item.id)"
+              @dblclick="editor?.select(item.id); editor?.focusSelected()"
             >
-              <span class="truncate text-ink">{{ item.name }}</span>
-              <span class="shrink-0 text-muted">
-                <template v-if="item.locked">🔒</template>
-                <template v-if="state.states.get(item.id) === 'blocked'">⛔</template>
-                <template v-else-if="state.states.get(item.id) === 'warning'">⚠</template>
+              <span class="grid size-9 shrink-0 place-items-center overflow-hidden rounded-sm bg-bg-muted">
+                <img v-if="item.image_url" :src="item.image_url" :alt="item.name" class="size-full object-cover" draggable="false">
+                <span v-else class="text-[10px] text-muted">3B</span>
+              </span>
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-ink">{{ item.name }}</span>
+                <span class="block truncate text-[11px] text-muted">
+                  {{ item.width_mm && item.depth_mm ? `${formatDistance(item.width_mm)} × ${formatDistance(item.depth_mm)}` : 'Ölçüsüz' }}
+                  <template v-if="item.locked"> · kilitli</template>
+                  <template v-if="state.states.get(item.id) === 'blocked'"> · sığmıyor</template>
+                  <template v-else-if="state.states.get(item.id) === 'warning'"> · pencerenin önünde</template>
+                </span>
+              </span>
+              <span class="shrink-0 text-right tabular-nums" :class="item.price ? 'text-ink' : 'text-muted'">
+                {{ item.price?.formatted ?? '—' }}
               </span>
             </button>
           </li>
         </ul>
 
-        <p v-if="problems.length > 0" class="mt-3 border-t border-line pt-3 text-xs text-muted">
+        <!-- The running total, and what it leaves out (K20). -->
+        <div v-if="state.items.length > 0" class="mt-3 flex items-baseline justify-between border-t border-line pt-3">
+          <span class="text-xs text-muted">
+            Toplam
+            <template v-if="total.unpriced > 0"> · {{ total.unpriced }} ürünün fiyatı yok</template>
+          </span>
+          <span class="text-sm font-medium tabular-nums text-ink">{{ total.formatted }}</span>
+        </div>
+
+        <p v-if="problems.length > 0" class="mt-3 text-xs text-muted">
           {{ problems.length }} ürün için uyarı var. Kırmızı olanlar bu odaya bu şekilde
           yerleşmiyor; sipariş vermeden önce düzeltilmesi gerekir.
         </p>
+
+        <!-- What the page wants done with the room as it stands: render it, buy it. -->
+        <div v-if="$slots.actions" class="mt-3 flex flex-wrap gap-2 border-t border-line pt-3">
+          <slot name="actions" />
+        </div>
       </div>
     </div>
   </div>

@@ -905,6 +905,9 @@ final class RoomLayoutController
              * further down, where the room photographs live.
              */
             'image_url' => $item->product?->media?->firstWhere('type', 'image')?->url(),
+            // What the piece costs now, so the room can keep a running total beside the
+            // customer while they arrange it (K20): a product added or removed moves the sum.
+            'price' => $item->sku?->effectivePrice()->jsonSerialize(),
 
             /*
              * A 3D model, when the product has one.

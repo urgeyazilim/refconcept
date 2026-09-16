@@ -302,7 +302,10 @@ it('hands the editor the room, its openings and its furniture in one request', f
     expect($response->json('data.geometry.width_mm'))->toBe(4_850)
         ->and($response->json('data.openings'))->toHaveCount(1)
         ->and($response->json('data.layout.items.0.width_mm'))->toBe(2_200)
-        ->and($response->json('data.layout.items.0.category'))->toBe('kanepe');
+        ->and($response->json('data.layout.items.0.category'))->toBe('kanepe')
+        // The price rides with the piece, so the room keeps a running total (K20).
+        ->and($response->json('data.layout.items.0.price.amount_minor'))->toBeInt()
+        ->and($response->json('data.layout.items.0.price.formatted'))->toBeString();
 });
 
 it('tells the editor what the floor is made of, in its own three words', function (): void {

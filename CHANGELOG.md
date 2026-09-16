@@ -31,6 +31,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   expected price and the ceiling before it queues anything, and saying plainly when the
   task is still routed to the simulator.
 
+### Changed — the room keeps a running total
+
+- Every piece in the room's list shows its photograph, its size and its price, and the list
+  ends in a **total** (K20) — a product added or removed moves the sum, and pieces without
+  a price are counted as none and said so. The layout endpoint now sends each item's price.
+- **"Render al"** and **"Odadakileri sepete ekle"** sit beside the total, where the decision
+  is made, rather than in a card further down the page. Double-clicking a row zooms to it.
+
 ### Changed — the 3D room, made to feel like a tool
 
 - **The camera flies** between views and in to a double-clicked piece, and "Odayı sığdır"
