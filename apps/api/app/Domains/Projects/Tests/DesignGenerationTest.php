@@ -1036,3 +1036,62 @@ it('shows the renderer the other photographs and names only the fixtures in the 
         ->and($roles[1])->toContain('REFERANS 1')
         ->and($version->fresh()?->render_inputs['view_count'])->toBe(1);
 });
+
+it('furnishes the 3D room with the design the moment it is ready', function (): void {
+    /*
+     * "Yapay zekâ tasarımı yaptı, o zaman 3B'de sen yerleştir." The arrangement is
+     * arithmetic against the room, free, and now nobody presses anything for it: a
+     * finished design has a plan, and a room whose measurements were only ever proposed
+     * has them taken as agreed so the plan can exist.
+     */
+    RoomGeometryVersion::query()->create([
+        'room_id' => $this->room->getKey(),
+        'version' => 1,
+        'source' => 'ai',
+        'width_mm' => 4_000,
+        'length_mm' => 5_000,
+        'height_mm' => 2_700,
+    ]);
+
+    $version = $this->launcher->launch($this->design, null, $this->owner);
+
+    expect($version->fresh()?->status)->toBe(DesignVersionStatus::Ready)
+        ->and(RoomGeometryVersion::query()->where('room_id', $this->room->getKey())->where('is_confirmed', true)->exists())->toBeTrue()
+        ->and(DesignLayout::query()->where('room_id', $this->room->getKey())->exists())->toBeTrue()
+        ->and(DesignVersionEvent::query()->where('design_version_id', $version->getKey())->pluck('message')->implode(' '))->toContain('3B odaya');
+});
+
+it('leaves an arrangement the customer already made alone when a new design finishes', function (): void {
+    $geometry = RoomGeometryVersion::query()->create([
+        'room_id' => $this->room->getKey(),
+        'version' => 1,
+        'source' => 'user',
+        'width_mm' => 4_000,
+        'length_mm' => 5_000,
+        'height_mm' => 2_700,
+    ]);
+    $geometry->forceFill(['is_confirmed' => true, 'confirmed_at' => now()])->save();
+
+    $layout = DesignLayout::query()->create([
+        'room_id' => $this->room->getKey(),
+        'geometry_version_id' => $geometry->getKey(),
+        'version' => 1,
+        'source' => 'user',
+    ]);
+
+    $sku = $this->sofa->skus()->firstOrFail();
+
+    DesignLayoutItem::query()->create([
+        'layout_id' => $layout->getKey(),
+        'product_id' => $this->sofa->getKey(),
+        'sku_id' => $sku->getKey(),
+        'position_x_mm' => 1_200,
+        'position_z_mm' => 900,
+    ]);
+
+    $this->launcher->launch($this->design, null, $this->owner);
+
+    // Ten minutes of somebody's own moving is not overwritten by an engine that finished.
+    expect(DesignLayoutItem::query()->where('layout_id', $layout->getKey())->count())->toBe(1)
+        ->and(DesignLayoutItem::query()->where('layout_id', $layout->getKey())->value('position_x_mm'))->toBe(1_200);
+});

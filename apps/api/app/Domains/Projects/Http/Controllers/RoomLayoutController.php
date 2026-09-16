@@ -18,7 +18,7 @@ use App\Domains\Projects\Models\Room;
 use App\Domains\Projects\Models\RoomAnalysis;
 use App\Domains\Projects\Models\RoomConstraint;
 use App\Domains\Projects\Models\RoomGeometryVersion;
-use App\Domains\Projects\Services\ComposableProducts;
+use App\Domains\Projects\Services\LayoutAutoComposer;
 use App\Domains\Projects\Services\LayoutComposer;
 use App\Domains\Projects\Services\LayoutWriter;
 use App\Domains\Projects\Services\RoomGeometryProposer;
@@ -47,9 +47,9 @@ final class RoomLayoutController
         private readonly LayoutWriter $layouts,
         private readonly RoomGeometryProposer $proposer,
         private readonly LayoutComposer $composer,
-        private readonly ComposableProducts $products,
         private readonly RoomPhotoStorage $photos,
         private readonly CartService $carts,
+        private readonly LayoutAutoComposer $autoComposer,
     ) {}
 
     /**
@@ -253,9 +253,9 @@ final class RoomLayoutController
         $this->authorizeProject($request, $project);
         $this->assertBelongs($room, $project);
 
-        $geometry = $this->currentGeometry($room);
-
-        abort_if($geometry === null, 422, 'Önce oda ölçülerinin onaylanması gerekiyor.');
+        // Measurements to arrange against: agreed ones, or the reading's proposal taken as
+        // agreed by the composer. Only a room nobody has read or measured is refused.
+        abort_if(! $this->autoComposer->canCompose($room), 422, 'Önce odanın ölçüsü gerekiyor: fotoğrafını okuyayım ya da sen söyle.');
 
         $version = $this->latestVersion($room, $request->string('design_version_id')->toString());
 
@@ -264,29 +264,12 @@ final class RoomLayoutController
         // they are being told they do not have.
         abort_if($version === null, 422, 'Bu oda için hazır bir tasarım yok. Önce bir tasarım oluşturun.');
 
-        $layout = $this->layouts->draftFor($room, $geometry, $request->user()?->getKey());
+        $result = $this->autoComposer->compose($room, $version, $request->user()?->getKey(), $request->boolean('replace'));
 
-        abort_if(
-            $layout->items()->exists() && $request->boolean('replace') !== true,
-            409,
-            'Odada kayıtlı bir yerleşim var. Üzerine yazmak için onaylayın.',
-        );
-
-        $catalogue = $this->products->forVersion($version);
-
-        $composed = $this->composer->compose($geometry, $room->constraints->all(), $catalogue['pieces']);
-
-        $this->layouts->save($layout, array_map(static fn (array $item): array => [
-            'product_id' => $item['product_id'],
-            'sku_id' => $item['sku_id'],
-            'position_x_mm' => $item['position_x_mm'],
-            'position_y_mm' => $item['position_y_mm'],
-            'position_z_mm' => $item['position_z_mm'],
-            'rotation_y_deg' => $item['rotation_y_deg'],
-        ], $composed['items']));
+        abort_if($result === null, 409, 'Odada kayıtlı bir yerleşim var. Üzerine yazmak için onaylayın.');
 
         return response()->json([
-            'data' => $this->layout($layout->fresh()),
+            'data' => $this->layout($result['layout']),
             'meta' => [
                 /*
                  * What did not make it in, said plainly.
@@ -295,8 +278,8 @@ final class RoomLayoutController
                  * lies about the shopping list beside it. "Bunlar sığmadı" is a sentence
                  * somebody can act on — choose a narrower one, or move something themselves.
                  */
-                'unplaced' => $composed['unplaced'],
-                'unmeasured' => $catalogue['unmeasured'],
+                'unplaced' => $result['unplaced'],
+                'unmeasured' => $result['unmeasured'],
             ],
         ]);
     }

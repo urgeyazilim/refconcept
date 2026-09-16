@@ -65,7 +65,7 @@ Her kural bir "her zaman" ya da "asla"dır. Kod bu listeye göre test edilir.
 
 ### Düzenleme (3B) — birebirlik
 - **K15.** **Tek gerçek yerleşim vardır**: `DesignLayout`. Öneri görseli, 3B sahne ve render hepsi ondan okur. Görseldeki kanepe ile 3B'deki kanepe aynı ürün, aynı koordinat, aynı yöndür.
-- **K16.** "Düzenle" 3B sahneyi **o yerleşimle** açar; sıfırdan değil, "yaklaşık" değil.
+- **K16.** "Düzenle" 3B sahneyi **o yerleşimle** açar; sıfırdan değil, "yaklaşık" değil. Yerleşim, tasarım hazır olduğu anda boru hattında kendiliğinden kurulur (`LayoutAutoComposer`); düğme yok. Ölçü onaylanmamışsa okumanın önerisi onaylanmış sayılır, rehber sormaya devam eder. Müşterinin elle taşıdığı yerleşim asla üstüne yazılmaz. (2026-09-16)
 - **K17.** 3B'de ürünler oklarla taşınır, halkayla döndürülür (15° adım, Shift serbest); duvarlar hizalanır; ölçüler canlı görünür.
 - **K18.** Hiçbir ürün duvarın dışına çıkamaz, duvara giremez, başka ürünün içine giremez, kapının önüne konamaz. Bu bir uyarı değil, **kısıttır**: parça duvarda durur ve duvar boyunca kayar. Aynı kural sunucuda da vardır ve karar sunucunundur.
 - **K19.** Her ürün **gerçek ölçüsünde** çizilir; 3B model varsa modelle, yoksa türünün katı şekliyle (kanepe kanepe gibi). Fotoğraf kesimi kullanılmaz.

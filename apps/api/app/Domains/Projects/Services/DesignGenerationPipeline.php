@@ -75,6 +75,7 @@ final class DesignGenerationPipeline
         private readonly CreditLedger $ledger,
         private readonly ShoppingListBuilder $shoppingList,
         private readonly BriefToPlacements $briefPlacements,
+        private readonly LayoutAutoComposer $autoComposer,
     ) {}
 
     /**
@@ -111,6 +112,7 @@ final class DesignGenerationPipeline
              */
             $matches = $this->match($version);
             $this->render($version, $room, $analysis, $plan, $matches);
+            $this->arrange($version, $room);
         } catch (DesignGenerationFailed $e) {
             return $this->fail($version, $e);
         } catch (AiJobRefused $e) {
@@ -1069,6 +1071,41 @@ final class DesignGenerationPipeline
         }
 
         return $roles;
+    }
+
+    /**
+     * The 3D room, furnished with what the design chose, without being asked.
+     *
+     * Free and deterministic, so it happens here rather than behind a button the customer
+     * has to find: "yapay zekâ tasarımı yaptı, o zaman 3B'de sen yerleştir". It never fails
+     * the design — a room that cannot be arranged (no measurements, nothing measured) is a
+     * finished design with an empty plan, and the plan page says so.
+     */
+    private function arrange(DesignVersion $version, Room $room): void
+    {
+        try {
+            $result = $this->autoComposer->compose($room, $version, $version->created_by);
+        } catch (Throwable $e) {
+            Log::warning('Tasarımın 3B yerleşimi kurulamadı.', ['design_version_id' => $version->getKey(), 'reason' => $e->getMessage()]);
+
+            return;
+        }
+
+        if ($result === null) {
+            return;
+        }
+
+        $placed = $result['layout']->items()->count();
+        $left = count($result['unplaced']) + count($result['unmeasured']);
+
+        $this->event(
+            $version,
+            GenerationStage::Render,
+            'succeeded',
+            $left === 0
+                ? sprintf('3B odaya %d ürün yerleştirildi.', $placed)
+                : sprintf('3B odaya %d ürün yerleştirildi; %d ürün yerleştirilemedi.', $placed, $left),
+        );
     }
 
     /** How many other views of the room go to the renderer: enough for the other walls, not a payload. */

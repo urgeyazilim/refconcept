@@ -5,6 +5,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed — The 3D room is furnished the moment the design is ready
+
+- **Nobody presses "Tasarıma göre yerleştir" any more.** The product owner opened the plan
+  of a room the engine had just designed and found it empty, behind a button: "yapay zekâ
+  tasarımı yaptı, o zaman 3B'de sen yerleştir". Arranging is free arithmetic against the
+  room, so it now runs inside the design pipeline as soon as the picture is made
+  (`LayoutAutoComposer`), and the plan page arranges on opening any room that has a finished
+  design and no arrangement yet — designs made before today included. The button stays,
+  as "Yeniden yerleştir", and an arrangement the customer has moved is never overwritten
+  unasked.
+- **Proposed measurements are taken as agreed when nothing else is there.** A room the
+  reading measured and nobody confirmed used to be refused ("Önce oda ölçülerinin
+  onaylanması gerekiyor"); the composer now confirms the reading's proposal itself, the way
+  "Evet, doğru" would, adopting the doors and windows it found. The guide keeps asking until
+  somebody measures. Only a room nobody has read or measured is refused.
+- The version's event log says how many pieces went into the room and how many did not.
+
 ### Fixed — The renderer painted fixtures it had only been told about
 
 - **A radiator and a window across the television wall.** The reading looks at every

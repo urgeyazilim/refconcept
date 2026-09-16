@@ -148,6 +148,9 @@ const rendering = ref(false)
 const composing = ref(false)
 const composeNotice = ref<string | null>(null)
 
+/** Whether the room was arranged on opening, unasked, so the column can say so. */
+const autoArranged = ref(false)
+
 const adding = ref(false)
 const cartNotice = ref<string | null>(null)
 
@@ -383,6 +386,19 @@ async function load(): Promise<void> {
     detected.value = response.data.detected
 
     /*
+     * A room with a finished design and no arrangement is arranged now, unasked.
+     *
+     * The server does this the moment a design is ready; designs made before it did, and
+     * rooms whose measurements were agreed after the design, arrive here empty. The product
+     * owner's verdict on an empty plan behind "3B düzenle" was that the customer should not
+     * have to press anything: the design chose the products, so the room shows them.
+     */
+    if (items.value.length === 0 && design.value !== null && (confirmed.value !== null || pending.value.length > 0)) {
+      autoArranged.value = true
+      await composeLayout()
+    }
+
+    /*
      * The photograph, only when there is something to draw on it and nothing agreed yet.
      *
      * A signed link is a deliberate request that runs the ownership check and expires in five
@@ -576,6 +592,16 @@ async function composeLayout(replace = false): Promise<void> {
 
     items.value = response.data.items
     overwrite.value = false
+
+    // Arranging a room nobody had confirmed takes the reading's proposal as agreed; the
+    // page learns that here rather than on the next visit.
+    if (confirmed.value === null) {
+      const fresh = await api.get<{ data: { geometry: GeometryVersion | null, pending_geometry: GeometryVersion[], openings: RoomOpening[] } }>(`${base}/layout`)
+
+      confirmed.value = fresh.data.geometry
+      pending.value = fresh.data.pending_geometry
+      openings.value = fresh.data.openings
+    }
 
     const missed = [...response.meta.unplaced, ...response.meta.unmeasured]
 
@@ -1137,8 +1163,9 @@ onMounted(async () => {
             </button>
     
             <p class="text-xs text-muted">
-              Son tasarımda seçilen ürünler, odanın ölçülerine göre dizilir. Sonra
-              istediğiniz gibi taşıyabilirsiniz.
+              <template v-if="autoArranged && liveItems.length > 0">Tasarımındaki ürünleri odana yerleştirdim. Beğenmediğini tut, taşı; ya da baştan dizdireyim.</template>
+              <template v-else-if="liveItems.length > 0">Tasarımın ürünleri odada. Yeniden dizdirirsen kendi taşıdıkların gider.</template>
+              <template v-else>Son tasarımda seçilen ürünler odanın ölçülerine göre dizilir; sonra istediğin gibi taşırsın.</template>
             </p>
     
     

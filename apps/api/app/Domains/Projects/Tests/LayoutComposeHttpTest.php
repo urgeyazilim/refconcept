@@ -237,8 +237,24 @@ it('says which products it could not measure rather than guessing their size', f
         ->and($response->json('meta.unmeasured'))->toHaveCount(1);
 });
 
-it('will not arrange a room whose measurements nobody has agreed to', function (): void {
+it('takes the proposed measurements as agreed rather than refusing to arrange', function (): void {
+    /*
+     * "Kullanıcıyı hiçbir şeyle uğraştırmak istemiyorum." A room whose measurements were
+     * read and never confirmed used to be refused; now the proposal is taken as agreed so
+     * the room can be furnished, and the guide keeps asking "doğru mu?" until somebody says.
+     */
     RoomGeometryVersion::query()->where('room_id', $this->room->getKey())->update(['is_confirmed' => false]);
+
+    planned([['category' => 'kanepe', 'wall' => 'kuzey', 'max_width_mm' => 2_200]]);
+    matched('Üçlü kanepe', 'kanepe', 2_200, 900, 0);
+
+    $this->actingAs($this->owner)->postJson("{$this->url}/layout/compose")->assertOk();
+
+    expect(RoomGeometryVersion::query()->where('room_id', $this->room->getKey())->where('is_confirmed', true)->exists())->toBeTrue();
+});
+
+it('will not arrange a room nobody has read or measured', function (): void {
+    RoomGeometryVersion::query()->where('room_id', $this->room->getKey())->delete();
 
     planned([['category' => 'kanepe', 'wall' => 'kuzey', 'max_width_mm' => 2_200]]);
     matched('Üçlü kanepe', 'kanepe', 2_200, 900, 0);
