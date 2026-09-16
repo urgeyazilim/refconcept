@@ -63,7 +63,7 @@ test.describe('studio stepper', () => {
 
     // Back on the Onay step the doors and windows are drawn from above, ready to drag.
     await strip.getByRole('button', { name: /Onay/ }).click()
-    await expect(page.getByRole('button', { name: '+ Pencere' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Çift kanat pencere ekle' })).toBeVisible()
     // Let the step's fade finish before the picture is taken.
     await page.waitForTimeout(400)
     await page.screenshot({ path: 'test-results/studio-stepper-room.png', fullPage: true })
