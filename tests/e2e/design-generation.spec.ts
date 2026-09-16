@@ -166,7 +166,7 @@ test.describe('design generation', () => {
       await signIn(page, customer.email)
       await gotoInteractive(page, `${STOREFRONT}/projects/${projectId}/rooms/${roomId}`)
 
-      await page.getByRole('button', { name: 'Tasarım oluştur' }).click()
+      await page.getByRole('button', { name: 'Hadi tasarlayalım' }).click()
       await completeBrief(page)
 
       await expect(page.getByRole('heading', { name: /Salon tasarımı/ })).toBeVisible()

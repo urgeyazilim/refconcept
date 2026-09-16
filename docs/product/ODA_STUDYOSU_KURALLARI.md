@@ -177,6 +177,11 @@ her adım klavyeyle tamamlanabilir, ölçüler metin olarak okunur.
 
 Sıra S1 → S2 → S4 → S3 → S5 olabilir: önce boş oda ve birebirlik (ürünün özü), sonra ekran.
 
+**Ses ve yönlendirme (2026-09-16):** Ekranların *nasıl konuştuğu* ayrı bir sözleşmede:
+`REHBER.md`. Her stüdyo ekranında tek bir Rehber kartı (`StudioGuide`) o anki adımı ve sıradaki
+tek adımı söyler; "eşyalarım kalsın" kararı Rehber'in sorusu olarak alındı (plaka `keep` listesi
+ile yapılır).
+
 ## 7. Maliyet notları
 
 Analiz ~0,01 $ (Gemini), plaka ~0,05–0,13 $ (görsel düzenleme), öneri görseli ve render

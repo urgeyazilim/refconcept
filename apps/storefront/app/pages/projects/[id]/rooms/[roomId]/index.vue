@@ -279,6 +279,261 @@ async function analyse(force = false) {
 }
 
 onBeforeUnmount(stopWatchingAnalysis)
+
+/**
+ * What the guide says on this screen (docs/product/REHBER.md §3).
+ *
+ * One state at a time, worked out from what the room has: photographs, a reading, a plate,
+ * designs. The guide card is the only place that tells the customer what comes next; the
+ * sections below it are where it happens.
+ */
+type GuideIcon = 'sparkle' | 'camera' | 'eye' | 'broom' | 'ruler' | 'pencil' | 'light' | 'check' | 'home' | 'door'
+
+const photoCount = computed(() => media.value.filter(item => item.type === 'photo').length)
+const primaryPhoto = computed(() => media.value.find(item => item.is_primary && item.type === 'photo') ?? media.value.find(item => item.type === 'photo') ?? null)
+const primaryPlate = computed(() => primaryPhoto.value === null ? null : (media.value.find(item => item.type === 'plate' && item.source_media_id === primaryPhoto.value!.id) ?? null))
+const latestDesign = computed(() => designs.value[0] ?? null)
+
+/** Which of the things the reading saw the customer wants taken out. Everything, at first. */
+const removing = ref<Set<string>>(new Set())
+const removingFor = ref<string | null>(null)
+
+watch(() => room.value?.analysis?.id ?? null, (id) => {
+  if (id !== removingFor.value) {
+    removing.value = new Set((room.value?.analysis?.movable_objects ?? []).map(object => object.label))
+    removingFor.value = id
+  }
+}, { immediate: true })
+
+function toggleRemoval(label: string) {
+  const next = new Set(removing.value)
+
+  if (next.has(label)) next.delete(label)
+  else next.add(label)
+
+  removing.value = next
+}
+
+const clearingPlate = ref(false)
+let plateTimer: ReturnType<typeof setInterval> | null = null
+
+/** Asks for the plate with the customer's choice of what stays. */
+async function clearPrimary() {
+  const photo = primaryPhoto.value
+
+  if (photo === null) return
+
+  const keep = (room.value?.analysis?.movable_objects ?? []).map(object => object.label).filter(label => !removing.value.has(label))
+
+  actionError.value = null
+  clearingPlate.value = true
+
+  try {
+    await api.post(`${base}/media/${photo.id}/clear`, { keep })
+  }
+  catch (error) {
+    clearingPlate.value = false
+    actionError.value = error instanceof ApiError ? error.message : 'Oda boşaltılamadı.'
+
+    return
+  }
+
+  plateTimer = setInterval(async () => {
+    await load()
+
+    if (primaryPlate.value !== null) {
+      clearingPlate.value = false
+
+      if (plateTimer !== null) {
+        clearInterval(plateTimer)
+        plateTimer = null
+      }
+    }
+  }, 4_000)
+}
+
+onBeforeUnmount(() => {
+  if (plateTimer !== null) clearInterval(plateTimer)
+})
+
+const colourWords: Record<string, string> = {
+  gray: 'gri', grey: 'gri', black: 'siyah', white: 'beyaz', brown: 'kahverengi', beige: 'bej', oak: 'meşe',
+  warm_white: 'kırık beyaz', wood: 'ahşap', blue: 'mavi', green: 'yeşil', cream: 'krem', navy: 'lacivert',
+}
+
+const mm = (value: number | null | undefined) => (value === null || value === undefined ? null : (value / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 1 }))
+
+const guide = computed<{
+  icon: GuideIcon
+  say: string
+  detail: string | null
+  action: { label: string, to?: string, busy?: boolean, note?: string } | null
+  secondary: { label: string, to: string } | null
+  tips: Array<{ icon: GuideIcon, label: string, hint?: string }>
+  choices: Array<{ key: string, label: string, selected: boolean }>
+  busy: boolean
+}>(() => {
+  const current = room.value
+  const analysis = current?.analysis ?? null
+  const plan = `/projects/${projectId}/rooms/${roomId}/plan`
+
+  if (current === null) {
+    return { icon: 'sparkle', say: 'Buradayım.', detail: null, action: null, secondary: null, tips: [], choices: [], busy: false }
+  }
+
+  if (photoCount.value === 0) {
+    return {
+      icon: 'camera',
+      say: 'Hadi odanın fotoğrafını çekelim.',
+      detail: 'Tek yön bana odanı anlatmaz. Kapıdan içeri bir kare, sonra sol köşe, sağ köşe ve karşı duvar — dördünü birden okuyup odanı tanıyacağım.',
+      action: { label: 'Fotoğraf ekle', to: '#fotograf' },
+      secondary: null,
+      tips: [
+        { icon: 'door', label: 'Kapıdan içeri', hint: 'Odanın tamamı görünsün' },
+        { icon: 'camera', label: 'Sol köşeden', hint: 'Pencereyi de al' },
+        { icon: 'camera', label: 'Sağ köşeden', hint: 'Kapı görünsün' },
+        { icon: 'light', label: 'Gündüz ışığında', hint: 'Renkleri doğru okurum' },
+      ],
+      choices: [],
+      busy: false,
+    }
+  }
+
+  if (analysing.value || (analysis === null && current.analysis_failure === null)) {
+    return {
+      icon: 'eye',
+      say: photoCount.value === 1 ? 'Bir kare aldım, okuyorum.' : `${photoCount.value} fotoğraf aldım, odanı okuyorum.`,
+      detail: 'Bir dakika kadar sürer; buradayım. Bu arada bir köşe daha eklersen odayı daha iyi anlarım.',
+      action: analysing.value ? null : { label: 'Şimdi oku' },
+      secondary: null,
+      tips: [],
+      choices: [],
+      busy: true,
+    }
+  }
+
+  if (analysis === null) {
+    return {
+      icon: 'eye',
+      say: 'Bunu okuyamadım. Bir daha deneyelim mi?',
+      detail: current.analysis_failure,
+      action: { label: 'Yeniden oku' },
+      secondary: null,
+      tips: [],
+      choices: [],
+      busy: false,
+    }
+  }
+
+  const objects = analysis.movable_objects
+  const dims = analysis.estimated_dimensions
+  const measured = (current.width_mm ?? null) !== null
+  const sizeLine = dims && dims.width_mm && dims.length_mm
+    ? `Odanı ${mm(dims.width_mm)} × ${mm(dims.length_mm)} m okudum${dims.height_mm ? `, tavan ${mm(dims.height_mm)}` : ''}.`
+    : null
+
+  if (primaryPlate.value === null && objects.length > 0) {
+    const seen = objects.slice(0, 5).map(object => object.label.toLocaleLowerCase('tr-TR')).join(', ')
+
+    return {
+      icon: 'broom',
+      say: `Odanı gördüm: ${seen}${objects.length > 5 ? '…' : ''}.`,
+      detail: `Hangilerini kaldırayım, hangileri kalsın? Seçtiklerini çıkarıp odanın boş hâlini hazırlayacağım. ${analysis.is_stale ? 'Fotoğraflar değişti; istersen önce yeniden okuyayım.' : ''}`.trim(),
+      action: { label: clearingPlate.value ? 'Eşyaları kaldırıyorum…' : 'Eşyaları kaldır', busy: clearingPlate.value, note: 'Yaklaşık bir dakika' },
+      secondary: sizeLine ? { label: 'Ölçülere bak', to: plan } : null,
+      tips: [],
+      choices: objects.map(object => ({ key: object.label, label: object.label, selected: removing.value.has(object.label) })),
+      busy: clearingPlate.value,
+    }
+  }
+
+  if (primaryPlate.value === null) {
+    return {
+      icon: 'check',
+      say: 'Odan zaten boş, harika.',
+      detail: sizeLine ? `${sizeLine} Doğruysa onayla, değilse düzelt; sonra tasarıma geçelim.` : 'Şimdi ölçülere bir bakalım, sonra tasarıma geçelim.',
+      action: { label: 'Planı aç', to: plan },
+      secondary: null,
+      tips: [],
+      choices: [],
+      busy: false,
+    }
+  }
+
+  if (!measured && sizeLine) {
+    return {
+      icon: 'ruler',
+      say: sizeLine,
+      detail: 'Doğruysa onayla, değilse düzelt. Ölçü doğru olursa önerdiğim her şey gerçekten sığar.',
+      action: { label: 'Ölçüleri onayla', to: plan },
+      secondary: null,
+      tips: [],
+      choices: [],
+      busy: false,
+    }
+  }
+
+  if (latestDesign.value === null) {
+    const colours = analysis.dominant_colors.map(colour => colourWords[colour] ?? colour).slice(0, 3).join(', ')
+
+    return {
+      icon: 'pencil',
+      say: 'Odan boş. Şimdi sen: ne istersin?',
+      detail: `${colours ? `Renklerin ${colours}; ` : ''}stilini ve bütçeni söyle, ürünleri odana yerleştirip göstereyim.`,
+      action: { label: 'Hadi tasarlayalım' },
+      secondary: null,
+      tips: [],
+      choices: [],
+      busy: false,
+    }
+  }
+
+  if (latestDesign.value.status === 'generating' || latestDesign.value.status === 'draft') {
+    return {
+      icon: 'sparkle',
+      say: 'Tasarımını çiziyorum.',
+      detail: 'Ürünleri seçtim, odana yerleştiriyorum; bir-iki dakika.',
+      action: { label: 'Tasarıma bak', to: `/projects/${projectId}/rooms/${roomId}/designs/${latestDesign.value.id}` },
+      secondary: null,
+      tips: [],
+      choices: [],
+      busy: true,
+    }
+  }
+
+  return {
+    icon: 'check',
+    say: 'Tasarımın hazır.',
+    detail: 'Beğenmediğin yeri söyle, değiştirelim; ya da 3B planda kendin taşı.',
+    action: { label: 'Tasarıma bak', to: `/projects/${projectId}/rooms/${roomId}/designs/${latestDesign.value.id}` },
+    secondary: { label: 'Yeni bir tasarım iste', to: '#tasarim' },
+    tips: [],
+    choices: [],
+    busy: false,
+  }
+})
+
+/** What the guide's button does when it is not a link. */
+function guideAct() {
+  const current = room.value
+
+  if (current === null) return
+
+  if (current.analysis === null) {
+    void analyse(current.analysis_failure !== null)
+
+    return
+  }
+
+  if (primaryPlate.value === null && current.analysis.movable_objects.length > 0) {
+    void clearPrimary()
+
+    return
+  }
+
+  creatingDesign.value = true
+  nextTick(() => document.getElementById('tasarim-olustur')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+}
 </script>
 
 <template>
@@ -304,22 +559,28 @@ onBeforeUnmount(stopWatchingAnalysis)
             v-if="canEdit && room.is_ready_for_design && !creatingDesign"
             @click="creatingDesign = true"
           >
-            Tasarım oluştur
+            Hadi tasarlayalım
           </RcButton>
         </div>
       </header>
 
       <StudioStepper :project-id="projectId" :room-id="roomId" :current="studioCurrent" :done="studioDone" />
 
-      <RcAlert v-if="actionError" tone="danger">{{ actionError }}</RcAlert>
+      <!-- The guide: the one voice that says what comes next (REHBER.md). -->
+      <StudioGuide
+        :icon="guide.icon"
+        :say="guide.say"
+        :detail="guide.detail"
+        :action="canEdit ? guide.action : null"
+        :secondary="guide.secondary"
+        :tips="guide.tips"
+        :choices="canEdit ? guide.choices : []"
+        :busy="guide.busy"
+        @act="guideAct"
+        @toggle="toggleRemoval"
+      />
 
-      <!-- Readiness -->
-      <RcAlert v-if="!room.is_ready_for_design" tone="warning">
-        <p class="font-medium">Bu oda henüz tasarıma hazır değil</p>
-        <ul class="mt-2 space-y-1">
-          <li v-for="item in room.missing_for_design" :key="item">· {{ item }}</li>
-        </ul>
-      </RcAlert>
+      <RcAlert v-if="actionError" tone="danger">{{ actionError }}</RcAlert>
 
       <!--
         Start a design.
@@ -331,6 +592,7 @@ onBeforeUnmount(stopWatchingAnalysis)
       -->
       <DesignBriefWizard
         v-if="creatingDesign && !briefUnavailable"
+        id="tasarim-olustur"
         :project-id="projectId"
         :room-id="roomId"
         :budget-minor="project?.budget?.amount_minor ?? null"
@@ -406,26 +668,6 @@ onBeforeUnmount(stopWatchingAnalysis)
       </div>
 
       <!--
-        Confirming and editing happen on the plan screen: the analysis proposes, the plan
-        asks "bu ölçüler doğru mu?", and the room is furnished there. This card is the way in.
-      -->
-      <section class="rc-card p-6 sm:p-8">
-        <p class="text-xs text-muted">Adım 3 ve 6</p>
-        <h2 class="mt-1 text-lg font-medium">Onay ve düzenleme</h2>
-        <p class="mt-1.5 max-w-[62ch] text-sm leading-relaxed text-ink-secondary">
-          Fotoğraftan okunan ölçüleri onaylayın, odayı üç boyutlu görün, ürünleri oklarla
-          taşıyıp halkayla döndürün. Bir şey duvara giremez, kapının önüne konamaz.
-        </p>
-
-        <NuxtLink
-          :to="`/projects/${projectId}/rooms/${roomId}/plan`"
-          class="mt-6 inline-flex rounded-pill bg-charcoal px-4 py-2 text-sm text-white"
-        >
-          Planı aç
-        </NuxtLink>
-      </section>
-
-      <!--
         What the reading found (step 2). Every photograph of the room is read as one room;
         the boxes on the picture are on the plan screen, the words are here.
       -->
@@ -461,7 +703,7 @@ onBeforeUnmount(stopWatchingAnalysis)
             <h3 class="text-xs font-medium uppercase tracking-wide text-muted">Odada bulunanlar</h3>
             <p v-if="room.analysis.movable_objects.length === 0" class="mt-1.5 text-sm text-muted">Taşınabilir eşya bulunmadı.</p>
             <ul v-else class="mt-1.5 flex flex-wrap gap-1.5">
-              <li v-for="(name, at) in room.analysis.movable_objects" :key="`m-${at}`" class="rounded-pill bg-bg-muted px-2.5 py-1 text-xs text-ink-secondary">{{ name }}</li>
+              <li v-for="(object, at) in room.analysis.movable_objects" :key="`m-${at}`" class="rounded-pill bg-bg-muted px-2.5 py-1 text-xs text-ink-secondary">{{ object.label }}</li>
             </ul>
           </div>
           <div>
@@ -515,6 +757,26 @@ onBeforeUnmount(stopWatchingAnalysis)
             Ölçüleri kaydet
           </RcButton>
         </form>
+      </section>
+
+      <!--
+        Confirming and editing happen on the plan screen: the reading proposes, the plan
+        asks "bu ölçüler doğru mu?", and the room is furnished there. This card is the way in.
+      -->
+      <section class="rc-card p-6 sm:p-8">
+        <p class="text-xs text-muted">Adım 3 ve 6</p>
+        <h2 class="mt-1 text-lg font-medium">Onay ve düzenleme</h2>
+        <p class="mt-1.5 max-w-[62ch] text-sm leading-relaxed text-ink-secondary">
+          Okuduğum ölçüleri onayla, odanı üç boyutlu gör, ürünleri oklarla taşı, halkayla
+          döndür. Hiçbir şey duvara giremez, kapının önüne konamaz.
+        </p>
+
+        <NuxtLink
+          :to="`/projects/${projectId}/rooms/${roomId}/plan`"
+          class="mt-6 inline-flex rounded-pill bg-charcoal px-4 py-2 text-sm text-white"
+        >
+          Planı aç
+        </NuxtLink>
       </section>
 
       <!-- Constraints -->

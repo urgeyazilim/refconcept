@@ -637,7 +637,10 @@ export interface RoomAnalysisSummary {
   detected_room_type: string | null
   confidence_bps: number | null
   fixed_elements: string[]
-  movable_objects: string[]
+  /** What stands in the room; the label is what the guide says and what a plate can keep. */
+  movable_objects: Array<{ type: string, label: string }>
+  dominant_colors: string[]
+  estimated_dimensions: { width_mm: number | null, length_mm: number | null, height_mm: number | null } | null
   warnings: string[]
   created_at: string | null
 }

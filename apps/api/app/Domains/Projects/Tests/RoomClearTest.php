@@ -3,12 +3,14 @@
 declare(strict_types=1);
 
 use App\Domains\Ai\Enums\AiTask;
+use App\Domains\Ai\Models\AiJob;
 use App\Domains\Ai\Providers\FakeAiProvider;
 use App\Domains\Ai\Services\GeneratedImageStore;
 use App\Domains\Identity\Models\User;
 use App\Domains\Projects\Jobs\ClearRoomPhotograph;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\RoomMedia;
+use App\Domains\Projects\Services\RoomAnalyser;
 use App\Domains\Projects\Services\RoomClearer;
 use App\Domains\Projects\Services\RoomPhotoStorage;
 use Database\Seeders\RolesAndPermissionsSeeder;
@@ -138,4 +140,38 @@ it('keeps the plate beside its photograph, one per photograph, and the renderer 
         ->assertJsonPath('data.source_media_id', (string) $this->photograph->getKey());
 
     Queue::assertNothingPushed();
+});
+
+it('leaves in the room what the customer asked to keep, and remakes the plate for a new choice', function (): void {
+    $analyser = app(RoomAnalyser::class);
+    $analyser->store($this->room, (string) $this->photograph->getKey(), null, [
+        'room_type' => 'living_room',
+        'fixed_elements' => [['type' => 'window']],
+        'surfaces' => ['floor' => ['material' => 'wood']],
+        'movable_objects' => [
+            ['type' => 'sofa', 'label' => 'Gri kanepe'],
+            ['type' => 'rug', 'label' => 'Desenli halı'],
+            ['type' => 'armchair', 'label' => 'Gri berjer'],
+        ],
+    ]);
+
+    (new ClearRoomPhotograph((string) $this->photograph->getKey(), ['Gri kanepe']))->handle(app(RoomClearer::class));
+
+    $job = AiJob::query()->where('task', AiTask::RoomClear->value)->latest('created_at')->firstOrFail();
+
+    // The sofa is named as staying and is not in the list of what goes.
+    expect($job->input['keep'])->toBe('Gri kanepe')
+        ->and($job->input['objects'])->toContain('rug')
+        ->and($job->input['objects'])->toContain('armchair')
+        ->and($job->input['objects'])->not->toContain('sofa');
+
+    // Asking again with a different choice queues a new plate rather than answering with
+    // the old one; asking with no choice at all answers with whatever plate exists.
+    Queue::fake();
+
+    $this->actingAs($this->owner)
+        ->postJson("{$this->url}/media/{$this->photograph->getKey()}/clear", ['keep' => ['Gri kanepe', 'Desenli halı']])
+        ->assertStatus(202);
+
+    Queue::assertPushed(ClearRoomPhotograph::class, fn (ClearRoomPhotograph $job): bool => $job->keep === ['Gri kanepe', 'Desenli halı']);
 });

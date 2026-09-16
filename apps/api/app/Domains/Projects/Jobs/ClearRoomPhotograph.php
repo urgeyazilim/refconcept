@@ -24,7 +24,8 @@ final class ClearRoomPhotograph implements ShouldQueue
 
     public int $timeout = 300;
 
-    public function __construct(public readonly string $mediaId)
+    /** @param  list<string>  $keep  what the customer asked to leave in the room */
+    public function __construct(public readonly string $mediaId, public readonly array $keep = [])
     {
         $this->onQueue('ai');
     }
@@ -37,6 +38,6 @@ final class ClearRoomPhotograph implements ShouldQueue
             return;
         }
 
-        $clearer->clear($photograph->room, $photograph);
+        $clearer->clear($photograph->room, $photograph, $this->keep);
     }
 }

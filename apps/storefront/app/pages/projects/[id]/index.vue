@@ -170,8 +170,26 @@ async function setStatus(status: string) {
         Bu proje arşivlendi. Düzenlemek için önce arşivden çıkarın.
       </RcAlert>
 
+      <!--
+        The guide, between the house and its rooms (REHBER.md §3): "add a room" when there is
+        none, "let's design it" when one was just added, and the way back in otherwise.
+      -->
+      <StudioGuide
+        v-if="project.can_edit && project.status !== 'archived' && !addingRoom"
+        :icon="project.rooms.length === 0 ? 'door' : 'sparkle'"
+        :say="project.rooms.length === 0 ? 'Şimdi bir oda ekle.' : `${project.rooms[0]!.name} hazır — hadi tasarlayalım.`"
+        :detail="project.rooms.length === 0
+          ? 'Hangisiyle başlıyoruz — salon mu, yatak odası mı? Adını ve türünü söyle, gerisi bende.'
+          : 'Odaya gir; fotoğrafını çekelim, odanı tanıyayım, sonra birlikte tasarlayalım. Başka bir oda da ekleyebilirsin.'"
+        :action="project.rooms.length === 0
+          ? { label: 'Oda ekle' }
+          : { label: 'Odaya git', to: `/projects/${project.id}/rooms/${project.rooms[0]!.id}` }"
+        :secondary="project.rooms.length === 0 ? null : { label: 'Başka oda ekle', to: '#odalar' }"
+        @act="addingRoom = true"
+      />
+
       <!-- Rooms -->
-      <section>
+      <section id="odalar">
         <header class="flex flex-wrap items-center justify-between gap-4">
           <h2 class="text-lg font-medium">Odalar</h2>
           <RcButton
@@ -219,8 +237,7 @@ async function setStatus(status: string) {
         </form>
 
         <p v-if="project.rooms.length === 0 && !addingRoom" class="mt-5 rounded-md bg-bg-muted p-6 text-sm leading-relaxed text-ink-secondary">
-          Henüz oda eklemediniz. Bir oda ekleyip fotoğrafını yüklediğinizde tasarım
-          üretebilirsiniz.
+          Henüz oda yok. İlkini ekleyince fotoğraflarından başlarız.
         </p>
 
         <div v-else-if="project.rooms.length > 0" class="mt-5 grid gap-4 sm:grid-cols-2">
@@ -245,15 +262,15 @@ async function setStatus(status: string) {
 
             <dl class="mt-4 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-ink-secondary">
               <div v-if="room.floor_area_m2">
-                <dt class="inline text-muted">Alan:</dt>
+                <dt class="mr-1 inline text-muted">Alan:</dt>
                 <dd class="inline tabular-nums"> {{ room.floor_area_m2 }} m²</dd>
               </div>
               <div>
-                <dt class="inline text-muted">Ölçü:</dt>
+                <dt class="mr-1 inline text-muted">Ölçü:</dt>
                 <dd class="inline"> {{ room.measurement_quality_label }}</dd>
               </div>
               <div v-if="room.constraint_count > 0">
-                <dt class="inline text-muted">Kısıt:</dt>
+                <dt class="mr-1 inline text-muted">Kısıt:</dt>
                 <dd class="inline tabular-nums"> {{ room.constraint_count }}</dd>
               </div>
             </dl>

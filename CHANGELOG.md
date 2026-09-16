@@ -31,6 +31,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   expected price and the ceiling before it queues anything, and saying plainly when the
   task is still routed to the simulator.
 
+### Added — the guide: the product speaks, in the second person singular
+
+- **`docs/product/REHBER.md`**: how RefConcept talks to a customer. One voice (an interior
+  designer standing next to you), "sen", first person, one next step at a time, the reason
+  for every ask, no corporate words; a table of what it says at every moment of the studio.
+- **`StudioGuide`**, one card on every studio screen — the projects list ("Hadi başlayalım."),
+  the house ("Şimdi bir oda ekle." / "Salon hazır — hadi tasarlayalım."), the room ("Hadi
+  odanın fotoğrafını çekelim." with the four angles as illustrated tips; "4 fotoğraf aldım,
+  odanı okuyorum."; "Odanı gördüm: iki kanepe, halı… Hangilerini kaldırayım, hangileri
+  kalsın?" with chips; "Odanı 3,8 × 5,0 m okudum, doğru mu?"; "Odan boş. Şimdi sen: ne
+  istersin? Renklerin gri, siyah, beyaz…"; "Tasarımın hazır."). It replaces the readiness
+  alert and the empty-state cards.
+- **The plate can keep things** (§8 decision "eşyalarım kalsın" — taken): the guide's chips
+  choose what stays; `POST …/clear` takes `keep: [...]`, the emptying prompt (v2) names what
+  stays, and a different choice remakes the plate.
+- Copy across the projects, project and room screens rewritten in the guide's voice; the
+  room screen's sections now follow the steps in order.
+
 ### Fixed — a real room was "read" by the simulator
 
 - **The simulator can no longer answer for a real model that failed.** A route whose

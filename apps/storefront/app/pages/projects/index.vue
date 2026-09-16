@@ -80,10 +80,10 @@ async function create() {
   <div class="space-y-8">
     <header class="flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h1 class="text-2xl font-medium">Projelerim</h1>
+        <h1 class="text-2xl font-medium">Evlerim</h1>
         <p class="mt-1.5 max-w-[62ch] text-sm leading-relaxed text-ink-secondary">
-          Bir proje, üzerinde çalıştığınız ev ya da mekândır. İçine odalarınızı ekler,
-          fotoğraflarını yükler ve her oda için tasarımlar üretirsiniz.
+          Her ev bir proje: içine odalarını ekle, fotoğraflarını çek; odanı tanıyıp
+          seninle birlikte tasarlayayım.
         </p>
       </div>
 
@@ -92,16 +92,32 @@ async function create() {
 
     <RcAlert v-if="loadError" tone="danger">{{ loadError }}</RcAlert>
 
+    <!--
+      The guide opens the door (REHBER.md §3): what to do first, said once, warmly. On a
+      list with projects it steps back to a single line.
+    -->
+    <StudioGuide
+      v-if="!loading && !creating"
+      icon="home"
+      :say="projects.length === 0 ? 'Hadi başlayalım.' : 'Hangi evle devam ediyoruz?'"
+      :detail="projects.length === 0
+        ? 'Önce evine bir ad ver — Kadıköy Dairesi, Yazlık, ne dersen. Odalarını içine ekleyeceğiz, sonra fotoğraflarını çekeceğiz.'
+        : 'Bir eve gir ya da yeni bir ev ekle; kaldığımız yerden devam ederiz.'"
+      :action="{ label: projects.length === 0 ? 'Evimi ekle' : 'Yeni bir ev ekle' }"
+      @act="creating = true"
+    />
+
     <!-- Create -->
     <section v-if="creating" class="rc-card p-6 sm:p-8">
-      <h2 class="text-lg font-medium">Yeni proje</h2>
+      <h2 class="text-lg font-medium">Evine bir ad verelim</h2>
+      <p class="mt-1.5 text-sm text-ink-secondary">Bir cümle yeter; gerisini birlikte yapacağız.</p>
 
       <RcAlert v-if="formError" tone="danger" class="mt-4">{{ formError }}</RcAlert>
 
       <form class="mt-5 space-y-5" @submit.prevent="create">
         <RcField
           v-model="form.name"
-          label="Proje adı"
+          label="Evinin adı"
           name="name"
           placeholder="Örn. Kadıköy Dairesi"
           :errors="errors.name"
@@ -120,7 +136,7 @@ async function create() {
             </option>
           </select>
           <p class="mt-1.5 text-xs text-muted">
-            Kiralık bir evde sabit mobilya önerilmez; tür seçimi tasarımı etkiler.
+            Kiralık bir evde sabit mobilya önermem; söylersen ona göre düşünürüm.
           </p>
         </div>
 
@@ -129,7 +145,7 @@ async function create() {
           label="Bütçe (₺)"
           name="budget"
           placeholder="Örn. 150.000"
-          hint="İsteğe bağlı. Tasarım önerileri bütçenize göre şekillenir."
+          hint="İstersen şimdi söyle, istersen sonra; önerilerimi buna göre şekillendiririm."
           :errors="errors.budget_minor"
         />
 
@@ -142,19 +158,18 @@ async function create() {
 
     <p v-if="loading" class="text-sm text-muted">Yükleniyor…</p>
 
-    <!-- Empty -->
-    <div v-else-if="projects.length === 0 && !creating" class="rc-card p-12 text-center">
+    <!-- Empty: the guide above already said what to do; this is the promise underneath. -->
+    <div v-else-if="projects.length === 0 && !creating" class="rc-card p-10 text-center">
       <RcFeatureIcon
         class="mx-auto"
         size="lg"
         icon="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"
       />
-      <h2 class="mt-5 text-lg font-medium">İlk projenizi oluşturun</h2>
+      <h2 class="mt-5 text-lg font-medium">Odanı gör, sonra karar ver</h2>
       <p class="mx-auto mt-3 max-w-[52ch] leading-relaxed text-ink-secondary">
-        Odanızın fotoğrafını yükleyin, ölçülerini girin; yapay zekâ o odaya uygun bir
-        tasarım hazırlasın. Fotoğraflarınız yalnızca size aittir ve kimseyle paylaşılmaz.
+        Fotoğrafını çek, odanı tanıyayım, eşyaları kaldırayım ve gerçek ürünlerle nasıl
+        olacağını göstereyim. Fotoğrafların yalnızca sana ait; kimseyle paylaşılmaz.
       </p>
-      <RcButton class="mt-7" @click="creating = true">Yeni proje</RcButton>
     </div>
 
     <!-- List -->

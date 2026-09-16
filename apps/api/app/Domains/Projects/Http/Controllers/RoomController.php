@@ -375,10 +375,55 @@ final class RoomController
             'detected_room_type' => $analysis->detected_room_type,
             'confidence_bps' => $analysis->confidence_bps,
             'fixed_elements' => $this->names($analysis->payload['fixed_elements'] ?? null),
-            'movable_objects' => $this->names($analysis->payload['movable_objects'] ?? null),
+            // Type and label both: the guide shows the label and asks the plate to keep
+            // things by it, the icon is chosen by the type.
+            'movable_objects' => $this->objects($analysis->payload['movable_objects'] ?? null),
+            'dominant_colors' => array_values(array_filter((array) ($analysis->payload['dominant_colors'] ?? []), 'is_string')),
+            'estimated_dimensions' => is_array($analysis->payload['estimated_dimensions'] ?? null)
+                ? [
+                    'width_mm' => $analysis->payload['estimated_dimensions']['width_mm'] ?? null,
+                    'length_mm' => $analysis->payload['estimated_dimensions']['length_mm'] ?? null,
+                    'height_mm' => $analysis->payload['estimated_dimensions']['height_mm'] ?? null,
+                ]
+                : null,
             'warnings' => array_values(array_filter((array) ($analysis->warnings ?? []), 'is_string')),
             'created_at' => $analysis->created_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * The movable things a model listed, as type and label.
+     *
+     * @return list<array{type: string, label: string}>
+     */
+    private function objects(mixed $items): array
+    {
+        if (! is_array($items)) {
+            return [];
+        }
+
+        $objects = [];
+
+        foreach ($items as $item) {
+            if (is_string($item) && $item !== '') {
+                $objects[] = ['type' => $item, 'label' => $item];
+
+                continue;
+            }
+
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $type = is_string($item['type'] ?? null) && $item['type'] !== '' ? $item['type'] : null;
+            $label = is_string($item['label'] ?? null) && $item['label'] !== '' ? $item['label'] : $type;
+
+            if ($type !== null && $label !== null) {
+                $objects[] = ['type' => $type, 'label' => $label];
+            }
+        }
+
+        return $objects;
     }
 
     /**

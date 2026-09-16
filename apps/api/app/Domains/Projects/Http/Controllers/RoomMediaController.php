@@ -131,13 +131,27 @@ final class RoomMediaController
         abort_unless($medium->room_id === $room->getKey(), 404);
         abort_unless($medium->type === 'photo', 422, 'Yalnızca bir oda fotoğrafı boşaltılabilir.');
 
+        $validated = $request->validate([
+            // What stays in the room, by the names the reading gave them. Absent means
+            // "everything goes"; present means a plate made to this choice, replacing the
+            // one that was there.
+            'keep' => ['sometimes', 'array', 'max:30'],
+            'keep.*' => ['string', 'max:80'],
+        ]);
+
+        $keep = array_values(array_map('strval', (array) ($validated['keep'] ?? [])));
         $existing = $this->storage->plateOf($medium);
 
-        if ($existing !== null) {
+        if ($existing !== null && ! array_key_exists('keep', $validated)) {
             return response()->json(['data' => $this->summary($existing, $room)]);
         }
 
-        ClearRoomPhotograph::dispatch((string) $medium->getKey());
+        if ($existing !== null) {
+            $this->storage->purge($existing->disk, $existing->storage_path);
+            $existing->delete();
+        }
+
+        ClearRoomPhotograph::dispatch((string) $medium->getKey(), $keep);
 
         return response()->json(['data' => ['status' => 'queued', 'source_media_id' => $medium->getKey()]], 202);
     }

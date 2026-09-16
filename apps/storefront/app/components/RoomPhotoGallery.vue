@@ -193,9 +193,8 @@ onBeforeUnmount(() => {
       <div>
         <h2 class="text-lg font-medium">Fotoğraflar</h2>
         <p class="mt-1.5 max-w-[60ch] text-sm leading-relaxed text-ink-secondary">
-          Odanın tamamını gösteren, gündüz çekilmiş bir fotoğraf en iyi sonucu verir.
-          Fotoğraflarınız yalnızca size aittir; kimseyle paylaşılmaz ve arama
-          motorlarına açılmaz.
+          Gündüz çek, odanın tamamı görünsün; birkaç köşeden çekersen daha iyi anlarım.
+          Fotoğrafların yalnızca sana ait; kimseyle paylaşılmaz, arama motorlarına açılmaz.
         </p>
       </div>
 

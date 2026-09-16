@@ -900,7 +900,7 @@ final class AiGatewaySeeder extends Seeder
                         'Do not change the camera, the perspective, the crop, the colour balance or the time of day. Do not add anything.',
                         'Output the edited photograph only.',
                     ]),
-                    'template' => "Remove these from the room: {{ objects }}.\nRoom type: {{ room_type }}.\n",
+                    'template' => "Remove these from the room: {{ objects }}.\nKeep exactly where they are, untouched: {{ keep }}.\nRoom type: {{ room_type }}.\n",
                 ],
             ],
 

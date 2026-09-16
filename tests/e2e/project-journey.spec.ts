@@ -65,7 +65,7 @@ test.describe('project journey', () => {
     // --- the project ----------------------------------------------------------
     await gotoInteractive(page, `${STOREFRONT}/projects`)
 
-    await expect(page.getByRole('heading', { name: 'İlk projenizi oluşturun' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Odanı gör, sonra karar ver' })).toBeVisible()
     // Two of them on an empty list — the header action and the empty-state call to
     // action — which is deliberate, so the test names which one it means.
     await page.getByRole('button', { name: 'Yeni proje' }).first().click()
@@ -79,7 +79,7 @@ test.describe('project journey', () => {
     const projectId = new URL(page.url()).pathname.split('/').pop()!
 
     // --- a room ----------------------------------------------------------------
-    await page.getByRole('button', { name: 'Oda ekle' }).click()
+    await page.getByRole('button', { name: 'Oda ekle' }).first().click()
     await fillStable(page, '#name', 'Salon')
     await page.locator('#room_type').selectOption('living_room')
     await page.locator('form').filter({ has: page.locator('#room_type') })
@@ -93,7 +93,7 @@ test.describe('project journey', () => {
     await page.getByRole('link', { name: /Salon/ }).click()
     await waitForHydration(page)
 
-    await expect(page.getByText('Odanın fotoğrafı')).toBeVisible()
+    await expect(page.getByText('Hadi odanın fotoğrafını çekelim.')).toBeVisible()
 
     // --- the photograph ---------------------------------------------------------
     await page.locator('input[type="file"]').setInputFiles({
@@ -151,7 +151,7 @@ test.describe('project journey', () => {
      * needs to act on — which is the behaviour worth asserting here, because this journey
      * is about a customer arriving with nothing.
      */
-    await page.getByRole('button', { name: 'Tasarım oluştur' }).click()
+    await page.getByRole('button', { name: 'Hadi tasarlayalım' }).click()
     await completeBrief(page)
 
     await expect(page.getByText(/kredi gerektiriyor/)).toBeVisible()

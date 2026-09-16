@@ -173,6 +173,7 @@
 | STU-S4 | — | FRONTEND_AGENT | STU-S2 | DONE | the step strip (§5) | StudioStepper on room, plan, design; plan prefilled from the room; fidelity note under the render; studio-stepper E2E |
 | STU-S3 | — | AI_AGENT | STU-S2 | DONE | interior-design rules (K11–K13) in LayoutComposer | odak, dolaşım, ölçek, sehpa, halı, simetri, yükseklik, aydınlatma — each a named test; unplaced pieces carry a reason |
 | STU-S5 | — | FRONTEND_AGENT | STU-S4 | DONE | version strip, compare, share (K26) | DesignVersionStrip + DesignVersionCompare on the design screen; looking ≠ deciding; sharing already project-level and photo-safe |
+| STU-G1 | — | FRONTEND_AGENT | STU-A1 | DONE | the guide (REHBER.md): one warm first-person card per studio screen; keep-list plate | StudioGuide on projects/project/room; chips choose what stays; copy rewritten in "sen"; guide.spec.ts |
 | STU-A1 | — | AI_AGENT | STU-S1 | DONE | every photograph read as one room; "Tanıma" as its own step (K1, K5) | RoomAnalyser reads all photos (primary first, ≤6); AnalyseRoom job after upload (delayed, stands down when stale) and POST rooms/{room}/analyse; RoomDetail.analysis; per-photo plate button; E2E global setup routes background tasks to the simulator |
 
 ## Scope notes

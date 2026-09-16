@@ -42,14 +42,18 @@ final class RoomClearer
      *
      * Null when it could not be made — the task is paused, the provider failed, or the
      * simulator answered — and the room carries on with its photograph, which is what it had.
+     *
+     * @param  list<string>  $keep  what stays in the room, by the names the reading gave them
      */
-    public function clear(Room $room, RoomMedia $photograph): ?RoomMedia
+    public function clear(Room $room, RoomMedia $photograph, array $keep = []): ?RoomMedia
     {
         $existing = $this->storage->plateOf($photograph);
 
         if ($existing !== null) {
             return $existing;
         }
+
+        $keep = array_values(array_unique(array_filter($keep, static fn (mixed $name): bool => is_string($name) && trim($name) !== '')));
 
         $analysis = RoomAnalysis::query()
             ->where('room_id', $room->getKey())
@@ -63,13 +67,17 @@ final class RoomClearer
                 task: AiTask::RoomClear,
                 input: [
                     'room_type' => $analysis->detected_room_type ?? $room->room_type->value,
-                    'objects' => $this->objectsSeenIn($analysis),
+                    'objects' => $this->objectsSeenIn($analysis, $keep),
+                    // What the customer asked to keep (K8 with a choice): said by name so the
+                    // model leaves exactly those and takes the rest.
+                    'keep' => $keep === [] ? 'nothing' : implode(', ', $keep),
                     // Read off the disk and sent as bytes. The photograph never leaves as a link.
                     'image_sources' => [['disk' => $photograph->disk, 'path' => $photograph->storage_path]],
                     'image_roles' => ['0: the room photograph to empty'],
                 ],
                 subject: $room,
-                idempotencyKey: 'room-plate:'.$photograph->getKey(),
+                // A different keep-list is a different plate, and may be paid for again.
+                idempotencyKey: 'room-plate:'.$photograph->getKey().($keep === [] ? '' : ':'.substr(hash('sha256', implode('|', $keep)), 0, 12)),
                 creditCostOverride: 0,
             );
         } catch (Throwable $e) {
@@ -118,8 +126,10 @@ final class RoomClearer
      *
      * "all movable furniture and objects" when nothing was listed — the instruction still
      * has to say what to remove.
+     *
+     * @param  list<string>  $keep
      */
-    private function objectsSeenIn(?RoomAnalysis $analysis): string
+    private function objectsSeenIn(?RoomAnalysis $analysis, array $keep = []): string
     {
         $objects = (array) ($analysis?->payload['movable_objects'] ?? []);
 
@@ -127,16 +137,24 @@ final class RoomClearer
 
         foreach ($objects as $object) {
             $type = is_array($object) ? ($object['type'] ?? null) : $object;
+            $label = is_array($object) ? ($object['label'] ?? null) : null;
+
+            // Kept by label or by type, whichever the customer's choice named.
+            if (in_array($type, $keep, true) || in_array($label, $keep, true)) {
+                continue;
+            }
 
             if (is_string($type) && $type !== '') {
-                $names[] = $type;
+                $names[] = is_string($label) && $label !== '' ? "{$type} ({$label})" : $type;
             }
         }
 
         $names = array_values(array_unique($names));
 
-        return $names === []
-            ? 'all movable furniture and objects'
-            : implode(', ', $names).' and any other movable furniture or objects';
+        if ($names === []) {
+            return $keep === [] ? 'all movable furniture and objects' : 'every movable object except the ones to keep';
+        }
+
+        return implode(', ', $names).($keep === [] ? ' and any other movable furniture or objects' : '');
     }
 }
