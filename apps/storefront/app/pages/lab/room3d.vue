@@ -11,7 +11,8 @@
  * inside out. Openings are the part most likely to be wrong and the part hardest to see in a
  * screenshot, so they are pinned to known numbers here and varied by hand.
  */
-import type { LayoutItem, RoomGeometry, RoomOpening } from '~/room3d/types'
+import type { OpeningKind } from '~/room3d/openings'
+import type { LayoutItem, RoomGeometry, RoomOpening, WallName } from '~/room3d/types'
 
 definePageMeta({ layout: false })
 useHead({ title: 'Oda 3D · laboratuvar' })
@@ -62,6 +63,31 @@ const openings = ref<RoomOpening[]>([
     sill_height_mm: 1_000,
   },
 ])
+
+/**
+ * One of a kind from the palette, on whichever wall has the most room left, after whatever
+ * is already there. The lab has no server to ask, so the page keeps the list itself.
+ */
+function addKind(kind: OpeningKind): void {
+  const spanOf = (wall: WallName): number => (wall === 'north' || wall === 'south' ? geometry.value.width_mm : geometry.value.length_mm)
+  const usedOn = (wall: WallName): number => openings.value
+    .filter(opening => opening.wall === wall)
+    .reduce((end, opening) => Math.max(end, (opening.offset_mm ?? 0) + (opening.width_mm ?? 0)), 0)
+  const wall = (['south', 'west', 'north', 'east'] as WallName[])
+    .map(candidate => ({ candidate, free: spanOf(candidate) - usedOn(candidate) }))
+    .sort((a, b) => b.free - a.free)[0]!.candidate
+
+  openings.value = [...openings.value, {
+    id: `o${openings.value.length + 1}`,
+    type: kind.type,
+    variant: kind.variant,
+    wall,
+    offset_mm: usedOn(wall) + 300,
+    width_mm: kind.width_mm,
+    height_mm: kind.height_mm,
+    sill_height_mm: kind.sill_height_mm,
+  }]
+}
 
 /**
  * A furnished room, with one of everything the editor treats differently.
@@ -143,6 +169,7 @@ function onSave(next: LayoutItem[]): void {
         editable
         @save="onSave"
         @move-opening="(id, offset, wall) => { openings = openings.map(opening => (opening.id === id ? { ...opening, offset_mm: offset, wall } : opening)) }"
+        @add-opening="addKind"
       />
 
       <p class="rounded-sm bg-surface p-3 text-xs text-muted">

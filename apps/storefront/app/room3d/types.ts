@@ -57,6 +57,8 @@ export interface RoomGeometry {
 export interface RoomOpening {
   id: string
   type: string
+  /** Which kind: single, double, triple, french_balcony, single_door, double_door, sliding. Null when never asked. */
+  variant?: string | null
   wall: WallName | null
   offset_mm: number | null
   width_mm: number | null

@@ -588,6 +588,9 @@ export interface RoomConstraintItem {
   id: string
   type: string
   type_label: string
+  /** Which kind of door or window (single, double, triple, french_balcony, single_door, double_door, sliding); null when never asked. */
+  variant: string | null
+  variant_label: string | null
   label: string | null
   wall: string | null
   offset_mm: number | null

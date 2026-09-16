@@ -19,6 +19,7 @@
  */
 import { formatDistance } from '~/room3d/MeasurementEngine'
 import { type EditorState, type OverlayLabel, RoomEditor } from '~/room3d/RoomEditor'
+import { OPENING_TYPES, type OpeningKind, type OpeningType, TYPE_LABELS, kindsFor } from '~/room3d/openings'
 import type { DisplayMode, LayoutItem, RoomGeometry, RoomOpening, ViewMode, WallName } from '~/room3d/types'
 
 const props = withDefaults(defineProps<{
@@ -45,17 +46,17 @@ const emit = defineEmits<{
   /** A door or window was dragged and let go on a wall — on the plan or in the room. */
   moveOpening: [id: string, offsetMm: number, wall: WallName]
   /** A door or window was picked from the palette: put one in the room to be dragged. */
-  addOpening: [type: 'door' | 'window' | 'balcony_door']
+  addOpening: [kind: OpeningKind]
   /** A door or window's end was dragged on the plan: this wide now, starting here. */
   resizeOpening: [id: string, offsetMm: number, widthMm: number]
 }>()
 
-/** The palette: what a customer can put on a wall. */
-const PALETTE: Array<{ type: 'door' | 'window' | 'balcony_door', label: string, path: string }> = [
-  { type: 'door', label: 'Kapı', path: 'M6 3h12v18H6zM14 12h1M6 21h12' },
-  { type: 'window', label: 'Pencere', path: 'M4 4h16v16H4zM12 4v16M4 12h16' },
-  { type: 'balcony_door', label: 'Balkon kapısı', path: 'M5 3h14v18H5zM12 3v18M5 12h14M9 8h1M15 8h1' },
-]
+/** The palette: what a customer can put on a wall, grouped as they think of them. */
+const PALETTE: Array<{ type: OpeningType, label: string, kinds: OpeningKind[] }> = OPENING_TYPES.map(type => ({
+  type,
+  label: TYPE_LABELS[type],
+  kinds: kindsFor(type),
+}))
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 const view = ref<ViewMode>('perspective')
@@ -345,23 +346,28 @@ defineExpose({
       />
 
       <!--
-        The palette: a door, a window, a balcony door. One tap puts it in the room; then it is
-        picked up and put on a wall like anything else. Nobody types where a door is.
+        The palette: windows, doors and balcony doors, each in the kinds a customer would name
+        — single, double, three panes, a French balcony, a sliding door. One tap puts it in
+        the room; then it is picked up and put on a wall like anything else.
       -->
-      <div v-if="editable" class="absolute top-16 left-4 flex flex-col gap-1 rounded-md bg-surface/90 p-1 backdrop-blur-sm" role="toolbar" aria-label="Kapı ve pencere ekle">
-        <button
-          v-for="entry in PALETTE"
-          :key="entry.type"
-          type="button"
-          class="flex flex-col items-center gap-0.5 rounded-sm px-2 py-1.5 text-[10px] text-ink-secondary transition-colors hover:bg-bg-muted"
-          :title="`${entry.label} ekle — sonra tutup duvara sürükle`"
-          @click="emit('addOpening', entry.type)"
-        >
-          <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path :d="entry.path" />
-          </svg>
-          {{ entry.label }}
-        </button>
+      <div v-if="editable" class="absolute top-16 left-4 flex max-h-[calc(100%-5rem)] flex-col gap-1 overflow-y-auto rounded-md bg-surface/90 p-1 backdrop-blur-sm" role="toolbar" aria-label="Kapı ve pencere ekle">
+        <template v-for="group in PALETTE" :key="group.type">
+          <p class="px-1.5 pt-1 text-[9px] font-medium tracking-wide text-muted uppercase">{{ group.label }}</p>
+          <button
+            v-for="kind in group.kinds"
+            :key="`${kind.type}-${kind.variant}`"
+            type="button"
+            class="flex items-center gap-1.5 rounded-sm px-1.5 py-1 text-[10px] text-ink-secondary transition-colors hover:bg-bg-muted"
+            :title="`${kind.label} ${group.label.toLocaleLowerCase('tr-TR')} ekle — sonra tutup duvara sürükle`"
+            :aria-label="`${kind.label} ${group.label.toLocaleLowerCase('tr-TR')}`"
+            @click="emit('addOpening', kind)"
+          >
+            <svg class="size-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path :d="kind.icon" />
+            </svg>
+            {{ kind.label }}
+          </button>
+        </template>
       </div>
 
       <!--

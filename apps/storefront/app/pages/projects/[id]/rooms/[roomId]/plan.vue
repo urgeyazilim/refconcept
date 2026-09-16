@@ -12,6 +12,7 @@
  * sixty requests a second; not on a button either, because a plan somebody spent twenty
  * minutes on and lost to a closed tab is a plan they do not make again.
  */
+import { type OpeningKind, describeKind, kindsFor, variantOf } from '~/room3d/openings'
 import type { LayoutItem, RoomGeometry, RoomOpening, WallName } from '~/room3d/types'
 
 definePageMeta({ middleware: ['auth', 'verified'], layout: 'account' })
@@ -165,21 +166,12 @@ const openingNotice = ref<string | null>(null)
 const openingBusy = ref(false)
 
 const WALL_LABELS: Record<string, string> = { north: 'kuzey', east: 'doğu', south: 'güney', west: 'batı' }
-const TYPE_LABELS: Record<string, string> = { door: 'Kapı', balcony_door: 'Balkon kapısı', window: 'Pencere' }
-
-const newOpening = reactive({
-  type: 'window' as 'window' | 'door' | 'balcony_door',
-  wall: 'north' as 'north' | 'east' | 'south' | 'west',
-  offset_cm: 100,
-  width_cm: 120,
-  height_cm: 140,
-  sill_cm: 90,
-})
 
 function asOpening(raw: Record<string, unknown>): RoomOpening {
   return {
     id: String(raw.id),
     type: String(raw.type),
+    variant: typeof raw.variant === 'string' ? raw.variant : null,
     wall: (raw.wall as RoomOpening['wall']) ?? null,
     offset_mm: typeof raw.offset_mm === 'number' ? raw.offset_mm : null,
     width_mm: typeof raw.width_mm === 'number' ? raw.width_mm : null,
@@ -220,15 +212,14 @@ async function resizeOpening(id: string, offsetMm: number, widthMm: number): Pro
 }
 
 /**
- * A door or window from the palette: put into the room at a sensible size, on a wall with
- * room for it, to be dragged where it belongs. Nobody types where a door is.
+ * A door or window from the palette: put into the room at the size such a thing usually is,
+ * on a wall with room for it, to be dragged where it belongs. Nobody types where a door is.
  */
-async function addOpening(type: 'door' | 'window' | 'balcony_door' = newOpening.type): Promise<void> {
+async function addOpening(kind: OpeningKind): Promise<void> {
   openingBusy.value = true
   openingNotice.value = null
 
-  const isDoor = type !== 'window'
-  const width = type === 'window' ? 1_200 : 900
+  const width = kind.width_mm
   const geometryNow = confirmed.value
 
   const spanOf = (wall: WallName): number => (wall === 'north' || wall === 'south' ? geometryNow?.width_mm ?? 4_000 : geometryNow?.length_mm ?? 5_000)
@@ -237,13 +228,14 @@ async function addOpening(type: 'door' | 'window' | 'balcony_door' = newOpening.
 
   try {
     const response = await api.post<{ data: Record<string, unknown> }>(`${base}/constraints`, {
-      type,
-      label: TYPE_LABELS[type],
+      type: kind.type,
+      variant: kind.variant,
+      label: describeKind({ type: kind.type, variant: kind.variant, width_mm: width, sill_height_mm: kind.sill_height_mm }),
       wall,
       offset_mm: Math.max(0, Math.round((spanOf(wall) - width) / 2)),
       width_mm: width,
-      height_mm: type === 'window' ? 1_400 : 2_100,
-      sill_height_mm: isDoor ? 0 : 900,
+      height_mm: kind.height_mm,
+      sill_height_mm: kind.sill_height_mm,
       notes: 'Sizin eklediğiniz.',
     })
 
@@ -254,6 +246,38 @@ async function addOpening(type: 'door' | 'window' | 'balcony_door' = newOpening.
   }
   finally {
     openingBusy.value = false
+  }
+}
+
+/**
+ * The same opening, another kind: a single window that is really a double. Its place and
+ * width stay — the customer has already put it where it is — only the drawing changes,
+ * except that a French balcony goes to the floor and a window off it comes back up.
+ */
+async function rekindOpening(id: string, kind: OpeningKind): Promise<void> {
+  const previous = openings.value
+  const current = previous.find(opening => opening.id === id)
+
+  if (!current) {
+    return
+  }
+
+  const toFloor = kind.sill_height_mm === 0 && (current.sill_height_mm ?? 0) > 0
+  const offFloor = kind.sill_height_mm > 0 && (current.sill_height_mm ?? 0) === 0
+  const changes = {
+    variant: kind.variant,
+    label: describeKind({ type: current.type, variant: kind.variant, width_mm: current.width_mm, sill_height_mm: kind.sill_height_mm }),
+    ...(toFloor || offFloor ? { sill_height_mm: kind.sill_height_mm, height_mm: kind.height_mm } : {}),
+  }
+
+  openings.value = previous.map(opening => (opening.id === id ? { ...opening, ...changes } : opening))
+
+  try {
+    await api.patch(`${base}/constraints/${id}`, { ...changes, notes: 'Sizin düzelttiğiniz.' })
+  }
+  catch (error) {
+    openings.value = previous
+    openingNotice.value = error instanceof ApiError ? error.message : 'Tür değiştirilemedi.'
   }
 }
 
@@ -1149,16 +1173,32 @@ onMounted(async () => {
         </p>
 
         <ul v-if="openings.length > 0" class="mt-3 divide-y divide-line text-sm">
-          <li v-for="opening in openings" :key="opening.id" class="flex items-center justify-between gap-3 py-2">
-            <span>
-              {{ TYPE_LABELS[opening.type] ?? opening.type }} ·
-              {{ opening.wall ? WALL_LABELS[opening.wall] : '—' }} duvarı ·
-              {{ opening.offset_mm === null ? '?' : Math.round(opening.offset_mm / 10) }} cm'de,
-              {{ opening.width_mm === null ? '?' : Math.round(opening.width_mm / 10) }} cm geniş
-            </span>
-            <button type="button" class="text-xs text-danger hover:underline" @click="removeOpening(opening.id)">
-              Kaldır
-            </button>
+          <li v-for="opening in openings" :key="opening.id" class="py-2">
+            <div class="flex items-center justify-between gap-3">
+              <span>
+                {{ describeKind(opening) }} ·
+                {{ opening.wall ? WALL_LABELS[opening.wall] : '—' }} duvarı ·
+                {{ opening.offset_mm === null ? '?' : Math.round(opening.offset_mm / 10) }} cm'de,
+                {{ opening.width_mm === null ? '?' : Math.round(opening.width_mm / 10) }} cm geniş
+              </span>
+              <button type="button" class="text-xs text-danger hover:underline" @click="removeOpening(opening.id)">
+                Kaldır
+              </button>
+            </div>
+            <!-- The same opening as another kind: the reading said "window", the customer says "double". -->
+            <div class="mt-1.5 flex flex-wrap gap-1" role="group" :aria-label="`${describeKind(opening)} türü`">
+              <button
+                v-for="kind in kindsFor(opening.type as OpeningKind['type'])"
+                :key="kind.variant"
+                type="button"
+                class="rounded-pill border px-2 py-0.5 text-[11px] transition-colors"
+                :class="variantOf(opening) === kind.variant ? 'border-charcoal bg-charcoal text-white' : 'border-line text-ink-secondary hover:bg-bg-muted'"
+                :aria-pressed="variantOf(opening) === kind.variant"
+                @click="rekindOpening(opening.id, kind)"
+              >
+                {{ kind.label }}
+              </button>
+            </div>
           </li>
         </ul>
         <p v-else class="mt-3 text-xs text-muted">Bu odada kayıtlı kapı ya da pencere yok.</p>

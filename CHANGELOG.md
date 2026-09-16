@@ -5,6 +5,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added — Which kind of window it is
+
+- **A window is a kind of window now.** Single, double or triple casement, or a French
+  balcony; a door with one leaf or two; a balcony door in either, or sliding. The palette
+  beside the room offers them by name, grouped as a customer thinks of them, each put in
+  at the size such a thing usually is and then dragged where it belongs.
+- **The room is drawn with the right one.** Three panes have two mullions; a double door
+  hangs a leaf on each jamb and swings both; a sliding door is two glass panels, one slid
+  behind the other, on a track; a French balcony is glass to the floor with a guard rail
+  outside it. The plan marks where the leaves meet and draws the second sliding panel, so
+  the kinds differ on paper too.
+- **The reading's openings are given a kind by their width** — a 2.1 m "window" is three
+  panes, a 1.6 m "door" two leaves — and the customer corrects it with one tap on a chip
+  beside the opening, on the plan page and at the confirmation step alike. A kind has to
+  be one its type can be: the API refuses a sliding window.
+- `room_constraints.variant` (nullable, checked); `variant` and `variant_label` on the
+  constraint and `variant` on the layout's openings.
+
 ### Added — Products in three dimensions
 
 - **A 3D model made from the seller's own photograph.** fal.ai / Tripo 2.5, thirty cents

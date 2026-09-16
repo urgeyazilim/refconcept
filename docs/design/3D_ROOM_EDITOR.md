@@ -217,3 +217,19 @@ What the editor gained in one day, in the order the owner would notice it:
 
 Still open: SSAO/quality toggle, non-rectangular rooms, resizing openings in 3D (only on the
 plan today), a right-hand catalogue column beside the scene.
+
+## Kinds of door and window (2026-09-16)
+
+`room_constraints.variant` says which kind an opening is — for a window `single`, `double`,
+`triple` or `french_balcony`; for a door `single_door` or `double_door`; for a balcony door
+those two or `sliding`. `OpeningVariant` (API) and `room3d/openings.ts` (browser) are the
+same list, with the same labels and the same starting sizes, and both refuse a kind that does
+not fit the type. The collision rules ignore it: a way through is a way through. Only what
+is drawn changes — `RoomGeometryBuilder.fixture` hangs one leaf or two, cuts one pane or
+three, builds the sliding panels and the guard rail; `RoomPlanSvg` ticks the leaf divisions
+and draws the second sliding panel.
+
+An opening with no variant — everything read before today — is judged by its width in
+`variantOf` (browser) and `OpeningVariant::guess` (adopter), with the same thresholds:
+casements under a metre are single, under 1.8 m double; a door leaf over 1.3 m is a pair;
+a balcony door over 2 m slides; a window on the floor is a French balcony.

@@ -10,6 +10,7 @@ use App\Domains\Ai\Models\AiJob;
 use App\Domains\Catalog\Enums\RoomType;
 use App\Domains\Projects\Enums\ConstraintType;
 use App\Domains\Projects\Enums\MeasurementQuality;
+use App\Domains\Projects\Enums\OpeningVariant;
 use App\Domains\Projects\Jobs\AnalyseRoom;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\Room;
@@ -188,7 +189,7 @@ final class RoomController
         // confirmable as existing.
         abort_unless($constraint->room_id === $room->getKey(), 404);
 
-        $constraint->fill($this->validateConstraint($request, partial: true))->save();
+        $constraint->fill($this->validateConstraint($request, current: $constraint))->save();
 
         return response()->json(['data' => $this->constraint($constraint->fresh())]);
     }
@@ -266,12 +267,16 @@ final class RoomController
     /**
      * @return array<string, mixed>
      */
-    private function validateConstraint(Request $request, bool $partial = false): array
+    private function validateConstraint(Request $request, ?RoomConstraint $current = null): array
     {
-        $required = $partial ? 'sometimes' : 'required';
+        $required = $current === null ? 'required' : 'sometimes';
 
-        return $request->validate([
+        $validator = Validator::make($request->all(), [
             'type' => [$required, Rule::enum(ConstraintType::class)],
+            // Which kind of door or window. It has to be one the type can be: a sliding
+            // window and a French-balcony door are not things, and drawing one would be a
+            // room the customer does not have.
+            'variant' => ['sometimes', 'nullable', Rule::enum(OpeningVariant::class)],
             'label' => ['sometimes', 'nullable', 'string', 'max:160'],
             'wall' => ['sometimes', 'nullable', Rule::in(['north', 'east', 'south', 'west', 'ceiling', 'floor'])],
             'offset_mm' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:100000'],
@@ -282,6 +287,19 @@ final class RoomController
             'must_stay_visible' => ['sometimes', 'boolean'],
             'notes' => ['sometimes', 'nullable', 'string', 'max:1000'],
         ]);
+
+        $validator->after(function (ValidatorInstance $check) use ($request, $current): void {
+            $variant = OpeningVariant::tryFrom((string) $request->input('variant', ''));
+            $type = $request->has('type')
+                ? ConstraintType::tryFrom((string) $request->input('type', ''))
+                : $current?->type;
+
+            if ($variant !== null && $type !== null && ! $variant->fits($type)) {
+                $check->errors()->add('variant', sprintf('%s bir %s olamaz.', $variant->label(), mb_strtolower($type->label())));
+            }
+        });
+
+        return $validator->validate();
     }
 
     /**
@@ -467,6 +485,8 @@ final class RoomController
             'id' => $constraint->id,
             'type' => $constraint->type->value,
             'type_label' => $constraint->type->label(),
+            'variant' => $constraint->variant?->value,
+            'variant_label' => $constraint->variant?->label(),
             'label' => $constraint->label,
             'wall' => $constraint->wall,
             'offset_mm' => $constraint->offset_mm,

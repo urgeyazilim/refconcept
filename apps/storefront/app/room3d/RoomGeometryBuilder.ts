@@ -25,6 +25,7 @@ import {
   trimMaterial,
   wallMaterial,
 } from './RoomMaterials'
+import { leavesOf, variantOf } from './openings'
 import { type RoomGeometry, type RoomOpening, type WallName, toUnits } from './types'
 
 /**
@@ -333,64 +334,129 @@ export class RoomGeometryBuilder {
       parts.push(jamb)
     }
 
-    const isDoor = sill === 0
+    const variant = variantOf(opening)
+    const leaves = leavesOf(variant)
+    const isDoor = opening.type === 'door' || opening.type === 'balcony_door'
 
-    if (isDoor) {
+    if (isDoor && variant === 'sliding') {
       /*
-       * The leaf, hung on the left jamb and standing open into the room.
+       * Two glass panels in the wall's thickness, one slid a third of the way behind the
+       * other: shut, a sliding door is a window, and the customer cannot tell it from one.
+       */
+      const panelW = w / 2 + 0.03
+      const glassZ = innerZ - inward * thickness / 2
+
+      for (const [px, pz] of [
+        [x1 + panelW / 2, glassZ],
+        [x1 + w - panelW / 2 - w / 6, glassZ + inward * 0.05],
+      ] as const) {
+        const panel = new Group()
+        const pane = new Mesh(new PlaneGeometry(panelW - 0.08, h - 0.08), this.glassMaterial)
+        const frame = new Mesh(new BoxGeometry(panelW, h, 0.04), this.trimMaterial)
+
+        frame.position.set(0, 0, 0)
+        pane.position.set(0, 0, 0.021)
+        panel.add(frame, pane)
+        panel.position.set(px, y1 + h / 2, pz)
+        parts.push(panel)
+      }
+
+      // The track along the floor.
+      const track = new Mesh(new BoxGeometry(w, 0.02, 0.1), this.trimMaterial)
+
+      track.position.set(x1 + w / 2, 0.01, glassZ + inward * 0.02)
+      parts.push(track)
+    }
+    else if (isDoor) {
+      /*
+       * The leaf, hung on a jamb and standing open into the room — both leaves, hung on
+       * both jambs, for a double door.
        *
        * Open rather than shut: a shut door is a panel filling a hole, and the customer cannot
        * tell it from a cupboard. Open, it says which way it swings and how much floor it
        * needs — which is the clearance the collision rules keep for it.
        */
       const leafThickness = 0.04
-      const hinge = new Group()
+      const leafW = w / leaves
+      const material = opening.type === 'balcony_door' ? this.glassMaterial : this.leafMaterial
 
-      hinge.position.set(x1, 0, innerZ)
-      hinge.rotation.y = -inward * (RoomGeometryBuilder.DOOR_OPEN_DEG * Math.PI) / 180
+      for (let index = 0; index < leaves; index++) {
+        // The first leaf hangs on the left jamb and opens rightwards; a second hangs on the
+        // right jamb and opens leftwards, so the pair meets in the middle.
+        const mirrored = index === 1
+        const hingeX = mirrored ? x1 + w : x1
+        const hinge = new Group()
 
-      const leaf = new Mesh(
-        new BoxGeometry(w - 0.02, h - 0.02, leafThickness),
-        opening.type === 'balcony_door' ? this.glassMaterial : this.leafMaterial,
-      )
+        hinge.position.set(hingeX, 0, innerZ)
+        hinge.rotation.y = (mirrored ? 1 : -1) * inward * (RoomGeometryBuilder.DOOR_OPEN_DEG * Math.PI) / 180
 
-      leaf.position.set((w - 0.02) / 2 + 0.01, (h - 0.02) / 2 + 0.01, inward * leafThickness / 2)
-      leaf.castShadow = true
-      hinge.add(leaf)
-      parts.push(hinge)
+        const leaf = new Mesh(new BoxGeometry(leafW - 0.02, h - 0.02, leafThickness), material)
 
-      // The swing, drawn on the floor: a quarter arc from the hinge, the door's width across.
-      const points: Vector3[] = []
+        leaf.position.set((mirrored ? -1 : 1) * ((leafW - 0.02) / 2 + 0.01), (h - 0.02) / 2 + 0.01, inward * leafThickness / 2)
+        leaf.castShadow = true
+        hinge.add(leaf)
+        parts.push(hinge)
 
-      for (let step = 0; step <= 16; step++) {
-        const angle = (step / 16) * (Math.PI / 2)
+        // The swing, drawn on the floor: a quarter arc from the hinge, the leaf's width across.
+        const points: Vector3[] = []
 
-        points.push(new Vector3(x1 + w * Math.cos(angle), 0.004, innerZ + inward * w * Math.sin(angle)))
+        for (let step = 0; step <= 16; step++) {
+          const angle = (step / 16) * (Math.PI / 2)
+
+          points.push(new Vector3(hingeX + (mirrored ? -1 : 1) * leafW * Math.cos(angle), 0.004, innerZ + inward * leafW * Math.sin(angle)))
+        }
+
+        parts.push(new Line(new BufferGeometry().setFromPoints(points), this.swingMaterial))
       }
-
-      parts.push(new Line(new BufferGeometry().setFromPoints(points), this.swingMaterial))
     }
     else {
-      // The sill: a board along the bottom of the window, proud of the wall.
-      const sillDepth = 0.12
-      const sillBoard = new Mesh(new BoxGeometry(w + frameWidth * 2, 0.04, sillDepth), this.trimMaterial)
-
-      sillBoard.position.set(x1 + w / 2, y1 - 0.02, innerZ + inward * sillDepth / 2)
-      sillBoard.castShadow = true
-      parts.push(sillBoard)
-
-      // The glass, in the middle of the wall's thickness, with a mullion down the centre.
       const glassZ = innerZ - inward * thickness / 2
 
+      if (sill > 0) {
+        // The sill: a board along the bottom of the window, proud of the wall.
+        const sillDepth = 0.12
+        const sillBoard = new Mesh(new BoxGeometry(w + frameWidth * 2, 0.04, sillDepth), this.trimMaterial)
+
+        sillBoard.position.set(x1 + w / 2, y1 - 0.02, innerZ + inward * sillDepth / 2)
+        sillBoard.castShadow = true
+        parts.push(sillBoard)
+      }
+
+      // The glass, in the middle of the wall's thickness, with a mullion between each pane.
       const glass = new Mesh(new PlaneGeometry(w, h), this.glassMaterial)
 
       glass.position.set(x1 + w / 2, y1 + h / 2, glassZ)
       parts.push(glass)
 
-      const mullion = new Mesh(new BoxGeometry(0.04, h, 0.05), this.trimMaterial)
+      for (let index = 1; index < leaves; index++) {
+        const mullion = new Mesh(new BoxGeometry(0.04, h, 0.05), this.trimMaterial)
 
-      mullion.position.set(x1 + w / 2, y1 + h / 2, glassZ)
-      parts.push(mullion)
+        mullion.position.set(x1 + (w * index) / leaves, y1 + h / 2, glassZ)
+        parts.push(mullion)
+      }
+
+      if (variant === 'french_balcony') {
+        /*
+         * The guard rail outside: a handrail at a metre with balusters under it. It is what
+         * makes a French balcony a French balcony rather than a door to nowhere, and it is
+         * outside the glass, so it is seen through it and never in the way.
+         */
+        const railZ = innerZ - inward * (thickness + 0.06)
+        const railY = 1.0
+        const rail = new Mesh(new BoxGeometry(w + 0.1, 0.04, 0.04), this.trimMaterial)
+
+        rail.position.set(x1 + w / 2, railY, railZ)
+        parts.push(rail)
+
+        const bars = Math.max(2, Math.round(w / 0.12))
+
+        for (let index = 0; index <= bars; index++) {
+          const bar = new Mesh(new BoxGeometry(0.015, railY, 0.015), this.trimMaterial)
+
+          bar.position.set(x1 + (w * index) / bars, railY / 2, railZ)
+          parts.push(bar)
+        }
+      }
 
       /*
        * Daylight: a bright sheet just outside, seen only through the hole.

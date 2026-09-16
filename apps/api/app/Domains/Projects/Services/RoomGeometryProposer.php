@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domains\Projects\Services;
 
 use App\Domains\Projects\Enums\ConstraintType;
+use App\Domains\Projects\Enums\OpeningVariant;
 use App\Domains\Projects\Models\Room;
 use App\Domains\Projects\Models\RoomAnalysis;
 use App\Domains\Projects\Models\RoomConstraint;
@@ -170,6 +171,9 @@ final class RoomGeometryProposer
             RoomConstraint::query()->create([
                 'room_id' => $room->getKey(),
                 'type' => $type,
+                // The reading is not asked which kind; the width says. A 2.1 m window is three
+                // panes, a 1.6 m door two leaves, and the customer can correct it in a tap.
+                'variant' => OpeningVariant::guess($type, $opening['width_mm'] ?? null, $opening['sill_height_mm'] ?? null)?->value,
                 'wall' => $opening['wall'],
                 'offset_mm' => $opening['offset_mm'],
                 'width_mm' => $opening['width_mm'],

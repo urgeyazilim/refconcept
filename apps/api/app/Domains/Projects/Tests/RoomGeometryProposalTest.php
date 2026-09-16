@@ -161,6 +161,29 @@ it('adopts the openings when the measurements are agreed to', function (): void 
         ->and($constraint->notes)->toBe('Fotoğraftan tespit edildi.');
 });
 
+it('says which kind an adopted opening most likely is, from its width', function (): void {
+    $version = $this->proposer->propose(analysed([
+        'estimated_dimensions' => ['width_mm' => 4_850, 'length_mm' => 5_200, 'height_mm' => 2_720],
+        'openings' => [
+            ['type' => 'door', 'wall' => 'east', 'offset_mm' => 400, 'width_mm' => 1_600, 'height_mm' => 2_100],
+            ['type' => 'window', 'wall' => 'north', 'offset_mm' => 720, 'width_mm' => 2_100, 'sill_height_mm' => 900],
+            ['type' => 'window', 'wall' => 'south', 'offset_mm' => 720, 'width_mm' => 1_200, 'sill_height_mm' => 0],
+        ],
+    ]));
+
+    $this->proposer->adoptOpenings($version);
+
+    /*
+     * The reading is not asked which kind; the width is the only evidence. Wrong is cheap —
+     * one tap on the chip — and a room drawn with three panes where there are three panes
+     * is the room the customer recognises.
+     */
+    $kinds = RoomConstraint::query()->where('room_id', $this->room->getKey())->orderBy('wall')
+        ->get()->mapWithKeys(fn (RoomConstraint $c): array => [$c->wall => $c->variant?->value])->all();
+
+    expect($kinds)->toBe(['east' => 'double_door', 'north' => 'triple', 'south' => 'french_balcony']);
+});
+
 it('leaves a room alone when it already has openings of its own', function (): void {
     RoomConstraint::query()->create([
         'room_id' => $this->room->getKey(),

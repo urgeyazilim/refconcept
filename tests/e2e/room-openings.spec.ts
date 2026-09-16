@@ -44,8 +44,12 @@ test.describe('room openings', () => {
 
     await expect(section.getByText('Bu odada kayıtlı kapı ya da pencere yok.')).toBeVisible()
     // From the palette at the left of the scene: a window lands centred on a free wall.
-    await page.getByRole('toolbar', { name: 'Kapı ve pencere ekle' }).getByRole('button', { name: 'Pencere' }).click()
-    await expect(section.getByText(/Pencere · kuzey duvarı · 18\d cm'de, 120 cm geniş/)).toBeVisible({ timeout: 15_000 })
+    await page.getByRole('toolbar', { name: 'Kapı ve pencere ekle' }).getByRole('button', { name: 'Çift kanat pencere', exact: true }).click()
+    await expect(section.getByText(/Çift kanat pencere · kuzey duvarı · 17\d cm'de, 140 cm geniş/)).toBeVisible({ timeout: 15_000 })
+
+    // --- the same window, three panes: one tap on the chip ----------------------------
+    await section.getByRole('group', { name: 'Çift kanat pencere türü' }).getByRole('button', { name: 'Üçlü' }).click()
+    await expect(section.getByText(/Üçlü pencere · kuzey duvarı · 17\d cm'de, 140 cm geniş/)).toBeVisible({ timeout: 15_000 })
 
     // --- drag it along the wall on the plan ------------------------------------------
     await page.getByRole('button', { name: 'Plan', exact: true }).click()
@@ -73,7 +77,7 @@ test.describe('room openings', () => {
     await page.mouse.up()
 
     // The list says where it went, and so does the room itself.
-    await expect(section.getByText(/Pencere · kuzey duvarı · (19\d|[2-9]\d\d) cm'de/)).toBeVisible({ timeout: 15_000 })
+    await expect(section.getByText(/Üçlü pencere · kuzey duvarı · (1[89]\d|[2-9]\d\d) cm'de/)).toBeVisible({ timeout: 15_000 })
 
     const layout = await request.get(`${API}/api/v1/projects/${projectId}/rooms/${roomId}/layout`, { headers })
     const openings = (await layout.json()).data.openings as Array<{ id: string, wall: string, offset_mm: number, width_mm: number }>
@@ -81,7 +85,7 @@ test.describe('room openings', () => {
     expect(openings).toHaveLength(1)
     expect(openings[0]!.wall).toBe('north')
     expect(openings[0]!.offset_mm).toBeGreaterThan(1_825)
-    expect(openings[0]!.offset_mm).toBeLessThanOrEqual(4_850 - 1_200)
+    expect(openings[0]!.offset_mm).toBeLessThanOrEqual(4_850 - 1_400)
 
     // --- wider, by its end -----------------------------------------------------------
     const handle = await page.evaluate(() => {
@@ -96,7 +100,7 @@ test.describe('room openings', () => {
     await page.mouse.move(handle.x + 60, handle.y, { steps: 8 })
     await page.mouse.up()
 
-    await expect(section.getByText(/Pencere · kuzey duvarı · \d+ cm'de, (1[3-9]\d|[2-9]\d\d) cm geniş/)).toBeVisible({ timeout: 15_000 })
+    await expect(section.getByText(/Üçlü pencere · kuzey duvarı · \d+ cm'de, (1[5-9]\d|[2-9]\d\d) cm geniş/)).toBeVisible({ timeout: 15_000 })
 
     // --- picked up in the 3D room and put on the left wall ---------------------------
     // The Plan button is a switch: pressed again it shows the 3D room.
@@ -126,7 +130,7 @@ test.describe('room openings', () => {
     await page.mouse.move(west.x, west.y, { steps: 8 })
     await page.mouse.up()
 
-    await expect(section.getByText(/Pencere · batı duvarı · \d+ cm'de/)).toBeVisible({ timeout: 15_000 })
+    await expect(section.getByText(/Üçlü pencere · batı duvarı · \d+ cm'de/)).toBeVisible({ timeout: 15_000 })
 
     // --- and gone again ------------------------------------------------------------
     await section.getByRole('button', { name: 'Kaldır' }).click()

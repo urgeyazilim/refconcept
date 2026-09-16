@@ -19,6 +19,7 @@
  */
 import { formatDistance } from '~/room3d/MeasurementEngine'
 import { footprintOf, isMeasured } from '~/room3d/footprint'
+import { leavesOf, variantOf } from '~/room3d/openings'
 import type { LayoutItem, RoomGeometry, RoomOpening, WallName } from '~/room3d/types'
 
 const props = withDefaults(defineProps<{
@@ -300,6 +301,9 @@ interface Opening {
   x2: number
   y2: number
   swings: boolean
+  /** How many leaves or panes across; drawn as ticks so a double window reads as one. */
+  leaves: number
+  sliding: boolean
 }
 
 const walls = computed<Segment[]>(() => {
@@ -363,26 +367,61 @@ const gaps = computed<Opening[]>(() => {
       continue
     }
 
-    const swings = opening.type === 'door' || opening.type === 'balcony_door'
+    const variant = variantOf(opening)
+    const sliding = variant === 'sliding'
+    const swings = (opening.type === 'door' || opening.type === 'balcony_door') && !sliding
+    const leaves = leavesOf(variant)
 
     switch (wallOf(opening)) {
       case 'north':
-        drawn.push({ opening, x1: offset, y1: 0, x2: offset + span, y2: 0, swings })
+        drawn.push({ opening, x1: offset, y1: 0, x2: offset + span, y2: 0, swings, leaves, sliding })
         break
       case 'south':
-        drawn.push({ opening, x1: offset, y1: length, x2: offset + span, y2: length, swings })
+        drawn.push({ opening, x1: offset, y1: length, x2: offset + span, y2: length, swings, leaves, sliding })
         break
       case 'west':
-        drawn.push({ opening, x1: 0, y1: offset, x2: 0, y2: offset + span, swings })
+        drawn.push({ opening, x1: 0, y1: offset, x2: 0, y2: offset + span, swings, leaves, sliding })
         break
       case 'east':
-        drawn.push({ opening, x1: width, y1: offset, x2: width, y2: offset + span, swings })
+        drawn.push({ opening, x1: width, y1: offset, x2: width, y2: offset + span, swings, leaves, sliding })
         break
     }
   }
 
   return drawn
 })
+
+interface Mark { x1: number, y1: number, x2: number, y2: number }
+
+/** Where the leaves or panes meet: a short tick across the opening at each division. */
+function ticks(gap: Opening): Mark[] {
+  const horizontal = gap.y1 === gap.y2
+  const half = WALL_MM * 0.9
+  const marks: Mark[] = []
+
+  for (let index = 1; index < gap.leaves; index++) {
+    const t = index / gap.leaves
+    const x = gap.x1 + (gap.x2 - gap.x1) * t
+    const y = gap.y1 + (gap.y2 - gap.y1) * t
+
+    marks.push(horizontal ? { x1: x, y1: y - half, x2: x, y2: y + half } : { x1: x - half, y1: y, x2: x + half, y2: y })
+  }
+
+  return marks
+}
+
+/** A sliding door's second panel, drawn just inside the first from the middle to the end. */
+function slidingPanel(gap: Opening): Mark {
+  const horizontal = gap.y1 === gap.y2
+  const inward = (horizontal ? gap.y1 === 0 : gap.x1 === 0) ? 1 : -1
+  const step = WALL_MM * 0.55 * inward
+  const midX = (gap.x1 + gap.x2) / 2
+  const midY = (gap.y1 + gap.y2) / 2
+
+  return horizontal
+    ? { x1: midX, y1: midY + step, x2: gap.x2, y2: gap.y2 + step }
+    : { x1: midX + step, y1: midY, x2: gap.x2 + step, y2: gap.y2 }
+}
 
 /** Every piece as a rectangle, already rotated, with where its label goes. */
 const pieces = computed(() => props.items.map((item) => {
@@ -461,6 +500,13 @@ const LABEL_MM = 150
         @pointerdown.stop="startOpeningDrag($event, gap.opening)"
         @click.stop
       />
+      <!-- Where the leaves meet, and a sliding door's second panel: so two kinds of window differ on paper too. -->
+      <g class="pointer-events-none stroke-charcoal" :stroke-width="WALL_MM * 0.25">
+        <template v-for="gap in gaps" :key="`t${gap.opening.id}`">
+          <line v-for="(tick, index) in ticks(gap)" :key="index" :x1="tick.x1" :y1="tick.y1" :x2="tick.x2" :y2="tick.y2" />
+          <line v-if="gap.sliding" :x1="slidingPanel(gap).x1" :y1="slidingPanel(gap).y1" :x2="slidingPanel(gap).x2" :y2="slidingPanel(gap).y2" :stroke-width="WALL_MM * 0.5" class="stroke-accent-500" />
+        </template>
+      </g>
       <!-- A wider, invisible handle over each opening: a 60 mm line is a hard thing to grab. -->
       <line
         v-for="gap in gaps"
