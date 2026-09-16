@@ -844,12 +844,12 @@ function guideSecondary() {
             </p>
           </div>
 
-          <RcButton
-            v-if="canEdit && room.is_ready_for_design && !creatingDesign"
-            @click="creatingDesign = true; goTo('propose')"
-          >
-            Hadi tasarlayalım
-          </RcButton>
+          <!--
+            No shortcut here. A "Hadi tasarlayalım" button in the header jumped straight to
+            the proposal and skipped the guide's questions — the empty room, the size — which
+            is exactly the wizard-with-a-different-hat the owner asked us not to build. The
+            guide is the only way forward; the strip is the way back.
+          -->
         </div>
       </header>
 
