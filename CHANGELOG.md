@@ -13,10 +13,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   reading cancelled itself. Nothing re-queued one, so the guide said "odanı okuyorum" for
   ever. The comparison is a set now: the reading looks at all of them and the order is not
   what it is about.
-- **A mesh could hold up a customer.**  shared the AI queue with room
+- **A mesh could hold up a customer.** GenerateProductModel shared the AI queue with room
   readings, plates and designs, and one worker runs one job at a time — three meshes at three
   to four minutes each put a customer twelve minutes behind a catalogue job nobody was
-  waiting for. Meshes have their own queue and their own worker now ().
+  waiting for. Meshes have their own queue and their own worker now: queue-models.
 - **The waiting screen gives up out loud.** After ninety seconds with no reading the guide
   says "Okuma uzun sürdü" and offers both ways on: try again, or go ahead and type the size.
 
