@@ -41,15 +41,33 @@ test.describe('studio stepper', () => {
     await expect(strip.getByText(/2\s*Eşyalar/)).toBeVisible()
 
     // --- a photograph, then the size confirmed on the Oda step ----------------------
-    await page.locator('input[type="file"]').setInputFiles({
+    /*
+     * Through the button, not into the hidden input.
+     *
+     * Everything on this screen is server-rendered, so waiting for text proves nothing about
+     * whether Vue has bound the input's change handler yet — and a file put into an unbound
+     * input is swallowed without a word. The chooser only opens once the button's own handler
+     * is live, which is the guarantee the test needs.
+     */
+    const chooser = page.waitForEvent('filechooser')
+
+    await page.getByRole('button', { name: 'Fotoğraf ekle' }).click()
+    await (await chooser).setFiles({
       name: 'salon.png',
       mimeType: 'image/png',
       buffer: pngBuffer(1024, 768),
     })
-    await expect(page.getByText('Tasarım bu fotoğraftan')).toBeVisible()
+    // The guide moves on by itself once the reading lands, so the photo panel may already
+    // have given way; what matters is that the photograph was taken.
+    await expect(strip.getByRole('button', { name: /✓\s*Fotoğraf/ })).toBeVisible({ timeout: 120_000 })
 
     // The size lives on the Oda step; the strip opens it without waiting for the reading.
     await strip.getByRole('button', { name: /Oda/ }).click()
+    // The reading may have landed and proposed a size; open the form deliberately.
+    const correct = page.getByRole('button', { name: 'Düzelt' }).first()
+
+    if (await correct.isVisible().catch(() => false)) await correct.click()
+
     await fillStable(page, '#width', '420')
     await fillStable(page, '#length', '560')
     await fillStable(page, '#height', '270')
@@ -61,9 +79,17 @@ test.describe('studio stepper', () => {
     await expect(strip.getByRole('button', { name: /✓\s*Fotoğraf/ })).toBeVisible()
     await expect(strip.getByRole('button', { name: /✓\s*Oda/ })).toBeVisible()
 
-    // Back on the Oda step the doors and windows are drawn from above, ready to drag.
+    /*
+     * Back a step, from the strip.
+     *
+     * The guide takes the customer forward; the strip is the only way back, and a tick that
+     * does not take you there is a dead end — the product owner met one. The room is on the
+     * screen again, in three dimensions, with its doors and windows ready to drag.
+     */
     await strip.getByRole('button', { name: /Oda/ }).click()
-    await expect(page.getByRole('button', { name: 'Çift kanat pencere ekle' })).toBeVisible()
+    await expect(strip.getByRole('button', { name: /3\s*Oda/ })).toHaveAttribute('aria-current', 'step')
+    await expect(page.getByRole('toolbar', { name: 'Kapı ve pencere ekle' })
+      .getByRole('button', { name: 'Çift kanat pencere', exact: true })).toBeVisible()
     // Let the step's fade finish before the picture is taken.
     await page.waitForTimeout(400)
     await page.screenshot({ path: 'test-results/studio-stepper-room.png', fullPage: true })

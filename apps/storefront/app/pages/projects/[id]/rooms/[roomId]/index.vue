@@ -37,6 +37,17 @@ const loadError = ref<string | null>(null)
 const actionError = ref<string | null>(null)
 
 const sizeForm = reactive({ width: '', length: '', height: '', quality: 'estimated' })
+
+/**
+ * What the form was last filled with from the server, to tell a typed value from a stale one.
+ *
+ * While the photographs are being read the screen reloads every four seconds, and each
+ * reload used to write the room's saved size back over the boxes — so a customer typing
+ * their own measurements watched the numbers vanish mid-word and got "Genişlik ve uzunluk
+ * gerekli" when they pressed save. A field is only refilled while it still holds what was
+ * put there; the moment it holds something of the customer's, it is theirs.
+ */
+const seeded = reactive({ width: '', length: '', height: '', quality: 'estimated' })
 const savingSize = ref(false)
 
 const addingConstraint = ref(false)
@@ -58,6 +69,22 @@ const savingDesign = ref(false)
 
 const base = `/api/v1/projects/${projectId}/rooms/${roomId}`
 
+/**
+ * The customer has put something of their own in the size form.
+ *
+ * The form otherwise closes the moment the reading proposes a size, which would take a
+ * half-typed measurement off the screen with it. Somebody who has started typing is
+ * answering the question; the reading can wait its turn.
+ */
+const typingSize = computed(() => (['width', 'length', 'height'] as const).some(field => sizeForm[field] !== seeded[field]))
+
+/** Puts a value in the form unless the customer has typed over it. */
+function fill(field: 'width' | 'length' | 'height' | 'quality', value: string) {
+  if (sizeForm[field] === seeded[field]) sizeForm[field] = value
+
+  seeded[field] = value
+}
+
 async function load() {
   try {
     const [projectResponse, roomResponse, mediaResponse, designResponse] = await Promise.all([
@@ -76,10 +103,10 @@ async function load() {
 
     // Millimetres on the wire, centimetres in the form: nobody measures a room in
     // millimetres, and asking them to would produce a decimal-point mistake per room.
-    sizeForm.width = roomResponse.data.width_mm ? String(roomResponse.data.width_mm / 10) : ''
-    sizeForm.length = roomResponse.data.length_mm ? String(roomResponse.data.length_mm / 10) : ''
-    sizeForm.height = roomResponse.data.height_mm ? String(roomResponse.data.height_mm / 10) : ''
-    sizeForm.quality = roomResponse.data.measurement_quality
+    fill('width', roomResponse.data.width_mm ? String(roomResponse.data.width_mm / 10) : '')
+    fill('length', roomResponse.data.length_mm ? String(roomResponse.data.length_mm / 10) : '')
+    fill('height', roomResponse.data.height_mm ? String(roomResponse.data.height_mm / 10) : '')
+    fill('quality', roomResponse.data.measurement_quality)
   } catch (error) {
     loadError.value = error instanceof ApiError
       ? ({ 403: 'Bu odaya erişim yetkiniz yok.', 404: 'Bu oda bulunamadı.' }[error.status] ?? error.message)
@@ -1054,7 +1081,7 @@ function guideSecondary() {
           -->
           <section v-else-if="activeStep === 'recognise'" id="oda" class="flex min-h-0 flex-col gap-3">
             <!-- The size, only when somebody is typing it, and on one line: the room below is the point. -->
-            <form v-if="editingSize || (!measured && !proposedSize)" class="rc-card flex flex-wrap items-end gap-3 p-3" @submit.prevent="submitSize">
+            <form v-if="editingSize || typingSize || (!measured && !proposedSize)" class="rc-card flex flex-wrap items-end gap-3 p-3" @submit.prevent="submitSize">
               <label class="w-28">
                 <span class="mb-1 block text-xs text-muted">Genişlik (cm)</span>
                 <input id="width" v-model="sizeForm.width" :disabled="!canEdit" inputmode="numeric" class="w-full rounded-sm border border-line bg-surface px-3 py-2 text-sm tabular-nums">

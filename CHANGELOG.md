@@ -5,6 +5,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — A size typed while the room is being read
+
+- **The measurements vanished as they were typed.** While the photographs are being read the
+  room screen reloads itself every four seconds, and each reload wrote the room's saved size
+  back over the three boxes. Somebody typing their own measurements watched the numbers
+  disappear mid-word and got "Genişlik ve uzunluk gerekli" when they pressed save. A box is
+  only refilled while it still holds what was put there; the moment it holds something of the
+  customer's, it is theirs.
+- **The form no longer closes under the customer's hands.** It used to disappear the instant
+  the reading proposed a size, taking a half-typed measurement with it. Somebody who has
+  started typing is answering the question, and the reading waits its turn.
+
+### Fixed — Tests that clicked a page before it was listening
+
+- **Hydration was declared too early.** `waitForHydration` waited for `__vue_app__`, which Vue
+  sets when it mounts — before a single listener is attached. On a route the dev server was
+  compiling for the first time that window was tens of seconds wide: the photograph went into
+  an input nothing was listening to and was swallowed without a word, and the test failed two
+  minutes later saying the step never ticked. It waits for Nuxt to put `isHydrating` down,
+  which is the same hook that finishes the takeover.
+- **The studio walk-through covers going back.** The guide takes the customer forward and the
+  strip is the only way back; the test now presses a tick, and asserts the studio really is on
+  that step again with the room's doors and windows in front of it.
+
 ### Changed — The room step shows the room
 
 - **In three dimensions, not as a rectangle.** Step three drew the customer's room as a flat
@@ -16,7 +40,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   two buttons the band already carried. The band asks; the panel is the room. The measuring
   form appears only when somebody is typing a size, and it is one row.
 - **Nothing that belongs to another step.** The furniture inspector and the product list are
-  hidden here (), and the "Boş oda" card with only a heading in it is gone.
+  hidden here (openingsOnly), and the "Boş oda" card with only a heading in it is gone.
 
 ### Fixed — The studio stopped on step one
 

@@ -21,7 +21,23 @@ export async function waitForHydration(page: Page): Promise<void> {
     () => {
       const root = document.querySelector('#__nuxt')
 
-      return Boolean(root && '__vue_app__' in root)
+      if (!root || !('__vue_app__' in root)) {
+        return false
+      }
+
+      /*
+       * Mounted is not the same as listening.
+       *
+       * `__vue_app__` appears when `app.mount()` is called, and every listener on the page
+       * is attached some time after that — long after, on a route the dev server is compiling
+       * for the first time. In that window every button on screen is the server's HTML: a
+       * click reaches it, nothing runs, and the test waits for something that will never
+       * happen. Nuxt turns `isHydrating` off in the same hook that finishes the takeover, so
+       * that is the flag to wait for, where it can be reached.
+       */
+      const nuxt = (globalThis as { useNuxtApp?: () => { isHydrating?: boolean } }).useNuxtApp?.()
+
+      return nuxt === undefined || nuxt.isHydrating !== true
     },
     undefined,
     { timeout: 60_000 },

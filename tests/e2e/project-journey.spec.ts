@@ -124,6 +124,11 @@ test.describe('project journey', () => {
     // --- measurements ------------------------------------------------------------
     // The size lives on the Oda step; the strip opens it without waiting for the reading.
     await page.getByRole('navigation', { name: 'Oda stüdyosu adımları' }).getByRole('button', { name: /Oda/ }).click()
+    // The reading may have landed and proposed a size; open the form deliberately.
+    const correct = page.getByRole('button', { name: 'Düzelt' }).first()
+
+    if (await correct.isVisible().catch(() => false)) await correct.click()
+
     await fillStable(page, '#width', '420')
     await fillStable(page, '#length', '560')
     await fillStable(page, '#height', '270')
