@@ -124,7 +124,15 @@ const percent = computed(() => Math.min(100, Math.max(0, Math.round(props.progre
 </script>
 
 <template>
-  <div class="rc-progress flex h-full flex-col justify-between bg-bg-muted">
+  <!--
+    One stage, centred, with nothing else on the screen.
+
+    The first version put the drawing in a panel, the words in a bordered footer under it
+    and the guide in a card beside it: three boxes, two scrollbars, and a lot of empty
+    beige. There is nothing to decide while the engine works, so there is nothing to lay
+    out — one column, centred, and a hairline that says how far along it is.
+  -->
+  <div class="rc-progress relative flex h-full flex-col items-center justify-center gap-8 overflow-hidden bg-gradient-to-b from-surface to-bg-muted px-6 py-10">
     <!--
       The room, drawing itself.
 
@@ -132,9 +140,14 @@ const percent = computed(() => Math.min(100, Math.max(0, Math.round(props.progre
       furniture, then the light. Line art rather than a render, because a photorealistic
       preview would set an expectation the real image then has to meet.
     -->
-    <div class="flex min-h-0 flex-1 items-center justify-center p-5">
+    <!-- How far along, as a hairline across the top rather than a bar in a box. -->
+    <div class="absolute inset-x-0 top-0 h-0.5 bg-line/40">
+      <div class="h-full bg-charcoal transition-[width] duration-700 ease-out" :style="{ width: `${percent}%` }" />
+    </div>
+
+    <div class="flex w-full max-w-md shrink-0 items-center justify-center">
       <svg
-        class="w-full max-w-md"
+        class="w-full"
         viewBox="0 0 320 220"
         fill="none"
         stroke="currentColor"
@@ -199,36 +212,21 @@ const percent = computed(() => Math.min(100, Math.max(0, Math.round(props.progre
       </svg>
     </div>
 
-    <div class="shrink-0 border-t border-line/60 bg-surface/60 px-5 py-4 backdrop-blur-sm">
-      <div class="flex items-baseline justify-between gap-4">
-        <p class="text-sm font-medium">{{ current.title }}</p>
-        <p class="text-xs tabular-nums text-muted">%{{ percent }}</p>
-      </div>
-
-      <p class="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-secondary">{{ current.detail }}</p>
-
-      <div class="mt-2.5 h-0.5 w-full overflow-hidden rounded-pill bg-line/60">
-        <div
-          class="h-full rounded-pill bg-charcoal transition-[width] duration-700 ease-out"
-          :style="{ width: `${percent}%` }"
-        />
-      </div>
+    <!-- What is happening, in one sentence, under the drawing it belongs to. -->
+    <div class="w-full max-w-[46ch] shrink-0 text-center">
+      <p class="text-2xl font-medium tracking-[-0.01em] text-ink">{{ current.title }}</p>
+      <p class="mt-2 text-sm leading-relaxed text-ink-secondary">{{ current.detail }}</p>
 
       <!--
         The craft, between the stages. Worth reading on its own, and the quiet argument
         for what the customer is paying for.
       -->
-      <div class="mt-3.5 border-t border-line/60 pt-3">
-        <p class="text-[11px] font-medium uppercase tracking-wide text-muted">
-          İç mimarlıktan
-        </p>
-        <p
-          class="mt-1 line-clamp-3 text-xs leading-relaxed text-ink-secondary transition-opacity duration-300"
-          :class="fading ? 'opacity-0' : 'opacity-100'"
-        >
-          {{ insights[insight] }}
-        </p>
-      </div>
+      <p
+        class="mt-8 text-xs leading-relaxed text-muted transition-opacity duration-500"
+        :class="fading ? 'opacity-0' : 'opacity-100'"
+      >
+        {{ insights[insight] }}
+      </p>
     </div>
   </div>
 </template>

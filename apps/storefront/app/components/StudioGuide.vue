@@ -75,104 +75,110 @@ const key = computed(() => `${props.icon}|${props.say}`)
 </script>
 
 <template>
+  <!--
+    One band across the top, not a card down the side.
+
+    The guide used to stand in a 380-pixel column beside every screen: a tall card with a
+    portrait avatar, four lines of text and two buttons, on the room, the plan and the
+    design. The product owner's verdict was that no other site does this, and they were
+    right — the content is what somebody came for, and it was getting two thirds of the
+    width. So the guide is a strip: who is talking, what it says, what to press. The screen
+    below it belongs to the room.
+  -->
   <section
-    class="relative overflow-hidden rounded-lg border border-accent-200/70 bg-gradient-to-br from-accent-50 via-surface to-surface p-5 shadow-sm sm:p-6"
+    class="rc-card flex flex-wrap items-center gap-x-5 gap-y-3 px-4 py-3 sm:px-5"
     aria-live="polite"
   >
-    <!-- A soft glow in the corner: the card is alive, not a notice. -->
-    <div class="pointer-events-none absolute -right-16 -top-16 size-48 rounded-full bg-accent-100/60 blur-3xl" aria-hidden="true" />
+    <span
+      class="grid size-9 shrink-0 place-items-center rounded-full bg-charcoal text-white"
+      :class="{ 'animate-pulse': busy }"
+      title="Yapay zekâ rehberin"
+      aria-label="Yapay zekâ rehberin"
+    >
+      <svg class="size-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path :d="paths[icon]" />
+      </svg>
+    </span>
 
-    <div class="relative flex flex-col gap-5 sm:flex-row sm:items-start">
-      <div class="flex shrink-0 items-center gap-3 sm:flex-col sm:items-start">
-        <span class="grid size-12 place-items-center rounded-full bg-charcoal text-white shadow-md" :class="{ 'animate-pulse': busy }">
-          <svg class="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path :d="paths[icon]" />
-          </svg>
-        </span>
-        <span class="rounded-pill border border-accent-300/70 bg-surface px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent-700">
-          Yapay zekâ rehberin
-        </span>
+    <Transition name="guide" mode="out-in">
+      <div :key="key" class="min-w-0 flex-1">
+        <p class="text-[15px] leading-snug font-medium text-ink">{{ say }}</p>
+        <p v-if="detail" class="mt-0.5 max-w-[92ch] text-[13px] leading-snug text-ink-secondary">{{ detail }}</p>
       </div>
+    </Transition>
 
-      <div class="min-w-0 flex-1">
-        <Transition name="guide" mode="out-in">
-          <div :key="key">
-            <p class="text-lg font-medium leading-snug text-ink sm:text-xl">{{ say }}</p>
-            <p v-if="detail" class="mt-2 max-w-[62ch] text-sm leading-relaxed text-ink-secondary">{{ detail }}</p>
-          </div>
-        </Transition>
+    <!-- What to press, at the end of the sentence, where the eye already is. -->
+    <div v-if="action || secondary" class="ml-auto flex shrink-0 flex-wrap items-center gap-3">
+      <NuxtLink v-if="secondary?.to" :to="secondary.to" class="text-sm whitespace-nowrap text-ink-secondary underline-offset-4 hover:underline">
+        {{ secondary.label }}
+      </NuxtLink>
+      <button
+        v-else-if="secondary"
+        type="button"
+        class="text-sm whitespace-nowrap text-ink-secondary underline-offset-4 hover:underline"
+        @click="emit('secondary')"
+      >
+        {{ secondary.label }}
+      </button>
 
-        <!-- One under the other: the guide stands in a narrow column now, and a grid of four overlapped its own words. -->
-        <ul v-if="tips.length > 0" class="mt-4 space-y-1.5">
-          <li v-for="tip in tips" :key="tip.label" class="flex items-center gap-2.5 rounded-md border border-line bg-surface/80 px-3 py-2">
-            <svg class="size-4 shrink-0 text-accent-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path :d="paths[tip.icon]" />
-            </svg>
-            <span class="min-w-0 text-xs leading-snug">
-              <span class="font-medium text-ink">{{ tip.label }}</span>
-              <span v-if="tip.hint" class="text-muted"> · {{ tip.hint }}</span>
-            </span>
-          </li>
-        </ul>
-
-        <ul v-if="choices.length > 0" class="mt-4 flex flex-wrap gap-2" aria-label="Kaldırılacaklar ve kalacaklar">
-          <li v-for="choice in choices" :key="choice.key">
-            <button
-              type="button"
-              class="inline-flex items-center gap-1.5 rounded-pill border px-3 py-1.5 text-xs transition-colors"
-              :class="choice.selected
-                ? 'border-charcoal bg-charcoal text-white'
-                : 'border-line bg-surface text-ink-secondary line-through decoration-line/80 hover:bg-bg-muted'"
-              :aria-pressed="choice.selected"
-              @click="emit('toggle', choice.key)"
-            >
-              <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path :d="choice.selected ? paths.broom : paths.check" />
-              </svg>
-              {{ choice.label }}
-              <span class="text-[10px] opacity-70">{{ choice.selected ? 'kaldır' : 'kalsın' }}</span>
-            </button>
-          </li>
-        </ul>
-
-        <div v-if="action || secondary" class="mt-5 flex flex-wrap items-center gap-3">
-          <template v-if="action">
-            <NuxtLink
-              v-if="action.to"
-              :to="action.to"
-              class="inline-flex items-center gap-2 rounded-pill bg-charcoal px-5 py-2.5 text-sm text-white shadow-sm transition-transform hover:-translate-y-px"
-            >
-              {{ action.label }}
-              <span aria-hidden="true">→</span>
-            </NuxtLink>
-            <button
-              v-else
-              type="button"
-              class="inline-flex items-center gap-2 rounded-pill bg-charcoal px-5 py-2.5 text-sm text-white shadow-sm transition-transform hover:-translate-y-px disabled:opacity-50"
-              :disabled="action.disabled || action.busy"
-              @click="emit('act')"
-            >
-              <span v-if="action.busy" class="size-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" />
-              {{ action.label }}
-              <span v-if="!action.busy" aria-hidden="true">→</span>
-            </button>
-            <span v-if="action.note" class="text-xs text-muted">{{ action.note }}</span>
-          </template>
-
-          <NuxtLink v-if="secondary?.to" :to="secondary.to" class="text-sm text-ink-secondary underline-offset-4 hover:underline">
-            {{ secondary.label }}
-          </NuxtLink>
-          <button
-            v-else-if="secondary"
-            type="button"
-            class="text-sm text-ink-secondary underline-offset-4 hover:underline"
-            @click="emit('secondary')"
-          >
-            {{ secondary.label }}
-          </button>
-        </div>
-      </div>
+      <template v-if="action">
+        <span v-if="action.note" class="hidden text-xs text-muted lg:inline">{{ action.note }}</span>
+        <NuxtLink
+          v-if="action.to"
+          :to="action.to"
+          class="inline-flex items-center gap-2 rounded-pill bg-charcoal px-4 py-2 text-sm whitespace-nowrap text-white transition-transform hover:-translate-y-px"
+        >
+          {{ action.label }}
+          <span aria-hidden="true">→</span>
+        </NuxtLink>
+        <button
+          v-else
+          type="button"
+          class="inline-flex items-center gap-2 rounded-pill bg-charcoal px-4 py-2 text-sm whitespace-nowrap text-white transition-transform hover:-translate-y-px disabled:opacity-50"
+          :disabled="action.disabled || action.busy"
+          @click="emit('act')"
+        >
+          <span v-if="action.busy" class="size-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" />
+          {{ action.label }}
+          <span v-if="!action.busy" aria-hidden="true">→</span>
+        </button>
+      </template>
     </div>
+
+    <!--
+      The tips and the choices belong to their own moment, so they take their own line
+      rather than squeezing the sentence: four photographing angles, or the things the
+      reading saw and would take out.
+    -->
+    <ul v-if="tips.length > 0" class="flex basis-full flex-wrap items-center gap-2 border-t border-line/70 pt-3">
+      <li v-for="tip in tips" :key="tip.label" class="inline-flex items-center gap-1.5 rounded-pill bg-bg-muted px-2.5 py-1 text-xs">
+        <svg class="size-3.5 shrink-0 text-accent-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path :d="paths[tip.icon]" />
+        </svg>
+        <span class="font-medium text-ink">{{ tip.label }}</span>
+        <span v-if="tip.hint" class="text-muted">{{ tip.hint }}</span>
+      </li>
+    </ul>
+
+    <ul v-if="choices.length > 0" class="flex basis-full flex-wrap gap-2 border-t border-line/70 pt-3" aria-label="Kaldırılacaklar ve kalacaklar">
+      <li v-for="choice in choices" :key="choice.key">
+        <button
+          type="button"
+          class="inline-flex items-center gap-1.5 rounded-pill border px-3 py-1 text-xs transition-colors"
+          :class="choice.selected
+            ? 'border-charcoal bg-charcoal text-white'
+            : 'border-line bg-surface text-ink-secondary line-through decoration-line/80 hover:bg-bg-muted'"
+          :aria-pressed="choice.selected"
+          @click="emit('toggle', choice.key)"
+        >
+          <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path :d="choice.selected ? paths.broom : paths.check" />
+          </svg>
+          {{ choice.label }}
+          <span class="text-[10px] opacity-70">{{ choice.selected ? 'kaldır' : 'kalsın' }}</span>
+        </button>
+      </li>
+    </ul>
   </section>
 </template>
 

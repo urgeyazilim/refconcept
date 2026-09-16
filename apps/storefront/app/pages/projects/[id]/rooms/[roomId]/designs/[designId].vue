@@ -68,6 +68,20 @@ const autoStage = computed<DesignStage>(() => {
   return 'video'
 })
 
+/**
+ * The engine is still working on the version being looked at.
+ *
+ * Nothing on this screen is a decision while that is true — the picture is not there, the
+ * shopping list is not there, and the guide's only line is "buradayım". So the whole
+ * two-column stage gives way to one centred drawing.
+ */
+const waiting = computed(() => {
+  const status = shownVersion.value?.status
+
+  // A design with no version yet — just created — is waiting too.
+  return status !== 'ready' && status !== 'failed'
+})
+
 /** A step the customer opened from the strip, to look back or ahead. */
 const chosenStage = ref<DesignStage | null>(null)
 const stage = computed<DesignStage>(() => chosenStage.value ?? autoStage.value)
@@ -89,11 +103,11 @@ const designGuide = computed(() => {
     case 'design':
       return {
         icon: 'check' as const,
-        say: renderedFromPlan.value ? 'Render hazır.' : 'Tasarımın hazır. Yerlerini değiştirmek ister misin?',
+        say: renderedFromPlan.value ? 'Render hazır.' : 'Tasarımın hazır.',
         detail: renderedFromPlan.value
           ? 'Yerleştirdiğin gibi, gerçek ürünlerle çizdim. İstersen 360 tura geçelim.'
-          : 'Evet dersen ürünleri 3B odana tasarımdaki gibi koyarım; tutar, taşırsın. Bitince render alırız.',
-        action: canEdit.value && !renderedFromPlan.value ? { label: 'Evet, 3B odayı aç', to: plan } : null,
+          : 'Yerlerini değiştirmek ister misin? Ürünleri 3B odana tasarımdaki gibi koyarım; tutar, taşırsın.',
+        action: canEdit.value && !renderedFromPlan.value ? { label: '3B odayı aç', to: plan } : null,
         secondary: renderedFromPlan.value ? { label: '360 tura geç' } : { label: 'Hayır, böyle iyi' },
         busy: false,
       }
@@ -783,7 +797,7 @@ const statusTone: Record<string, string> = {
 </script>
 
 <template>
-  <div class="rc-container rc-container--wide space-y-4 py-4">
+  <div class="rc-container rc-container--wide flex flex-col gap-3 py-4 lg:h-[calc(100vh-4.5rem)]">
   <!--
     A workspace like the room and the plan: one line of chrome, the guide beside the picture
     rather than above it, no footer. The name, the version count, the credits and the status
@@ -821,9 +835,21 @@ const statusTone: Record<string, string> = {
         />
       </div>
 
-      <!-- The stage: as tall as the window; the guide stays, the step's panel scrolls in its column. -->
-      <div class="grid gap-4 lg:h-[calc(100vh-11rem)] lg:grid-cols-[minmax(320px,380px)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
-      <div class="min-h-0 space-y-3 lg:overflow-y-auto">
+      <!--
+        While the engine works there is nothing to decide, so there is nothing to lay out:
+        one stage, centred, no guide column and no cards. The product owner's verdict on the
+        column beside a waiting screen was "çok saçma soldakiler, gerek yok".
+      -->
+      <RcDesignInProgress
+        v-if="waiting"
+        class="min-h-0 flex-1 overflow-hidden rounded-lg border border-line/70"
+        :stage="shownVersionId ? progress[shownVersionId]?.stage : null"
+        :progress-bps="shownVersionId ? (progress[shownVersionId]?.progress_bps ?? 0) : 0"
+      />
+
+      <!-- Everything else: the guide as one band, then the step's panel across the full width. -->
+      <template v-else>
+
       <!-- The guide's last question (REHBER.md §3): the picture is here; would you move things? -->
       <StudioGuide
         :icon="designGuide.icon"
@@ -842,9 +868,9 @@ const statusTone: Record<string, string> = {
         Durum bilgisi alınamıyor. Tasarımın arka planda çalışmaya devam ediyor;
         sayfayı yenileyerek son durumu görebilirsin.
       </RcAlert>
-      </div>
 
-      <div class="min-h-0 min-w-0 space-y-6 lg:overflow-y-auto lg:pr-1">
+
+      <div class="min-h-0 flex-1 space-y-4 lg:overflow-y-auto">
 
       <!--
         The versions as pictures, above the picture. Only once there is more than one: a strip
@@ -878,24 +904,8 @@ const statusTone: Record<string, string> = {
         other, and it cannot. Under a wipe the walls line up and dragging is the proof.
       -->
       <section v-if="design.source_image_url && (stage === 'design' || stage === 'render')" id="tasarim" class="rc-card overflow-hidden">
-        <div class="flex flex-wrap items-end justify-between gap-4 p-6 pb-5 sm:px-8 sm:pt-8">
-          <div>
-            <h2 class="text-xl font-medium">{{ stage === 'render' && renderedFromPlan ? 'Render' : 'Odan' }}</h2>
-            <p class="mt-1.5 max-w-[52ch] text-sm leading-relaxed text-ink-secondary">
-              {{ compareVersion?.image_url && shownVersion?.image_url
-                ? `v${shownVersion.version_number} ile v${compareVersion.version_number} yan yana. Aynı odadan, aynı boş plakadan.`
-                : shownVersion?.image_url
-                  ? 'Ortadaki çubuğu sağa sola sürükleyin: solda odanızın ilk hâli, sağda önerilen ürünlerle hâli.'
-                  : 'Tasarım hazır olduğunda odanızı burada karşılaştırabileceksiniz.' }}
-            </p>
-          </div>
-
-          <p v-if="shownVersion" class="text-sm text-muted">
-            v{{ shownVersion.version_number }}
-          </p>
-        </div>
-
-        <div class="px-6 pb-6 sm:px-8 sm:pb-8">
+        <!-- No heading over the picture: the guide band above already said what it is. -->
+        <div class="p-4 sm:p-5">
           <DesignVersionCompare
             v-if="compareVersion?.image_url && shownVersion?.image_url"
             :left="{ src: shownVersion.image_url, label: `v${shownVersion.version_number}` }"
@@ -919,17 +929,6 @@ const statusTone: Record<string, string> = {
           >
             {{ shownVersion.failure_reason ?? 'Bu sürüm tamamlanamadı.' }}
           </div>
-
-          <!--
-            And one still running. The room draws itself as the engine reads it, so the
-            most exciting minute in the product is not an empty grey panel.
-          -->
-          <RcDesignInProgress
-            v-else
-            class="aspect-[16/10] w-full overflow-hidden rounded-md"
-            :stage="shownVersionId ? progress[shownVersionId]?.stage : null"
-            :progress-bps="shownVersionId ? (progress[shownVersionId]?.progress_bps ?? 0) : 0"
-          />
 
           <!--
             The one thing the render cannot be held to.
@@ -990,18 +989,9 @@ const statusTone: Record<string, string> = {
           </RcAlert>
 
           <!--
-            The plan, from the picture.
-
-            Here rather than on the room page, because this is the moment somebody asks "but
-            would it actually fit" — they have just seen the room and want to move the sofa a
-            little to the left. The plan opens with these products already arranged in it.
+            No "open it in the plan" button here: the guide beside the picture asks exactly
+            that, in its own words, and two buttons for one decision is two decisions.
           -->
-          <NuxtLink
-            :to="`/projects/${projectId}/rooms/${roomId}/plan?compose=${shownVersionId ?? ''}`"
-            class="mt-4 inline-flex rounded-pill border border-line px-4 py-2 text-sm hover:bg-bg-muted"
-          >
-            3B planda aç ve yerleştir
-          </NuxtLink>
         </div>
       </section>
 
@@ -1475,7 +1465,7 @@ const statusTone: Record<string, string> = {
         </ul>
       </section>
       </div>
-      </div>
+      </template>
     </template>
 
     <!--

@@ -63,6 +63,11 @@ async function hoveredAxis(page: Page): Promise<string | null> {
   })
 }
 
+/** Only the turn ring, so the rim can be found without mistaking an arrow for it. */
+async function turnerAxis(page: Page): Promise<string | null> {
+  return page.evaluate(() => (window as unknown as { __rcEditor: { gizmo: { turner: { axis: string | null } } } }).__rcEditor.gizmo.turner.axis)
+}
+
 /** The canvas's box on screen, after bringing it into view — a button click may have scrolled it away. */
 async function canvasBox(page: Page): Promise<{ x: number, y: number }> {
   await page.locator('canvas').scrollIntoViewIfNeeded()
@@ -118,14 +123,34 @@ test.describe('room gizmo', () => {
 
     expect(before.screen).not.toBeNull()
 
-    // The ring's rim, to the right of the piece and past the arrow, dragged downwards and round.
-    const rim = { x: box.x + before.screen!.x + 78, y: box.y + before.screen!.y }
+    /*
+     * The ring's rim, found rather than guessed.
+     *
+     * It used to be "78 pixels right of the piece", which is a number that depends on how
+     * far away the camera happens to be — and the camera now fits the room to the shape of
+     * its box, so the ring moved and the test failed while the product worked. Hovering
+     * outwards until the gizmo says it is over the turn ring asks the thing itself.
+     */
+    let rim: { x: number, y: number } | null = null
 
-    await page.mouse.move(rim.x, rim.y)
+    for (let dx = 40; dx <= 160 && rim === null; dx += 6) {
+      const at = { x: box.x + before.screen!.x + dx, y: box.y + before.screen!.y }
+
+      await page.mouse.move(at.x, at.y)
+      await page.waitForTimeout(40)
+
+      if ((await turnerAxis(page)) !== null) {
+        rim = at
+      }
+    }
+
+    expect(rim, 'the turn ring must be somewhere right of the piece').not.toBeNull()
+
+    await page.mouse.move(rim!.x, rim!.y)
     await page.waitForTimeout(300)
     await page.mouse.down()
-    await page.mouse.move(rim.x - 15, rim.y + 40, { steps: 15 })
-    await page.mouse.move(rim.x - 40, rim.y + 55, { steps: 15 })
+    await page.mouse.move(rim!.x - 15, rim!.y + 40, { steps: 15 })
+    await page.mouse.move(rim!.x - 40, rim!.y + 55, { steps: 15 })
     await page.mouse.up()
     await page.waitForTimeout(1_200)
 

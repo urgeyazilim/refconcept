@@ -937,7 +937,7 @@ function guideSecondary() {
 </script>
 
 <template>
-  <div class="rc-container rc-container--wide space-y-4 py-4">
+  <div class="rc-container rc-container--wide flex flex-col gap-3 py-4 lg:h-[calc(100vh-4.5rem)]">
   <!--
     A workspace: one line of chrome — where you came from, which room, which step — then the
     guide standing beside the step's work rather than above it. The first version stacked a
@@ -977,30 +977,22 @@ function guideSecondary() {
         />
       </div>
 
-      <!--
-        The stage: as tall as the window, like a television. The guide on the left never
-        moves; the step's work on the right scrolls inside its own column when it has to.
-        The page itself does not scroll — "mouse ile aşağıya inmeyeyim, TV ekranı gibi".
-      -->
-      <div class="grid gap-4 lg:h-[calc(100vh-11rem)] lg:grid-cols-[minmax(320px,380px)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
-        <!-- The guide: the one voice that says what comes next (REHBER.md). -->
-        <div class="min-h-0 space-y-3 lg:overflow-y-auto">
-          <StudioGuide
-            :icon="guide.icon"
-            :say="guide.say"
-            :detail="guide.detail"
-            :action="canEdit ? guide.action : null"
-            :secondary="canEdit ? guide.secondary : null"
-            :tips="guide.tips"
-            :choices="canEdit ? guide.choices : []"
-            :busy="guide.busy"
-            @act="guideAct"
-            @secondary="guideSecondary"
-            @toggle="toggleRemoval"
-          />
+      <!-- The guide: the one voice that says what comes next (REHBER.md). One band, full width. -->
+      <StudioGuide
+        :icon="guide.icon"
+        :say="guide.say"
+        :detail="guide.detail"
+        :action="canEdit ? guide.action : null"
+        :secondary="canEdit ? guide.secondary : null"
+        :tips="guide.tips"
+        :choices="canEdit ? guide.choices : []"
+        :busy="guide.busy"
+        @act="guideAct"
+        @secondary="guideSecondary"
+        @toggle="toggleRemoval"
+      />
 
-          <RcAlert v-if="actionError" tone="danger">{{ actionError }}</RcAlert>
-        </div>
+      <RcAlert v-if="actionError" tone="danger">{{ actionError }}</RcAlert>
 
       <!--
         One step on the screen at a time. The strip says where we are, the guide says what
@@ -1008,7 +1000,7 @@ function guideSecondary() {
         nothing to discover at the bottom of the page.
       -->
       <Transition name="step" mode="out-in">
-        <div :key="activeStep" class="min-h-0 min-w-0 lg:overflow-y-auto lg:pr-1">
+        <div :key="activeStep" class="min-h-0 min-w-0 flex-1 lg:overflow-y-auto">
           <!-- 1 · Fotoğraf -->
           <div v-if="activeStep === 'photo'" id="fotograf">
             <RoomPhotoGallery
@@ -1277,7 +1269,6 @@ function guideSecondary() {
           </section>
         </div>
       </Transition>
-      </div>
     </template>
   </div>
 </template>

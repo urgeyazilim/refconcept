@@ -878,7 +878,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="rc-container rc-container--wide space-y-3 py-4">
+  <div class="rc-container rc-container--wide flex flex-col gap-3 py-4 lg:h-[calc(100vh-4.5rem)]">
   <!--
     A workspace rather than a page: the room fills the height of the window and everything
     that acts on it stands in one column beside it. The first version stacked the stepper, a
@@ -1082,10 +1082,28 @@ onMounted(async () => {
         catalogue. Arranging costs nothing — the design was paid for; this is arithmetic
         against the room the customer confirmed — so it is the first button in the column.
       -->
+      <!--
+        The guide, in the column: steps 6 and 7 of the ten. It says the room is furnished
+        the way the design had it, that every move is saved, and asks for the render when
+        the customer is done — the "Tasarıma göre yerleştir" button is its quieter second.
+      -->
+      <StudioGuide
+        icon="pencil"
+        :say="composing ? 'Ürünleri odana yerleştiriyorum.' : liveItems.length === 0 ? (design === null ? 'Önce bir tasarım gerek.' : 'Odan boş.') : saved ? 'Ürünlerin odada; kaydettim.' : 'Taşıyorsun; kaydediyorum.'"
+        :detail="composing ? 'Tasarımdaki gibi, gerçek ölçülerinde.' : liveItems.length === 0 ? (design === null ? 'İstekler adımına dönüp bir tasarım isteyelim.' : 'Tasarımdaki ürünleri yerleştireyim mi?') : 'Beğenmediğini tut, taşı; halkayla döndür. Bitince render alayım.'"
+        :action="liveItems.length === 0
+          ? (design === null ? null : { label: 'Yerleştir', busy: composing })
+          : (design === null ? null : { label: rendering ? 'Render alınıyor…' : 'Render al', busy: rendering, note: 'Yerleştirdiğin gibi, gerçek ürünlerle' })"
+        :secondary="liveItems.length > 0 && !composing ? { label: 'Tasarıma göre yeniden diz' } : null"
+        :busy="composing || rendering"
+        @act="liveItems.length === 0 ? composeLayout() : renderFinal()"
+        @secondary="composeLayout()"
+      />
+
       <Room3DScene
         ref="scene"
         workspace
-        class="h-[calc(100vh-11.5rem)] min-h-[480px]"
+        class="min-h-0 flex-1 lg:min-h-[420px]"
         :geometry="geometry"
         :openings="openings"
         :items="items"
@@ -1104,23 +1122,6 @@ onMounted(async () => {
         -->
 
         <template #side-start>
-          <!--
-            The guide, in the column: steps 6 and 7 of the ten. It says the room is furnished
-            the way the design had it, that every move is saved, and asks for the render when
-            the customer is done — the "Tasarıma göre yerleştir" button is its quieter second.
-          -->
-          <StudioGuide
-            icon="pencil"
-            :say="composing ? 'Ürünleri odana yerleştiriyorum.' : liveItems.length === 0 ? (design === null ? 'Önce bir tasarım gerek.' : 'Odan boş.') : saved ? 'Ürünlerin odada; kaydettim.' : 'Taşıyorsun; kaydediyorum.'"
-            :detail="composing ? 'Tasarımdaki gibi, gerçek ölçülerinde.' : liveItems.length === 0 ? (design === null ? 'İstekler adımına dönüp bir tasarım isteyelim.' : 'Tasarımdaki ürünleri yerleştireyim mi?') : 'Beğenmediğini tut, taşı; halkayla döndür. Bitince render alayım.'"
-            :action="liveItems.length === 0
-              ? (design === null ? null : { label: 'Yerleştir', busy: composing })
-              : (design === null ? null : { label: rendering ? 'Render alınıyor…' : 'Render al', busy: rendering, note: 'Yerleştirdiğin gibi, gerçek ürünlerle' })"
-            :secondary="liveItems.length > 0 && !composing ? { label: 'Tasarıma göre yeniden diz' } : null"
-            :busy="composing || rendering"
-            @act="liveItems.length === 0 ? composeLayout() : renderFinal()"
-            @secondary="composeLayout()"
-          />
     
     
           <!-- The question the 409 exists to ask. -->

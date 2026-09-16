@@ -5,6 +5,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed — The guide is a band, not a column
+
+- **The left column is gone from every studio screen.** The guide stood in a 380-pixel card
+  beside the room, the plan and the design: a portrait avatar, a badge, four lines of copy
+  and two buttons, taking a third of the width even while the engine was working and there
+  was nothing to decide. The product owner's verdict was that no other site does this. It is
+  now one band across the top — who is speaking, what it says, what to press — and the screen
+  below it belongs to the room. The photographing tips and the furniture choices take their
+  own line inside the band rather than stacking down a column.
+- **The waiting screen is one centred stage.** No columns, no cards, no bordered footer: the
+  room draws itself in the middle, the stage is named under it in one sentence, and how far
+  along it is shows as a hairline across the top.
+- **No heading over the picture.** The design's "Odan" heading, its paragraph and its version
+  pill said what the guide had just said; the picture now starts at the top of its card and
+  is never taller than the window.
+- **The step strip never scrolls sideways.** Below a threshold the labels give way to the
+  numbered dots (container queries), so ten steps fit any width.
+
 ### Fixed — The owner's own room, on the ten steps
 
 - **Step two did not end.** The owner emptied their first corner while the second was the

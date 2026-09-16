@@ -83,10 +83,11 @@ function nudge(step: number) {
 </script>
 
 <template>
+  <!-- Never taller than the stage it stands on: a 16:10 picture at full width was a screen and a half. -->
   <div class="overflow-hidden rounded-md bg-charcoal">
     <div
       ref="frame"
-      class="relative aspect-[16/10] w-full touch-none select-none"
+      class="relative aspect-[16/10] max-h-[calc(100vh-21rem)] w-full touch-none select-none"
       @pointerdown="startDrag"
       @pointermove="onDrag"
       @pointerup="endDrag"

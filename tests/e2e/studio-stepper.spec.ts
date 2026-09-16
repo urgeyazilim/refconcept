@@ -37,8 +37,8 @@ test.describe('studio stepper', () => {
 
     await expect(strip).toBeVisible()
     await expect(strip.getByRole('button', { name: /1\s*Fotoğraf/ })).toHaveAttribute('aria-current', 'step')
-    await expect(strip.getByText('Sıradaki:')).toBeVisible()
-    await expect(strip.locator('span').filter({ hasText: /^Eşyalar$/ })).toBeVisible()
+    // The next step is on the strip, quiet and numbered; the 'Sıradaki' hint only shows when there is room for it.
+    await expect(strip.getByText(/2\s*Eşyalar/)).toBeVisible()
 
     // --- a photograph, then the size confirmed on the Oda step ----------------------
     await page.locator('input[type="file"]').setInputFiles({

@@ -92,14 +92,15 @@ test.describe('room openings', () => {
     const handle = await page.evaluate(() => {
       // The handles only: the default layout's footer has icons with circles of their own.
       const circles = document.querySelectorAll('svg circle.cursor-ew-resize')
-      const rect = circles[circles.length - 1]!.getBoundingClientRect()
+      // The start handle: the window has already been dragged right, so it can only grow left.
+      const rect = circles[0]!.getBoundingClientRect()
 
       return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
     })
 
     await page.mouse.move(handle.x, handle.y)
     await page.mouse.down()
-    await page.mouse.move(handle.x + 60, handle.y, { steps: 8 })
+    await page.mouse.move(handle.x - 110, handle.y, { steps: 8 })
     await page.mouse.up()
 
     await expect(section.getByText(/Üçlü pencere · kuzey duvarı · \d+ cm'de, (1[5-9]\d|[2-9]\d\d) cm geniş/)).toBeVisible({ timeout: 15_000 })

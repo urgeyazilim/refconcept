@@ -102,3 +102,16 @@ mouse ile aşağıya inmeyeyim, TV ekranı gibi sabit olsun. Adım atlama olmas�
 Ekran kuralı: her adım tek ekran (yükseklik pencere kadar), rehber solda sabit, adımın işi
 sağda; sayfa kaymaz, gerekirse panel kendi içinde kayar. Başlık, alt başlık, açıklama kartı,
 alt bilgi yok. Şerit on adımı gösterir; hiçbiri gizlenmez, hiçbiri atlanmaz.
+
+## 4a. Rehber bir bant, sütun değil (2026-09-16)
+
+Sahibinin sözü: "Bütün sayfalarda sol taraftaki var; böyle saçma bir tasarım başka sitede
+yoktur. Projenin tüm sol tarafındaki saçma şeyleri kaldır."
+
+- Rehber **ekranın üstünde tek satırlık bir bant**tır: yuvarlak simge, cümle, altında ince
+  detay, sağda tek eylem ve sessiz ikincil. Sütun yok, kart yığını yok.
+- İpuçları (dört çekim açısı) ve seçimler (kaldırılacak eşyalar) bandın **kendi satırında**,
+  yatay çipler olarak durur.
+- **Bekleme** hâlinde rehber bandı bile yoktur: oda ortada kendini çizer, altında ne
+  yapıldığı tek cümleyle yazar, en üstte saç teli kalınlığında ilerleme çizgisi vardır.
+- İçerik ekranın tamamını alır; sayfa kaymaz.

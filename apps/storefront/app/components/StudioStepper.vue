@@ -86,8 +86,13 @@ const next = computed(() => {
 </script>
 
 <template>
-  <nav aria-label="Oda stüdyosu adımları" class="rc-card overflow-x-auto px-3 py-2">
-    <ol class="flex min-w-max items-center gap-0.5 text-xs">
+  <!--
+    Never scrolls sideways. Ten steps at full width is a scrollbar on a 1550-pixel screen,
+    and a map you have to drag is not a map — so the labels go when the strip is tight and
+    the numbered dots stay, which is what tells you where you are.
+  -->
+  <nav aria-label="Oda stüdyosu adımları" class="rc-card @container px-3 py-2">
+    <ol class="flex items-center gap-0.5 text-xs">
       <li v-for="(step, at) in steps" :key="step.key" class="flex items-center">
         <component
           :is="choosable(step.key) ? 'button' : (selectable && own.includes(step.key) ? 'span' : NuxtLink)"
@@ -100,6 +105,7 @@ const next = computed(() => {
             'text-muted': stateOf(step.key) === 'ahead',
           }"
           :aria-current="stateOf(step.key) === 'current' ? 'step' : undefined"
+          :aria-label="`${stateOf(step.key) === 'done' ? '✓' : at + 1} ${step.label}`"
           @click="choosable(step.key) && emit('select', step.key)"
         >
           <span
@@ -113,13 +119,14 @@ const next = computed(() => {
             <template v-if="stateOf(step.key) === 'done'">✓</template>
             <template v-else>{{ at + 1 }}</template>
           </span>
-          <span>{{ step.label }}</span>
+          <!-- The current step keeps its name whatever the width; it is the one being read. -->
+          <span :class="stateOf(step.key) === 'current' ? '' : 'hidden @[820px]:inline'">{{ step.label }}</span>
         </component>
 
-        <span v-if="at < steps.length - 1" class="mx-0.5 h-px w-3 bg-line" aria-hidden="true" />
+        <span v-if="at < steps.length - 1" class="mx-0.5 hidden h-px w-3 bg-line @[560px]:block" aria-hidden="true" />
       </li>
 
-      <li v-if="next && next.key !== current && index(next.key) > index(current)" class="ml-auto pl-4 text-muted">
+      <li v-if="next && next.key !== current && index(next.key) > index(current)" class="ml-auto hidden pl-4 text-muted @[1080px]:block">
         Sıradaki: <NuxtLink :to="next.to" class="text-ink underline-offset-4 hover:underline">{{ next.label }}</NuxtLink>
       </li>
     </ol>
