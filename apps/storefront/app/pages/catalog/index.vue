@@ -155,7 +155,7 @@ function goToPage(page: number) {
 <template>
   <div>
     <section class="border-b border-line bg-bg-muted">
-      <div class="rc-container py-12 sm:py-16">
+      <div class="rc-container rc-container--wide py-12 sm:py-16">
         <h1 class="text-3xl font-medium tracking-tight sm:text-4xl">Ürünler</h1>
         <p class="mt-4 max-w-[62ch] leading-relaxed text-ink-secondary">
           RefConcept'te satılan her ürün, onaylı satıcılar tarafından listelenir ve
@@ -165,7 +165,7 @@ function goToPage(page: number) {
       </div>
     </section>
 
-    <div class="rc-container grid gap-10 py-10 lg:grid-cols-[240px_minmax(0,1fr)]">
+    <div class="rc-container rc-container--wide grid gap-10 py-10 lg:grid-cols-[240px_minmax(0,1fr)]">
       <!-- Filters -->
       <aside class="space-y-7 lg:sticky lg:top-24 lg:self-start">
         <div>

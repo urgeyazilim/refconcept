@@ -142,7 +142,7 @@ const blockingIssues = computed(() => issues.value.filter(issue => issue.blocks_
 </script>
 
 <template>
-  <div class="rc-container py-10 lg:py-14">
+  <div class="rc-container rc-container--wide py-10 lg:py-14">
     <h1 class="text-2xl font-medium">Sepetim</h1>
 
     <RcAlert v-if="loadError" tone="danger" class="mt-6">{{ loadError }}</RcAlert>

@@ -199,7 +199,7 @@ const deliveryNote = computed(() => {
 
 <template>
   <div>
-    <div v-if="notFound" class="rc-container py-24 text-center">
+    <div v-if="notFound" class="rc-container rc-container--wide py-24 text-center">
       <h1 class="text-2xl font-medium">Bu ürün bulunamadı</h1>
       <p class="mx-auto mt-4 max-w-[48ch] leading-relaxed text-ink-secondary">
         Ürün kaldırılmış ya da satıcısı tarafından yayından çekilmiş olabilir.
@@ -207,11 +207,11 @@ const deliveryNote = computed(() => {
       <RcButton to="/catalog" class="mt-8">Kataloğa dön</RcButton>
     </div>
 
-    <div v-else-if="loadError" class="rc-container py-24">
+    <div v-else-if="loadError" class="rc-container rc-container--wide py-24">
       <RcAlert tone="danger">{{ loadError }}</RcAlert>
     </div>
 
-    <div v-else-if="product" class="rc-container py-8 sm:py-12">
+    <div v-else-if="product" class="rc-container rc-container--wide py-8 sm:py-12">
       <nav class="flex flex-wrap items-center gap-2 text-sm text-muted">
         <NuxtLink to="/catalog" class="hover:text-ink">Ürünler</NuxtLink>
         <span>/</span>

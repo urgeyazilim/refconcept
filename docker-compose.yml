@@ -219,6 +219,33 @@ services:
         condition: service_healthy
     networks: [refconcept]
 
+  # The 3D meshes, on their own worker.
+  #
+  # A mesh takes three to four minutes at the provider and the AI worker runs one job at a
+  # time, so a batch of them held up the reading of a customer's room: somebody sat on step
+  # one watching "odanı okuyorum" while three model jobs chewed through twelve minutes.
+  # Nobody waits at a screen for a mesh; somebody always waits for their room.
+  queue-models:
+    build:
+      context: .
+      dockerfile: infra/docker/php/Dockerfile
+      target: base
+    container_name: refconcept-queue-models
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: ["php", "artisan", "queue:work", "--queue=models", "--tries=1", "--timeout=960", "--max-time=3600", "--sleep=2"]
+    volumes:
+      - api-app:/var/www/html
+      - api-vendor:/var/www/html/vendor
+    depends_on:
+      api:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [refconcept]
+
   scheduler:
     build:
       context: .

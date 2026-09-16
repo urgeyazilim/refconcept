@@ -81,8 +81,16 @@ final class GenerateProductModel implements ShouldQueue
         public readonly ?string $modelCode = null,
         public readonly ?string $keepAs = null,
     ) {
-        // The AI worker: one process, a long timeout, and no payment callback waiting behind it.
-        $this->onQueue('ai');
+        /*
+         * Its own queue, away from anything a customer is waiting on.
+         *
+         * A mesh takes three to four minutes and the AI worker runs one job at a time, so a
+         * catalogue of models queued behind each other held up the reading of a customer's
+         * room — the product owner sat on step one watching "odanı okuyorum" while three
+         * model jobs chewed through twelve minutes. Nobody is looking at a screen waiting
+         * for a mesh; somebody is always looking at a screen waiting for their room.
+         */
+        $this->onQueue('models');
     }
 
     public function handle(

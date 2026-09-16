@@ -6,7 +6,8 @@ const version = '2026-01'
 </script>
 
 <template>
-  <article class="rc-container max-w-[var(--rc-prose)] py-16">
+  <div class="rc-container rc-container--wide py-16">
+    <article class="max-w-[var(--rc-prose)]">
     <p class="text-xs tracking-wide text-muted uppercase">Sürüm {{ version }}</p>
     <h1 class="mt-3 text-3xl font-medium">KVKK Aydınlatma Metni</h1>
 
@@ -62,4 +63,5 @@ const version = '2026-01'
       Kayıt ekranına dön
     </NuxtLink>
   </article>
+  </div>
 </template>

@@ -470,6 +470,9 @@ watch([activeStep, () => primaryPlate.value?.id ?? null], async ([step, plateId]
  * Queued on the server after every upload, and here on request; the page reloads the room
  * until the reading appears, and stops asking after a couple of minutes rather than forever.
  */
+/** The reading has been under way far longer than it should; the guide offers a way on. */
+const readingStalled = ref(false)
+
 const analysing = ref(false)
 let analysingTimer: ReturnType<typeof setInterval> | null = null
 let analysingSince = 0
@@ -521,6 +524,7 @@ function watchReading(before: string | null): void {
   stopWatchingAnalysis()
 
   analysing.value = true
+  readingStalled.value = false
   analysingSince = Date.now()
 
   analysingTimer = setInterval(async () => {
@@ -530,7 +534,10 @@ function watchReading(before: string | null): void {
 
     const failed = room.value?.analysis_failure !== null && room.value?.analysis_failure !== undefined && (now === null || now === undefined || now.id === before)
 
-    if ((now !== null && now !== undefined && now.id !== before && !now.is_stale) || failed || Date.now() - analysingSince > 180_000) {
+    const tooLong = Date.now() - analysingSince > 90_000
+
+    if ((now !== null && now !== undefined && now.id !== before && !now.is_stale) || failed || tooLong) {
+      readingStalled.value = tooLong && (now === null || now === undefined || now.id === before)
       stopWatchingAnalysis()
       await loadLayout()
     }
@@ -696,6 +703,21 @@ const guide = computed<GuideState>(() => {
           say: 'Bunu okuyamadım. Bir daha deneyelim mi?',
           detail: current.analysis_failure,
           action: { label: 'Yeniden oku' },
+        })
+      }
+
+      /*
+       * Waited long enough. A reading that never lands used to leave "odanı okuyorum" on the
+       * screen for ever — the worker was busy with something else entirely and nothing on
+       * this page ever said so. It says so now, and offers both ways on.
+       */
+      if (!recognised.value && readingStalled.value) {
+        return quiet({
+          icon: 'eye',
+          say: 'Okuma uzun sürdü.',
+          detail: 'Bir daha deneyeyim mi? Beklemek istemezsen ölçüleri sen söyleyip devam edebilirsin.',
+          action: { label: 'Yeniden oku' },
+          secondary: { label: 'Beklemeden devam et' },
         })
       }
 
@@ -885,7 +907,7 @@ function guideAct() {
 
   switch (activeStep.value) {
     case 'photo':
-      if (current.analysis === null && current.analysis_failure !== null) void analyse(true)
+      if (readingStalled.value || (current.analysis === null && current.analysis_failure !== null)) void analyse(true)
       else goTo('plate')
 
       return
@@ -914,6 +936,14 @@ function guideAct() {
 /** The guide's quieter button, when it is not a link. */
 function guideSecondary() {
   switch (activeStep.value) {
+    // 'Beklemeden devam et': the reading is taking too long, so go on and type the size.
+    case 'photo':
+      readingStalled.value = false
+      stopWatchingAnalysis()
+      goTo('recognise')
+      editingSize.value = true
+
+      return
     case 'recognise':
       if (room.value?.analysis?.is_stale === true && measured.value) void analyse(true)
       else editingSize.value = true

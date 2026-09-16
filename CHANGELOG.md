@@ -5,7 +5,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — The studio stopped on step one
+
+- **The room reading stood down whenever the primary photograph changed.** The job compares
+  the photographs it was queued for with the ones the room has now; that list is ordered
+  primary-first, so pressing "Bunu kullan" on another corner reordered it and every queued
+  reading cancelled itself. Nothing re-queued one, so the guide said "odanı okuyorum" for
+  ever. The comparison is a set now: the reading looks at all of them and the order is not
+  what it is about.
+- **A mesh could hold up a customer.**  shared the AI queue with room
+  readings, plates and designs, and one worker runs one job at a time — three meshes at three
+  to four minutes each put a customer twelve minutes behind a catalogue job nobody was
+  waiting for. Meshes have their own queue and their own worker now ().
+- **The waiting screen gives up out loud.** After ninety seconds with no reading the guide
+  says "Okuma uzun sürdü" and offers both ways on: try again, or go ahead and type the size.
+
 ### Changed — One frame for the whole journey
+
+- **Including the header.** The bar at the top used the 1200-pixel container while the studio
+  pages used the 1440 one, so the logo sat 120 pixels right of the page under it. Header,
+  footer, catalogue, basket, checkout, favourites, the account pages and the legal pages all
+  use the wide container now: one left edge on every screen in the product. The legal prose
+  keeps its comfortable measure but starts at that edge rather than centred in the middle.
 
 - **One left edge, one top gap, on every screen.** The home page, the house list, a house,
   a room, the plan and the design each had their own margins: three different left edges and

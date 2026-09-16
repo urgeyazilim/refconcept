@@ -100,7 +100,7 @@ function money(minor: number, currency = 'TRY'): string {
 </script>
 
 <template>
-  <div class="rc-container py-16">
+  <div class="rc-container rc-container--wide py-16">
     <div class="mx-auto max-w-lg text-center">
       <RcAlert v-if="loadError" tone="danger">{{ loadError }}</RcAlert>
 

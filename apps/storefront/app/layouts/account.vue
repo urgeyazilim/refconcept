@@ -13,7 +13,7 @@ const nav = [
 
 <template>
   <NuxtLayout name="default">
-    <div class="rc-container py-10 lg:py-14">
+    <div class="rc-container rc-container--wide py-10 lg:py-14">
       <div class="grid gap-8 lg:grid-cols-[220px_1fr] lg:gap-12">
         <aside>
           <p class="mb-4 text-xs tracking-wide text-muted uppercase">{{ displayName }}</p>

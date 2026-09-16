@@ -47,8 +47,22 @@ final class AnalyseRoom implements ShouldQueue
             return;
         }
 
-        // The photographs changed since this was queued: a later job has the current set.
-        if ($analyser->photoIds($room) !== $this->photoIds) {
+        /*
+         * The photographs changed since this was queued: a later job has the current set.
+         *
+         * Compared as a set rather than as a list. The reading looks at all of them and the
+         * order is only "primary first", so marking a different photograph as the primary
+         * reorders the list without changing what there is to read — and that was enough to
+         * make every queued reading stand down. The customer sat on step one watching
+         * "odanı okuyorum" with nothing running and nothing to re-queue it.
+         */
+        $now = $analyser->photoIds($room);
+        $queued = $this->photoIds;
+
+        sort($now);
+        sort($queued);
+
+        if ($now !== $queued) {
             return;
         }
 

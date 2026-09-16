@@ -200,7 +200,7 @@ const addressLine = (address: Record<string, string | null> | null): string =>
 </script>
 
 <template>
-  <div class="rc-container py-10 lg:py-14">
+  <div class="rc-container rc-container--wide py-10 lg:py-14">
     <h1 class="text-2xl font-medium">Ödeme</h1>
 
     <p v-if="loading" class="mt-6 text-sm text-muted">Yükleniyor…</p>

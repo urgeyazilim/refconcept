@@ -86,7 +86,7 @@ function onKeydown(event: KeyboardEvent) {
     </a>
 
     <header class="sticky top-0 z-50 border-b border-line/70 bg-bg/85 backdrop-blur">
-      <div class="rc-container flex h-18 items-center justify-between gap-4 py-4 lg:gap-8">
+      <div class="rc-container rc-container--wide flex h-18 items-center justify-between gap-4 py-4 lg:gap-8">
         <div class="flex items-center gap-2">
           <!-- The phone's way in. Absent, this header offers a logo and a sign-up button. -->
           <button
@@ -278,7 +278,7 @@ function onKeydown(event: KeyboardEvent) {
     </main>
 
     <footer v-if="!studio" class="border-t border-line bg-bg-muted">
-      <div class="rc-container py-10">
+      <div class="rc-container rc-container--wide py-10">
         <div class="flex flex-col gap-6 sm:flex-row sm:justify-between">
           <div>
             <p class="text-sm font-medium">RefConcept</p>
