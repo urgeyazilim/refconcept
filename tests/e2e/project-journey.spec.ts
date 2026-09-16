@@ -145,7 +145,7 @@ test.describe('project journey', () => {
       .getByRole('button', { name: 'Ekle', exact: true })
       .click()
 
-    await expect(page.getByText(/Pencere · 180 cm/)).toBeVisible()
+    await expect(page.getByText(/pencere · 180 cm/i)).toBeVisible()
 
     /*
      * --- a design ---------------------------------------------------------------------

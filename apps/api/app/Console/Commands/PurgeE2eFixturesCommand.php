@@ -61,11 +61,31 @@ final class PurgeE2eFixturesCommand extends Command
             return self::FAILURE;
         }
 
-        $organizations = $this->fixtureOrganizations();
+        $users = $this->fixtureUsers();
+        $organizations = $this->fixtureOrganizations($users);
 
-        if ($organizations === []) {
+        /*
+         * The fixture customers' projects, and with them their rooms and photographs. Not
+         * housekeeping only: a photograph uploaded by a test queues a reading of the room
+         * twenty seconds later, and a reading whose room no longer exists stands down before
+         * it reaches a provider. The projects are deleted before the routing is restored for
+         * exactly that reason.
+         */
+        $projects = DB::table('projects')->whereIn('user_id', $users);
+        $projectCount = $projects->count();
+
+        if ($organizations === [] && $projectCount === 0) {
             $this->info('Temizlenecek test artığı yok.');
 
+            return self::SUCCESS;
+        }
+
+        if (! $this->option('dry-run') && $projectCount > 0) {
+            $projects->delete();
+            $this->info(sprintf('%d test projesi odalarıyla birlikte silindi.', $projectCount));
+        }
+
+        if ($organizations === []) {
             return self::SUCCESS;
         }
 
@@ -76,7 +96,7 @@ final class PurgeE2eFixturesCommand extends Command
         $count = $products->count();
 
         if ($this->option('dry-run')) {
-            $this->line(sprintf('%d satıcı, %d ürün arşivlenecek.', count($organizations), $count));
+            $this->line(sprintf('%d test projesi silinecek; %d satıcı, %d ürün arşivlenecek.', $projectCount, count($organizations), $count));
 
             return self::SUCCESS;
         }
@@ -92,13 +112,13 @@ final class PurgeE2eFixturesCommand extends Command
     }
 
     /**
-     * Organizations whose owner is a fixture account.
+     * The fixture accounts themselves.
      *
      * @return array<int, string>
      */
-    private function fixtureOrganizations(): array
+    private function fixtureUsers(): array
     {
-        $users = DB::table('users')
+        return DB::table('users')
             ->where(function ($query): void {
                 $query
                     ->where('email', 'like', '%'.self::FIXTURE_DOMAIN)
@@ -106,7 +126,16 @@ final class PurgeE2eFixturesCommand extends Command
             })
             ->pluck('id')
             ->all();
+    }
 
+    /**
+     * Organizations whose owner is a fixture account.
+     *
+     * @param  array<int, string>  $users
+     * @return array<int, string>
+     */
+    private function fixtureOrganizations(array $users): array
+    {
         if ($users === []) {
             return [];
         }

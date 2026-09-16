@@ -19,11 +19,21 @@ const run = promisify(execFile)
  * rules about what is a fixture and what must never be touched belong in one place, next to
  * the schema they depend on, and that command refuses to run in production.
  *
+ * The order matters and was wrong once. A photograph uploaded by a test queues a reading of
+ * the room twenty seconds later; the routing was put back the moment the last test ended,
+ * and the reading then ran against the real provider and was billed — eight times in one
+ * afternoon, unnoticed, because every test had passed. So now: the fixtures' projects are
+ * deleted first, which makes every pending reading stand down; the queue is watched until
+ * none is left; and only then is the routing restored. If the wait times out the routing is
+ * restored anyway and the run says so, because a simulator left in place is the worse fault.
+ *
  * A failure here is reported and swallowed. Teardown that fails the run would turn a green
  * suite red over housekeeping, and the next run's purge picks up whatever this one left.
  */
 export default async function globalTeardown(): Promise<void> {
-  // The routing first, so a failure in the purge below cannot leave the simulator in place.
+  await artisan(['refconcept:purge-e2e-fixtures'], 'test artıkları temizlenemedi')
+  await artisan(['refconcept:await-ai-queue', '--timeout=90'], 'bekleyen okumalar sönmedi')
+
   try {
     await restoreBackgroundTasks()
   } catch (error) {
@@ -31,18 +41,18 @@ export default async function globalTeardown(): Promise<void> {
       `\n[teardown] AI yönlendirmesi geri alınamadı: ${error instanceof Error ? error.message : String(error)}\n`,
     )
   }
+}
 
+async function artisan(args: string[], failure: string): Promise<void> {
   try {
     const { stdout } = await run(
       'docker',
-      ['compose', 'exec', '-T', 'api', 'php', 'artisan', 'refconcept:purge-e2e-fixtures'],
-      { cwd: process.cwd(), timeout: 120_000 },
+      ['compose', 'exec', '-T', 'api', 'php', 'artisan', ...args],
+      { cwd: process.cwd(), timeout: 150_000 },
     )
 
     process.stdout.write(`\n[teardown] ${stdout.trim()}\n`)
   } catch (error) {
-    process.stdout.write(
-      `\n[teardown] test artıkları temizlenemedi: ${error instanceof Error ? error.message : String(error)}\n`,
-    )
+    process.stdout.write(`\n[teardown] ${failure}: ${error instanceof Error ? error.message : String(error)}\n`)
   }
 }

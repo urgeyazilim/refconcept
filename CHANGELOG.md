@@ -5,6 +5,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — The browser suite was quietly billing the real providers
+
+- **Readings fired after the routing was restored.** A photograph uploaded by a test queues
+  a reading of the room twenty seconds later; the suite's teardown put the real routing back
+  the moment the last test ended, and the reading then ran against Gemini and was billed —
+  thirteen readings on 2026-09-16 alone, none approved, unnoticed because every test had
+  passed. The teardown now deletes the fixture accounts' projects first (a reading whose room
+  is gone stands down), waits with `refconcept:await-ai-queue` until no reading, plate or
+  design job is left waiting, delayed or reserved, and only then restores the routing.
+- **The planner, reranker, renderer and render check were never routed to the simulator.**
+  Only the two upload-triggered tasks were; a journey that asked for a design paid for the
+  rest — between half a lira and two and a half per run. All seven tasks a test can trigger
+  are now pointed at the simulator for the run.
+- `refconcept:purge-e2e-fixtures` also deletes the fixture customers' projects, rooms and
+  photographs, and says so.
+
 ### Added — Which kind of window it is
 
 - **A window is a kind of window now.** Single, double or triple casement, or a French

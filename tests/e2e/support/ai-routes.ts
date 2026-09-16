@@ -18,8 +18,24 @@ import { createVerifiedAccount, grantPlatformRole } from './accounts'
 
 const API = process.env.E2E_API_URL ?? 'http://localhost:58000'
 
-/** The tasks a test can trigger without meaning to. */
-export const BACKGROUND_TASKS = ['room_analysis', 'room_clear'] as const
+/**
+ * The tasks a test can trigger without meaning to.
+ *
+ * Not only the two the upload queues. A journey that asks for a design runs the planner,
+ * the reranker, the renderer and the render check, and each of those was billed for real
+ * until the whole list was named here — a few kuruş to a few lira per run, unnoticed because
+ * every test passed.
+ */
+export const BACKGROUND_TASKS = ['room_analysis', 'room_clear', 'design_plan', 'product_match_rerank', 'render_check', 'image_render_draft', 'image_render_premium'] as const
+
+/** Which simulator model answers each task; anything not named here is text. */
+const SIMULATOR_MODEL: Partial<Record<(typeof BACKGROUND_TASKS)[number], string>> = {
+  room_analysis: 'fake-vision-1',
+  render_check: 'fake-vision-1',
+  room_clear: 'fake-image-1',
+  image_render_draft: 'fake-image-1',
+  image_render_premium: 'fake-image-1',
+}
 
 const SAVED = 'test-results/.ai-routes-before.json'
 
@@ -65,7 +81,7 @@ export async function pointBackgroundTasksAtSimulator(): Promise<void> {
 
     routes.push({ task, primary: row.route.primary_model.id, fallback: row.route.fallback_model?.id ?? null })
 
-    const wantedCode = task === 'room_clear' ? 'fake-image-1' : 'fake-vision-1'
+    const wantedCode = SIMULATOR_MODEL[task] ?? 'fake-text-1'
     const model = fake.models.find((entry: { code: string }) => entry.code === wantedCode)
 
     if (!model) {
