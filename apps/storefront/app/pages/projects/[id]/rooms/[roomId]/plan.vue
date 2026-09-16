@@ -64,6 +64,8 @@ const liveItems = ref<LayoutItem[]>([])
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const saveError = ref<string | null>(null)
+const adding = ref(false)
+const cartNotice = ref<string | null>(null)
 const confirming = ref(false)
 
 /** What the room itself says: its typed size and whether it has a photograph. */
@@ -792,6 +794,46 @@ async function addProduct(candidate: Candidate): Promise<void> {
 
 
 /**
+ * Puts everything standing in the room into the basket.
+ *
+ * The end of the module. A plan is a list of real products at real sizes in a room they
+ * have been checked against, so one press from being an order is the only sensible place
+ * for it to end. What could not be added is named rather than skipped — a basket that
+ * quietly contains four of the five things somebody planned is a basket they discover at
+ * the door.
+ *
+ * Not the same button as the design screen's. That one buys what the designer chose; this
+ * one buys what is standing in the room after the customer moved it, swapped it and took
+ * things out — which is the only list that matches the picture they are looking at. It
+ * went out with the duplicated 'Render al' and took the room's only way to a basket with
+ * it; the walk-through caught the room-plan journey ending nowhere.
+ */
+async function addLayoutToCart(): Promise<void> {
+  adding.value = true
+  saveError.value = null
+  cartNotice.value = null
+
+  try {
+    const response = await api.post<{
+      data: { added: number }
+      meta: { refused: Array<{ name: string | null, reason: string }> }
+    }>(`${base}/layout/cart`)
+
+    cartNotice.value = response.meta.refused.length === 0
+      ? `${response.data.added} ürün sepete eklendi.`
+      : `${response.data.added} ürün sepete eklendi. Eklenemeyenler: ${response.meta.refused
+        .map(entry => `${entry.name ?? 'ürün'} (${entry.reason})`)
+        .join(' · ')}`
+  }
+  catch (error) {
+    saveError.value = error instanceof Error ? error.message : 'Sepete eklenemedi.'
+  }
+  finally {
+    adding.value = false
+  }
+}
+
+/**
  * The categories that belong in this room.
  *
  * Read from the taxonomy rather than written out here, so a category added to the catalogue
@@ -1115,15 +1157,31 @@ onMounted(async () => {
         @resize-opening="resizeOpening"
       >
         <!--
-          The end of the module, beside the total: the final picture, which spends credits and
-          says so, and the basket — a plan is a list of real products at real sizes in a room
-          they have been checked against, and finding each again in the shop is doing the work
-          twice.
+          The end of the module, under the room's own list and its total: the basket. A plan is
+          a list of real products at real sizes in a room they have been checked against, and
+          finding each again in the shop is doing the work twice. The render is not here — the
+          guide asks for that, once.
         -->
+        <template #actions>
+          <button
+            v-if="liveItems.length > 0"
+            type="button"
+            class="rounded-pill border border-line px-4 py-2 text-xs hover:bg-bg-muted disabled:opacity-50"
+            :disabled="adding"
+            @click="addLayoutToCart"
+          >
+            {{ adding ? 'Ekleniyor…' : 'Odadakileri sepete ekle' }}
+          </button>
+        </template>
 
         <template #side-start>
-    
-    
+          <p v-if="cartNotice" class="rounded-sm bg-bg-muted p-3 text-sm text-ink-secondary">
+            {{ cartNotice }}
+            <NuxtLink to="/cart" class="ml-1 underline">
+              Sepete git
+            </NuxtLink>
+          </p>
+
           <!-- The question the 409 exists to ask. -->
           <div v-if="overwrite" class="rounded-md border border-line bg-warning-subtle p-4">
             <p class="text-sm text-warning-strong">
