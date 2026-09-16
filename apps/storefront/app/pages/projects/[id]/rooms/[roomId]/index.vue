@@ -183,6 +183,13 @@ const walls = [
 const photoCount = computed(() => media.value.filter(item => item.type === 'photo').length)
 const primaryPhoto = computed(() => media.value.find(item => item.is_primary && item.type === 'photo') ?? media.value.find(item => item.type === 'photo') ?? null)
 const primaryPlate = computed(() => primaryPhoto.value === null ? null : (media.value.find(item => item.type === 'plate' && item.source_media_id === primaryPhoto.value!.id) ?? null))
+
+/**
+ * Any emptied photograph at all. The server makes an emptied photograph the primary one,
+ * but a room emptied before it did, or one where somebody chose another primary since,
+ * still answered step two: the furniture question is not asked again.
+ */
+const anyPlate = computed(() => media.value.some(item => item.type === 'plate'))
 const latestDesign = computed(() => designs.value[0] ?? null)
 
 type StudioStep = 'photo' | 'plate' | 'recognise' | 'propose' | 'design' | 'edit' | 'save' | 'render' | 'video' | 'buy'
@@ -232,7 +239,7 @@ const studioDone = computed<Partial<Record<StudioStep, boolean>>>(() => ({
   photo: hasPhoto.value,
   // Done when the room is emptied, when there was nothing to empty, or when the customer
   // said to leave it as it is.
-  plate: primaryPlate.value !== null || plateSkipped.value || (recognised.value && (room.value?.analysis?.movable_objects.length ?? 0) === 0),
+  plate: anyPlate.value || plateSkipped.value || (recognised.value && (room.value?.analysis?.movable_objects.length ?? 0) === 0),
   // The room is understood once its size is agreed — the reading proposes, the customer says yes.
   recognise: confirmedGeometry.value !== null || measured.value,
   propose: designs.value.length > 0,
@@ -769,7 +776,7 @@ const guide = computed<GuideState>(() => {
         })
       }
 
-      if (primaryPlate.value !== null) {
+      if (anyPlate.value) {
         return quiet({
           icon: 'check',
           say: 'Odan boş.',
@@ -884,7 +891,7 @@ function guideAct() {
       return
     case 'plate':
       if (current.analysis === null) void analyse(current.analysis_failure !== null)
-      else if (primaryPlate.value !== null || current.analysis.movable_objects.length === 0) advance()
+      else if (anyPlate.value || current.analysis.movable_objects.length === 0) advance()
       else void clearPrimary()
 
       return
@@ -913,8 +920,8 @@ function guideSecondary() {
 
       return
     case 'plate':
-      if (primaryPlate.value !== null) {
-        void clearPrimary(true)
+      if (anyPlate.value) {
+        void clearPrimary(primaryPlate.value !== null)
       }
       else {
         const from = activeStep.value

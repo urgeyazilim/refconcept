@@ -175,3 +175,40 @@ it('leaves in the room what the customer asked to keep, and remakes the plate fo
 
     Queue::assertPushed(ClearRoomPhotograph::class, fn (ClearRoomPhotograph $job): bool => $job->keep === ['Gri kanepe', 'Desenli halı']);
 });
+
+it('makes the emptied photograph the primary one, unless the primary has a plate of its own', function (): void {
+    $storage = app(RoomPhotoStorage::class);
+    $files = app(GeneratedImageStore::class);
+
+    // A second corner, marked primary; the first is the one that gets emptied.
+    $second = RoomMedia::query()->create([
+        'room_id' => $this->room->getKey(),
+        'disk' => 's3',
+        'storage_path' => 'room-media/'.$this->room->getKey().'/oda-2.jpg',
+        'original_name' => 'oda-2.jpg',
+        'mime_type' => 'image/jpeg',
+        'size_bytes' => 1_024,
+        'checksum_sha256' => hash('sha256', 'oda-2'),
+        'type' => 'photo',
+        'uploaded_by' => $this->owner->getKey(),
+        'position' => 1,
+    ]);
+
+    $this->room->forceFill(['primary_media_id' => $second->getKey()])->save();
+
+    /*
+     * The product owner emptied their first corner while the second was primary, and the
+     * studio stood on step two asking about a photograph that was never going to be emptied.
+     * The design is made from the plate, so the plated photograph is the one to design from.
+     */
+    $storage->storePlate($this->room, $this->photograph, $files->stash('png-one', 'image/png'));
+    app(RoomClearer::class)->adoptAsPrimary($this->room, $this->photograph);
+
+    expect($this->room->fresh()?->primary_media_id)->toBe((string) $this->photograph->getKey());
+
+    // The primary already emptied: emptying another corner does not take its place.
+    $storage->storePlate($this->room, $second, $files->stash('png-two', 'image/png'));
+    app(RoomClearer::class)->adoptAsPrimary($this->room, $second);
+
+    expect($this->room->fresh()?->primary_media_id)->toBe((string) $this->photograph->getKey());
+});

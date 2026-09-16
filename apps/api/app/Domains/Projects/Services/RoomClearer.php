@@ -118,7 +118,29 @@ final class RoomClearer
             return null;
         }
 
-        return $this->storage->storePlate($room, $photograph, $reference);
+        $plate = $this->storage->storePlate($room, $photograph, $reference);
+
+        $this->adoptAsPrimary($room, $photograph);
+
+        return $plate;
+    }
+
+    /**
+     * Makes the emptied photograph the room's primary one, unless the primary has a plate
+     * of its own.
+     *
+     * The design is made from the emptied photograph, so that is the one to design from.
+     * The product owner emptied their first corner while the second was marked primary, and
+     * the studio stood on step two asking "Eşyaları kaldırayım mı?" about a photograph that
+     * was never going to be emptied — the customer had answered, on a different card.
+     */
+    public function adoptAsPrimary(Room $room, RoomMedia $photograph): void
+    {
+        $primary = $room->primaryMedia()->first();
+
+        if ($primary === null || ($primary->getKey() !== $photograph->getKey() && $this->storage->plateOf($primary) === null)) {
+            $room->forceFill(['primary_media_id' => $photograph->getKey()])->save();
+        }
     }
 
     /**

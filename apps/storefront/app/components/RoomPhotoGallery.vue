@@ -202,7 +202,8 @@ onBeforeUnmount(() => {
 
     <RcAlert v-if="error" tone="danger" class="mt-5">{{ error }}</RcAlert>
 
-    <div v-if="tiles.length > 0" class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <!-- Small enough that the four corners of a room and their plates sit on one screen. -->
+    <div v-if="tiles.length > 0" class="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
       <figure
         v-for="item in tiles"
         :key="item.id"

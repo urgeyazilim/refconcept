@@ -16,8 +16,14 @@ const split = ref(50)
 </script>
 
 <template>
-  <div class="relative select-none overflow-hidden rounded-md border border-line bg-bg-muted">
-    <img :src="before" alt="Odanın fotoğrafı" class="block w-full" draggable="false">
+  <!--
+    Sized by the photograph but never taller than the stage: a portrait photograph at full
+    width pushed the whole step below the window, and the product owner had to scroll to
+    see the bottom of it. The container shrinks to the picture, so the split is still a
+    percentage of the picture.
+  -->
+  <div class="relative w-fit max-w-full select-none overflow-hidden rounded-md border border-line bg-bg-muted">
+    <img :src="before" alt="Odanın fotoğrafı" class="block h-auto max-h-[calc(100vh-22rem)] max-w-full" draggable="false">
 
     <!-- The emptied room, clipped to the left of the line. -->
     <div class="absolute inset-0 overflow-hidden" :style="{ width: `${split}%` }">

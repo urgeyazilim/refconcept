@@ -102,14 +102,15 @@ const key = computed(() => `${props.icon}|${props.say}`)
           </div>
         </Transition>
 
-        <ul v-if="tips.length > 0" class="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          <li v-for="tip in tips" :key="tip.label" class="flex items-start gap-2.5 rounded-md border border-line bg-surface/80 px-3 py-2.5">
-            <svg class="mt-0.5 size-4 shrink-0 text-accent-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <!-- One under the other: the guide stands in a narrow column now, and a grid of four overlapped its own words. -->
+        <ul v-if="tips.length > 0" class="mt-4 space-y-1.5">
+          <li v-for="tip in tips" :key="tip.label" class="flex items-center gap-2.5 rounded-md border border-line bg-surface/80 px-3 py-2">
+            <svg class="size-4 shrink-0 text-accent-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path :d="paths[tip.icon]" />
             </svg>
-            <span class="text-xs leading-snug">
-              <span class="block font-medium text-ink">{{ tip.label }}</span>
-              <span v-if="tip.hint" class="block text-muted">{{ tip.hint }}</span>
+            <span class="min-w-0 text-xs leading-snug">
+              <span class="font-medium text-ink">{{ tip.label }}</span>
+              <span v-if="tip.hint" class="text-muted"> · {{ tip.hint }}</span>
             </span>
           </li>
         </ul>

@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — The owner's own room, on the ten steps
+
+- **Step two did not end.** The owner emptied their first corner while the second was the
+  primary photograph; the studio kept asking "Eşyaları kaldırayım mı?" about a photograph
+  that was never going to be emptied. An emptied photograph now becomes the primary one
+  (`RoomClearer::adoptAsPrimary`, unless the primary has a plate of its own), and step two
+  counts any emptied photograph as answered.
+- **The emptied room pushed the step below the window.** The before/after picture is never
+  taller than the stage now; a portrait photograph at full width was a screen and a half.
+- **The four photographing tips overlapped their own words** in the guide's column; they
+  stand one under the other. Five photographs fit on one screen (four or five across).
+
 ### Fixed — Walking the ten steps as a customer
 
 Found by walking the steps end to end with a fresh account, through the guide's own
