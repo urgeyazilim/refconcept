@@ -185,10 +185,16 @@ const primaryPhoto = computed(() => media.value.find(item => item.is_primary && 
 const primaryPlate = computed(() => primaryPhoto.value === null ? null : (media.value.find(item => item.type === 'plate' && item.source_media_id === primaryPhoto.value!.id) ?? null))
 const latestDesign = computed(() => designs.value[0] ?? null)
 
-type StudioStep = 'photo' | 'recognise' | 'confirm' | 'plate' | 'propose' | 'edit' | 'render'
+type StudioStep = 'photo' | 'plate' | 'recognise' | 'propose' | 'design' | 'edit' | 'save' | 'render' | 'video' | 'buy'
 
-// The order the guide walks: read, ask about the furniture, then the size, then design.
-const STEP_ORDER: StudioStep[] = ['photo', 'recognise', 'plate', 'confirm', 'propose', 'edit', 'render']
+/**
+ * The ten steps in the product owner's order: photographs, the furniture out, the room
+ * understood, what you want, the design, the 3D arrangement, saved, the render, the 360
+ * tour, the purchase. The first four are this screen's; the plan and the design screens
+ * carry the rest, and the guide links across.
+ */
+const STEP_ORDER: StudioStep[] = ['photo', 'plate', 'recognise', 'propose', 'design', 'edit', 'save', 'render', 'video', 'buy']
+const ON_ROOM: StudioStep[] = ['photo', 'plate', 'recognise', 'propose']
 
 /** "Hayır, kalsın": the customer wants the room as it is; the plate step is behind them. */
 const plateSkipped = ref(false)
@@ -224,27 +230,33 @@ await loadLayout()
 
 const studioDone = computed<Partial<Record<StudioStep, boolean>>>(() => ({
   photo: hasPhoto.value,
-  recognise: recognised.value,
-  confirm: confirmedGeometry.value !== null || measured.value,
   // Done when the room is emptied, when there was nothing to empty, or when the customer
   // said to leave it as it is.
   plate: primaryPlate.value !== null || plateSkipped.value || (recognised.value && (room.value?.analysis?.movable_objects.length ?? 0) === 0),
+  // The room is understood once its size is agreed — the reading proposes, the customer says yes.
+  recognise: confirmedGeometry.value !== null || measured.value,
   propose: designs.value.length > 0,
+  design: designs.value.some(design => design.status === 'ready'),
   edit: placedCount.value > 0,
-  render: designs.value.some(design => design.status === 'ready'),
+  save: placedCount.value > 0,
+  // The steps after the arrangement are the design screen's to tick; from here they are ahead.
 }))
 
 /**
  * The first step not done, in the guide's order — where the customer is going.
  *
- * The reading is not a screen of its own: while the photographs are being read the
- * customer stays with them (and may add a corner), and when the reading lands the guide
- * moves straight on to its first question. "Tanıma" in the strip ticks itself.
+ * The reading has no screen of its own: while the photographs are being read the customer
+ * stays with them (and may add a corner), and when the reading lands the guide asks about
+ * the furniture. The steps after this screen's four are reached through the guide's link.
  */
 const autoStep = computed<StudioStep>(() => {
-  const first = STEP_ORDER.find(step => studioDone.value[step] !== true) ?? 'render'
+  const first = STEP_ORDER.find(step => studioDone.value[step] !== true) ?? 'buy'
 
-  return first === 'recognise' ? 'photo' : first
+  if (!recognised.value && (first === 'plate' || first === 'recognise')) {
+    return 'photo'
+  }
+
+  return first
 })
 
 /** A step the customer opened from the strip, to look back or ahead. */
@@ -643,12 +655,51 @@ const guide = computed<GuideState>(() => {
       })
 
     case 'recognise':
+      // Step 3: the room as read from every corner — its size, its doors and windows. One
+      // question, the product owner's choice: "Doğru mu?"
+      if (analysis === null && current.analysis_failure !== null && !analysing.value) {
+        return quiet({
+          icon: 'eye',
+          say: 'Bunu okuyamadım. Bir daha deneyelim mi?',
+          detail: current.analysis_failure,
+          action: { label: 'Yeniden oku' },
+          secondary: { label: 'Ölçüleri ben söyleyeyim' },
+        })
+      }
+
+      if (measured.value && !editingSize.value) {
+        return quiet({
+          icon: 'ruler',
+          say: `Odan ${mm(current.width_mm)} × ${mm(current.length_mm)} m.`,
+          detail: `${photoCount.value} kareden okudum. Kapı ve pencereler yanda; yeri yanlışsa tutup sürükle. Hazırsan devam edelim.`,
+          action: { label: 'Devam et' },
+          secondary: analysis?.is_stale ? { label: 'Yeniden oku' } : null,
+        })
+      }
+
+      if (proposedSize.value && !editingSize.value) {
+        return quiet({
+          icon: 'ruler',
+          say: `Odanı ${proposedSize.value.text} okudum. Doğru mu?`,
+          detail: `${photoCount.value} kareden çıkardım; kapı ve pencereleri de yana koydum. Doğruysa onayla, değilse düzelt — ölçü doğru olunca önerdiğim her şey gerçekten sığar.`,
+          action: { label: 'Evet, doğru', busy: confirmingSize.value },
+          secondary: { label: 'Düzelt' },
+        })
+      }
+
+      return quiet({
+        icon: 'ruler',
+        say: 'Ölçüleri sen söyle.',
+        detail: 'Genişlik, uzunluk ve tavan; santimetre cinsinden. Duvar diplerinden ölçmek en doğrusu.',
+      })
+
+    case 'plate':
+      // Step 2 waits for the reading: the question is about what the reading saw.
       if (analysing.value || (analysis === null && current.analysis_failure === null)) {
         return quiet({
           icon: 'eye',
-          say: photoCount.value === 1 ? 'Kareyi okuyorum.' : `${photoCount.value} fotoğrafı okuyorum.`,
-          detail: 'Bir dakika kadar sürer; buradayım. Duvarları, kapıyı, pencereyi ve odanda duranları çıkarıyorum.',
-          secondary: photoCount.value < 4 ? { label: 'Bir kare daha ekle' } : null,
+          say: photoCount.value === 1 ? 'Kareye bakıyorum.' : `${photoCount.value} kareye bakıyorum.`,
+          detail: 'Odanda ne duruyor, çıkarıyorum; bir dakika kadar sürer.',
           busy: true,
         })
       }
@@ -662,45 +713,6 @@ const guide = computed<GuideState>(() => {
         })
       }
 
-      {
-        const seen = analysis.movable_objects.slice(0, 5).map(object => object.label.toLocaleLowerCase('tr-TR')).join(', ')
-
-        return quiet({
-          icon: 'eye',
-          say: analysis.movable_objects.length > 0 ? `Odanı gördüm: ${seen}${analysis.movable_objects.length > 5 ? '…' : ''}.` : 'Odanı gördüm; içinde eşya yok.',
-          detail: `${proposedSize.value ? `Ölçünü de okudum: ${proposedSize.value.text}. ` : ''}${analysis.is_stale ? 'Fotoğraflar değişti; istersen yeniden okuyayım. ' : ''}Devam edelim mi?`,
-          action: { label: 'Devam et' },
-          secondary: analysis.is_stale ? { label: 'Yeniden oku' } : null,
-        })
-      }
-
-    case 'confirm':
-      if (measured.value && !editingSize.value) {
-        return quiet({
-          icon: 'ruler',
-          say: `Ölçüler tamam: ${mm(current.width_mm)} × ${mm(current.length_mm)} m.`,
-          detail: 'Kapı ve pencereleri de aşağıda görüyorsun; yerleri yanlışsa planda sürükleyerek düzelt. Hazırsan devam edelim.',
-          action: { label: 'Devam et' },
-        })
-      }
-
-      if (proposedSize.value && !editingSize.value) {
-        return quiet({
-          icon: 'ruler',
-          say: `Odanı ${proposedSize.value.text} okudum. Doğru mu?`,
-          detail: 'Fotoğraftan tahmin ettim; kesin değil. Doğruysa onayla, değilse düzelt — ölçü doğru olunca önerdiğim her şey gerçekten sığar.',
-          action: { label: 'Evet, doğru', busy: confirmingSize.value },
-          secondary: { label: 'Düzelt' },
-        })
-      }
-
-      return quiet({
-        icon: 'ruler',
-        say: 'Ölçüleri sen söyle.',
-        detail: 'Genişlik, uzunluk ve tavan; santimetre cinsinden. Duvar diplerinden ölçmek en doğrusu.',
-      })
-
-    case 'plate':
       if (primaryPlate.value !== null) {
         return quiet({
           icon: 'check',
@@ -762,19 +774,32 @@ const guide = computed<GuideState>(() => {
       })
 
     case 'edit':
+    case 'save':
       return quiet({
         icon: 'pencil',
-        say: 'Şimdi odanı düzenle.',
-        detail: 'Planda ürünleri oklarla taşı, halkayla döndür; ben duvarları ve kapı önünü korurum.',
-        action: { label: 'Planı aç', to: plan },
+        say: placedCount.value > 0 ? 'Ürünlerin 3B odanda.' : 'Şimdi odanı 3B görelim.',
+        detail: placedCount.value > 0
+          ? 'Tasarımdaki gibi yerleştirdim; beğenmediğini tut, taşı. Her hareketi kaydederim.'
+          : 'Tasarımdaki ürünleri odana ben yerleştiririm; sen istersen taşırsın.',
+        action: { label: 'Odayı aç', to: plan },
       })
 
     default:
+      // Design, render, 360 and purchase live on the design screen; from here, the way there.
+      if (design === null) {
+        return quiet({
+          icon: 'sparkle',
+          say: 'Önce bir tasarım gerek.',
+          detail: 'İstekler adımına dönelim; ne istediğini söyle, tasarlayayım.',
+          action: { label: 'İsteklere dön' },
+        })
+      }
+
       return quiet({
         icon: 'sparkle',
-        say: design === null ? 'Render için önce bir tasarım gerek.' : 'Render hazır.',
-        detail: design === null ? 'Öneri adımına dönüp bir tasarım isteyelim.' : 'Yerleştirdiğin gibi, gerçek ürünlerle. Sürümleri yan yana görebilirsin.',
-        action: design === null ? { label: 'Öneriye dön' } : { label: 'Tasarıma bak', to: `/projects/${projectId}/rooms/${roomId}/designs/${design.id}` },
+        say: activeStep.value === 'render' ? 'Render tasarım ekranında.' : activeStep.value === 'video' ? '360 tur tasarım ekranında.' : activeStep.value === 'buy' ? 'Satın alma tasarım ekranında.' : 'Tasarımın tasarım ekranında.',
+        detail: 'Oraya geçelim; devamını orada sorarım.',
+        action: { label: 'Tasarıma geç', to: `/projects/${projectId}/rooms/${roomId}/designs/${design.id}` },
       })
   }
 })
@@ -791,19 +816,16 @@ function guideAct() {
       else goTo('plate')
 
       return
-    case 'recognise':
-      if (current.analysis === null) void analyse(current.analysis_failure !== null)
-      else advance()
-
-      return
-    case 'confirm':
-      if (measured.value) advance()
-      else void acceptProposal()
-
-      return
     case 'plate':
-      if (primaryPlate.value !== null || current.analysis === null || current.analysis.movable_objects.length === 0) advance()
+      if (current.analysis === null) void analyse(current.analysis_failure !== null)
+      else if (primaryPlate.value !== null || current.analysis.movable_objects.length === 0) advance()
       else void clearPrimary()
+
+      return
+    case 'recognise':
+      if (current.analysis === null && current.analysis_failure !== null && !measured.value && !proposedSize.value) void analyse(true)
+      else if (measured.value) advance()
+      else void acceptProposal()
 
       return
     case 'propose':
@@ -820,12 +842,8 @@ function guideAct() {
 function guideSecondary() {
   switch (activeStep.value) {
     case 'recognise':
-      if (room.value?.analysis !== null && room.value?.analysis !== undefined && room.value.analysis.is_stale) void analyse(true)
-      else goTo('photo')
-
-      return
-    case 'confirm':
-      editingSize.value = true
+      if (room.value?.analysis?.is_stale === true && measured.value) void analyse(true)
+      else editingSize.value = true
 
       return
     case 'plate':
@@ -878,14 +896,21 @@ function guideSecondary() {
           :room-id="roomId"
           :current="activeStep"
           :done="studioDone"
+          :design-id="latestDesign?.id ?? null"
+          :own="ON_ROOM"
           selectable
           @select="goTo"
         />
       </div>
 
-      <div class="grid gap-4 lg:grid-cols-[minmax(320px,380px)_minmax(0,1fr)] lg:items-start">
-        <!-- The guide: the one voice that says what comes next (REHBER.md). Beside the work, and it stays put while the work scrolls. -->
-        <div class="space-y-3 lg:sticky lg:top-24">
+      <!--
+        The stage: as tall as the window, like a television. The guide on the left never
+        moves; the step's work on the right scrolls inside its own column when it has to.
+        The page itself does not scroll — "mouse ile aşağıya inmeyeyim, TV ekranı gibi".
+      -->
+      <div class="grid gap-4 lg:h-[calc(100vh-8.5rem)] lg:grid-cols-[minmax(320px,380px)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+        <!-- The guide: the one voice that says what comes next (REHBER.md). -->
+        <div class="min-h-0 space-y-3 lg:overflow-y-auto">
           <StudioGuide
             :icon="guide.icon"
             :say="guide.say"
@@ -909,7 +934,7 @@ function guideSecondary() {
         nothing to discover at the bottom of the page.
       -->
       <Transition name="step" mode="out-in">
-        <div :key="activeStep" class="min-w-0">
+        <div :key="activeStep" class="min-h-0 min-w-0 lg:overflow-y-auto lg:pr-1">
           <!-- 1 · Fotoğraf -->
           <div v-if="activeStep === 'photo'" id="fotograf">
             <RoomPhotoGallery
@@ -921,61 +946,19 @@ function guideSecondary() {
             />
           </div>
 
-          <!-- 2 · Tanıma -->
-          <section v-else-if="activeStep === 'recognise'" class="rc-card p-6 sm:p-8">
-            <div class="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <h2 class="text-lg font-medium">Odanda gördüklerim</h2>
-                <p class="mt-1.5 max-w-[62ch] text-sm leading-relaxed text-ink-secondary">
-                  <template v-if="analysing || (room.analysis === null && room.analysis_failure === null)">Fotoğrafları okuyorum; bir dakika kadar sürer.</template>
-                  <template v-else-if="room.analysis === null">Son okuma tamamlanamadı: {{ room.analysis_failure }}.</template>
-                  <template v-else-if="room.analysis.is_stale">Fotoğraflar değişti; bu okuma {{ room.analysis.photo_count }} fotoğraf üzerinden. İstersen yeniden okuyayım.</template>
-                  <template v-else>{{ room.analysis.photo_count }} fotoğrafı tek oda olarak okudum.</template>
-                </p>
-              </div>
-
+          <!-- 3 · Oda: the size as read, and the doors and windows -->
+          <section v-else-if="activeStep === 'recognise'" id="oda" class="rc-card p-5 sm:p-6">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <h2 class="text-base font-medium">Odanın ölçüleri</h2>
               <button
                 v-if="canEdit && hasPhoto && !analysing && room.analysis !== null"
                 type="button"
-                class="rounded-pill border border-line px-4 py-2 text-sm text-ink-secondary hover:bg-bg-muted"
+                class="text-xs text-ink-secondary underline-offset-4 hover:underline"
                 @click="analyse(true)"
               >
-                Yeniden oku
+                Fotoğrafları yeniden oku
               </button>
             </div>
-
-            <div v-if="room.analysis !== null" class="mt-5 grid gap-4 sm:grid-cols-2">
-              <div>
-                <h3 class="text-xs font-medium uppercase tracking-wide text-muted">Odada duranlar</h3>
-                <p v-if="room.analysis.movable_objects.length === 0" class="mt-1.5 text-sm text-muted">Taşınabilir eşya görmedim.</p>
-                <ul v-else class="mt-1.5 flex flex-wrap gap-1.5">
-                  <li v-for="(object, at) in room.analysis.movable_objects" :key="`m-${at}`" class="rounded-pill bg-bg-muted px-2.5 py-1 text-xs text-ink-secondary">{{ object.label }}</li>
-                </ul>
-              </div>
-              <div>
-                <h3 class="text-xs font-medium uppercase tracking-wide text-muted">Sabit olanlar</h3>
-                <p v-if="room.analysis.fixed_elements.length === 0" class="mt-1.5 text-sm text-muted">Sabit öğe görmedim.</p>
-                <ul v-else class="mt-1.5 flex flex-wrap gap-1.5">
-                  <li v-for="(name, at) in room.analysis.fixed_elements" :key="`f-${at}`" class="rounded-pill border border-line px-2.5 py-1 text-xs text-ink-secondary">{{ name }}</li>
-                </ul>
-              </div>
-              <div v-if="room.analysis.dominant_colors.length > 0">
-                <h3 class="text-xs font-medium uppercase tracking-wide text-muted">Renklerin</h3>
-                <p class="mt-1.5 text-sm text-ink-secondary">{{ room.analysis.dominant_colors.map(colour => colourWords[colour] ?? colour).join(', ') }}</p>
-              </div>
-              <div v-if="proposedSize">
-                <h3 class="text-xs font-medium uppercase tracking-wide text-muted">Okuduğum ölçü</h3>
-                <p class="mt-1.5 text-sm text-ink-secondary">{{ proposedSize.text }} — bir sonraki adımda onaylarsın.</p>
-              </div>
-              <p v-if="room.analysis.warnings.length > 0" class="text-xs leading-relaxed text-warning sm:col-span-2">
-                {{ room.analysis.warnings.join(' · ') }}
-              </p>
-            </div>
-          </section>
-
-          <!-- 3 · Onay: the size, and the doors and windows -->
-          <section v-else-if="activeStep === 'confirm'" class="rc-card p-6 sm:p-8">
-            <h2 class="text-lg font-medium">Odanın ölçüleri</h2>
 
             <div v-if="measured && !editingSize" class="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-md bg-bg-muted p-4">
               <p class="text-sm">
@@ -1131,13 +1114,9 @@ function guideSecondary() {
             </div>
           </section>
 
-          <!-- 4 · Boş oda -->
-          <section v-else-if="activeStep === 'plate'" class="rc-card p-6 sm:p-8">
-            <h2 class="text-lg font-medium">Boş oda</h2>
-            <p class="mt-1.5 max-w-[62ch] text-sm leading-relaxed text-ink-secondary">
-              Tasarımı odanın eşyaları kaldırılmış hâline yaparım: duvarlar, zemin, pencere ve
-              kapı senin; mobilya yalnızca seçtiklerin. Kalsın dediklerin yerinde kalır.
-            </p>
+          <!-- 2 · Eşyalar: the room emptied, shown against the photograph -->
+          <section v-else-if="activeStep === 'plate'" id="esyalar" class="rc-card p-5 sm:p-6">
+            <h2 class="text-base font-medium">Boş oda</h2>
 
             <RoomPlateCompare
               v-if="plateLinks"
@@ -1149,8 +1128,8 @@ function guideSecondary() {
             <p v-else-if="primaryPlate" class="mt-5 text-sm text-muted">Boş oda hazır; görüntüsü yükleniyor…</p>
           </section>
 
-          <!-- 5 · Öneri -->
-          <div v-else-if="activeStep === 'propose'" class="space-y-6">
+          <!-- 4 · İstekler -->
+          <div v-else-if="activeStep === 'propose'" id="istekler" class="space-y-6">
             <DesignBriefWizard
               v-if="creatingDesign && !briefUnavailable"
               id="tasarim-olustur"
@@ -1215,19 +1194,12 @@ function guideSecondary() {
             </section>
           </div>
 
-          <!-- 6 · Düzenle and 7 · Render live on their own screens; the guide links to them. -->
-          <section v-else class="rc-card p-6 sm:p-8">
-            <h2 class="text-lg font-medium">{{ activeStep === 'edit' ? 'Odanı düzenle' : 'Render' }}</h2>
-            <p class="mt-1.5 max-w-[62ch] text-sm leading-relaxed text-ink-secondary">
-              <template v-if="activeStep === 'edit'">Odanı üç boyutlu gör; ürünleri oklarla taşı, halkayla döndür. Hiçbir şey duvara giremez, kapının önüne konamaz.</template>
-              <template v-else>Yerleştirdiğin gibi, gerçek ürünlerle çizerim; her render bir sürümdür, ikisini yan yana görebilirsin.</template>
-            </p>
-            <NuxtLink
-              :to="activeStep === 'edit' || latestDesign === null ? `/projects/${projectId}/rooms/${roomId}/plan` : `/projects/${projectId}/rooms/${roomId}/designs/${latestDesign.id}`"
-              class="mt-6 inline-flex rounded-pill bg-charcoal px-4 py-2 text-sm text-white"
-            >
-              {{ activeStep === 'edit' ? 'Planı aç' : 'Tasarıma bak' }}
-            </NuxtLink>
+          <!-- Steps 5–10 live on the plan and design screens; the guide beside this is the way there. -->
+          <section v-else class="rc-card p-5 sm:p-6">
+            <h2 class="text-base font-medium">
+              {{ activeStep === 'edit' || activeStep === 'save' ? '3B oda' : activeStep === 'render' ? 'Render' : activeStep === 'video' ? '360 tur' : activeStep === 'buy' ? 'Satın alma' : 'Tasarım' }}
+            </h2>
+            <p class="mt-1 text-sm text-ink-secondary">Bu adım kendi ekranında; rehberden geç.</p>
           </section>
         </div>
       </Transition>

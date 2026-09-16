@@ -73,12 +73,18 @@ const roomFacts = ref<{ width_mm: number | null, length_mm: number | null, heigh
  * Where this screen sits in the studio's steps: confirming the room until the geometry is
  * confirmed, editing once it is.
  */
-const studioCurrent = computed<'confirm' | 'edit'>(() => (confirmed.value === null ? 'confirm' : 'edit'))
+/** Whether every move so far has been written; step 7 of the ten is "saved". */
+const saved = ref(true)
+
+const studioCurrent = computed<'edit' | 'save'>(() => (liveItems.value.length > 0 && saved.value ? 'save' : 'edit'))
 const studioDone = computed(() => ({
   photo: (roomFacts.value?.photo_count ?? 0) > 0,
-  recognise: confirmed.value !== null || pending.value.length > 0 || (roomFacts.value?.width_mm ?? null) !== null,
-  confirm: confirmed.value !== null,
+  plate: true,
+  recognise: confirmed.value !== null || (roomFacts.value?.width_mm ?? null) !== null,
+  propose: design.value !== null,
+  design: design.value !== null,
   edit: liveItems.value.length > 0,
+  save: liveItems.value.length > 0 && saved.value,
 }))
 
 /** The 3D scene, for the picture the renderer works from and for adding products to. */
@@ -147,9 +153,6 @@ const rendering = ref(false)
 
 const composing = ref(false)
 const composeNotice = ref<string | null>(null)
-
-/** Whether the room was arranged on opening, unasked, so the column can say so. */
-const autoArranged = ref(false)
 
 const adding = ref(false)
 const cartNotice = ref<string | null>(null)
@@ -394,7 +397,6 @@ async function load(): Promise<void> {
      * have to press anything: the design chose the products, so the room shows them.
      */
     if (items.value.length === 0 && design.value !== null && (confirmed.value !== null || pending.value.length > 0)) {
-      autoArranged.value = true
       await composeLayout()
     }
 
@@ -554,6 +556,7 @@ async function save(next: LayoutItem[]): Promise<void> {
       })),
     })
 
+    saved.value = true
     scheduleSnapshot()
   }
   catch (error) {
@@ -915,7 +918,7 @@ onMounted(async () => {
     space and a mouse wheel that never stopped. Nothing here needs the page to scroll.
   -->
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <StudioStepper :project-id="projectId" :room-id="roomId" :current="studioCurrent" :done="studioDone" class="min-w-0 flex-1" />
+      <StudioStepper :project-id="projectId" :room-id="roomId" :current="studioCurrent" :done="studioDone" :design-id="design?.design_id ?? null" class="min-w-0 flex-1" />
 
       <div class="flex items-center gap-4">
         <h1 class="sr-only">Oda planı</h1>
@@ -1119,7 +1122,7 @@ onMounted(async () => {
         :items="items"
         editable
         @save="save"
-        @change="liveItems = $event"
+        @change="liveItems = $event; saved = false"
         @move-opening="moveOpening"
         @add-opening="addOpening"
         @resize-opening="resizeOpening"
@@ -1152,24 +1155,23 @@ onMounted(async () => {
         </template>
 
         <template #side-start>
-          <div class="space-y-2 rounded-md border border-line bg-surface p-3">
-            <button
-              type="button"
-              class="w-full rounded-pill bg-charcoal px-4 py-2 text-sm text-white disabled:opacity-50"
-              :disabled="composing"
-              @click="composeLayout()"
-            >
-              {{ liveItems.length === 0 ? 'Tasarıma göre yerleştir' : 'Yeniden yerleştir' }}
-            </button>
-    
-            <p class="text-xs text-muted">
-              <template v-if="autoArranged && liveItems.length > 0">Tasarımındaki ürünleri odana yerleştirdim. Beğenmediğini tut, taşı; ya da baştan dizdireyim.</template>
-              <template v-else-if="liveItems.length > 0">Tasarımın ürünleri odada. Yeniden dizdirirsen kendi taşıdıkların gider.</template>
-              <template v-else>Son tasarımda seçilen ürünler odanın ölçülerine göre dizilir; sonra istediğin gibi taşırsın.</template>
-            </p>
-    
-    
-          </div>
+          <!--
+            The guide, in the column: steps 6 and 7 of the ten. It says the room is furnished
+            the way the design had it, that every move is saved, and asks for the render when
+            the customer is done — the "Tasarıma göre yerleştir" button is its quieter second.
+          -->
+          <StudioGuide
+            icon="pencil"
+            :say="composing ? 'Ürünleri odana yerleştiriyorum.' : liveItems.length === 0 ? (design === null ? 'Önce bir tasarım gerek.' : 'Odan boş.') : saved ? 'Ürünlerin odada; kaydettim.' : 'Taşıyorsun; kaydediyorum.'"
+            :detail="composing ? 'Tasarımdaki gibi, gerçek ölçülerinde.' : liveItems.length === 0 ? (design === null ? 'İstekler adımına dönüp bir tasarım isteyelim.' : 'Tasarımdaki ürünleri yerleştireyim mi?') : 'Beğenmediğini tut, taşı; halkayla döndür. Bitince render alayım.'"
+            :action="liveItems.length === 0
+              ? (design === null ? null : { label: 'Yerleştir', busy: composing })
+              : (design === null ? null : { label: rendering ? 'Render alınıyor…' : 'Render al', busy: rendering, note: 'Yerleştirdiğin gibi, gerçek ürünlerle' })"
+            :secondary="liveItems.length > 0 && !composing ? { label: 'Tasarıma göre yeniden diz' } : null"
+            :busy="composing || rendering"
+            @act="liveItems.length === 0 ? composeLayout() : renderFinal()"
+            @secondary="composeLayout()"
+          />
     
           <p v-if="cartNotice" class="rounded-sm bg-bg-muted p-3 text-sm text-ink-secondary">
             {{ cartNotice }}

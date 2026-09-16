@@ -196,3 +196,10 @@ fiyatlaması bu maliyetlerin üstünde ve **tek yerde** (`CreditEconomySeeder`).
    müşteriye "elimizden gelen bu" ile en iyisi gösterilir.)
 4. Stüdyo ekranı mevcut oda/plan/tasarım sayfalarının **yerine mi** geçer, yanına mı?
    (Öneri: yerine; eski sayfalar yönlendirir.)
+
+## 9. On adım (2026-09-16, sahibinin listesi; §2'nin yedi adımının yerini alır)
+
+Fotoğraf → Eşyalar → Oda → İstekler → Tasarım → 3B → Kayıt → Render → 360 → Satın al.
+`StudioStepper` bu onu gösterir; oda ekranı ilk dördü, plan 6–7'yi, tasarım ekranı 5 ve
+8–10'u tek tek sahneler (`stage`). Her sahne pencere yüksekliğinde; sayfa kaymaz. Ölçü onayı
+3. adımın tek sorusudur (sahibinin kararı). Bkz. REHBER.md §2b.

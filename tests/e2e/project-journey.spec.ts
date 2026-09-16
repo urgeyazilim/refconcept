@@ -121,8 +121,8 @@ test.describe('project journey', () => {
       .toBeGreaterThan(0)
 
     // --- measurements ------------------------------------------------------------
-    // The size lives on the Onay step; the strip opens it without waiting for the reading.
-    await page.getByRole('navigation', { name: 'Oda stüdyosu adımları' }).getByRole('button', { name: /Onay/ }).click()
+    // The size lives on the Oda step; the strip opens it without waiting for the reading.
+    await page.getByRole('navigation', { name: 'Oda stüdyosu adımları' }).getByRole('button', { name: /Oda/ }).click()
     await fillStable(page, '#width', '420')
     await fillStable(page, '#length', '560')
     await fillStable(page, '#height', '270')
@@ -133,8 +133,8 @@ test.describe('project journey', () => {
     await expect(page.getByText('23.52 m²').first()).toBeVisible()
 
     // --- something to design around ------------------------------------------------
-    // Saving the size moved the guide on; the doors and windows are back on the Onay step.
-    await page.getByRole('navigation', { name: 'Oda stüdyosu adımları' }).getByRole('button', { name: /Onay/ }).click()
+    // Saving the size moved the guide on; the doors and windows are back on the Oda step.
+    await page.getByRole('navigation', { name: 'Oda stüdyosu adımları' }).getByRole('button', { name: /Oda/ }).click()
     await page.getByRole('button', { name: 'Ekle', exact: true }).click()
     await page.locator('#ctype').selectOption('window')
     await page.locator('#wall').selectOption('south')
@@ -155,8 +155,8 @@ test.describe('project journey', () => {
      * needs to act on — which is the behaviour worth asserting here, because this journey
      * is about a customer arriving with nothing.
      */
-    // The questions open by themselves on the Öneri step; the strip takes us there.
-    await page.getByRole('navigation', { name: 'Oda stüdyosu adımları' }).getByRole('button', { name: /Öneri/ }).click()
+    // The questions open by themselves on the İstekler step; the strip takes us there.
+    await page.getByRole('navigation', { name: 'Oda stüdyosu adımları' }).getByRole('button', { name: /İstekler/ }).click()
     await completeBrief(page)
 
     await expect(page.getByText(/kredi gerektiriyor/)).toBeVisible()

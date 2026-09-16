@@ -10,7 +10,7 @@ import { signInThrough } from './support/signin'
  *
  * On a room with nothing in it the first step is lit; once a photograph is up and the size
  * is confirmed, those steps carry a tick; on the plan the strip knows the size was agreed
- * and lights "Düzenle". The strip is the one part of the studio that is on every screen,
+ * and lights "3B". The strip is the one part of the studio that is on every screen,
  * so this is the one journey that reads it.
  */
 
@@ -38,9 +38,9 @@ test.describe('studio stepper', () => {
     await expect(strip).toBeVisible()
     await expect(strip.getByRole('button', { name: /1\s*Fotoğraf/ })).toHaveAttribute('aria-current', 'step')
     await expect(strip.getByText('Sıradaki:')).toBeVisible()
-    await expect(strip.locator('span').filter({ hasText: /^Tanıma$/ })).toBeVisible()
+    await expect(strip.locator('span').filter({ hasText: /^Eşyalar$/ })).toBeVisible()
 
-    // --- a photograph, then the size confirmed on the Onay step ----------------------
+    // --- a photograph, then the size confirmed on the Oda step ----------------------
     await page.locator('input[type="file"]').setInputFiles({
       name: 'salon.png',
       mimeType: 'image/png',
@@ -48,8 +48,8 @@ test.describe('studio stepper', () => {
     })
     await expect(page.getByText('Tasarım bu fotoğraftan')).toBeVisible()
 
-    // The size lives on the Onay step; the strip opens it without waiting for the reading.
-    await strip.getByRole('button', { name: /Onay/ }).click()
+    // The size lives on the Oda step; the strip opens it without waiting for the reading.
+    await strip.getByRole('button', { name: /Oda/ }).click()
     await fillStable(page, '#width', '420')
     await fillStable(page, '#length', '560')
     await fillStable(page, '#height', '270')
@@ -57,12 +57,12 @@ test.describe('studio stepper', () => {
     await page.getByRole('button', { name: 'Ölçüleri kaydet' }).click()
     await expect(page.getByText('23.52 m²').first()).toBeVisible()
 
-    // Fotoğraf and Onay are ticked; the guide has moved on to what it asks next.
+    // Fotoğraf and Oda are ticked; the guide has moved on to what it asks next.
     await expect(strip.getByRole('button', { name: /✓\s*Fotoğraf/ })).toBeVisible()
-    await expect(strip.getByRole('button', { name: /✓\s*Onay/ })).toBeVisible()
+    await expect(strip.getByRole('button', { name: /✓\s*Oda/ })).toBeVisible()
 
-    // Back on the Onay step the doors and windows are drawn from above, ready to drag.
-    await strip.getByRole('button', { name: /Onay/ }).click()
+    // Back on the Oda step the doors and windows are drawn from above, ready to drag.
+    await strip.getByRole('button', { name: /Oda/ }).click()
     await expect(page.getByRole('button', { name: 'Çift kanat pencere ekle' })).toBeVisible()
     // Let the step's fade finish before the picture is taken.
     await page.waitForTimeout(400)
@@ -75,8 +75,8 @@ test.describe('studio stepper', () => {
     const planStrip = page.getByRole('navigation', { name: 'Oda stüdyosu adımları' })
 
     await expect(page.locator('canvas')).toBeVisible({ timeout: 30_000 })
-    await expect(planStrip.getByRole('link', { name: /✓\s*Onay/ })).toBeVisible()
-    await expect(planStrip.getByRole('link', { name: /6\s*Düzenle/ })).toHaveAttribute('aria-current', 'step')
+    await expect(planStrip.getByRole('link', { name: /✓\s*Oda/ })).toBeVisible()
+    await expect(planStrip.getByRole('link', { name: /6\s*3B/ })).toHaveAttribute('aria-current', 'step')
 
     await page.screenshot({ path: 'test-results/studio-stepper-plan.png', fullPage: true })
   })

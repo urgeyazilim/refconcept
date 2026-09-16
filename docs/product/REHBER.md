@@ -82,3 +82,23 @@ derse üç boyutta yerleştir."
   yapılır (`POST …/clear` gövdesinde `keep: [...]`). Seçim değişirse plaka yeniden yapılır.
 - Ölçü önerisini plan ekranındaki onaya bağlar (K4).
 - Okumadaki renk paletini "ne istersin" adımına önerisi olarak taşır.
+
+## 2b. On adım (2026-09-16, sahibinin listesi)
+
+Sahibinin sözü: "Kullanıcıyı hiçbir şeyle uğraştırmak istemiyorum. Ekran beni sürüklesin;
+mouse ile aşağıya inmeyeyim, TV ekranı gibi sabit olsun. Adım atlama olmasın."
+
+1. **Fotoğraf** — oda fotoğrafları yüklenir; okuma kendiliğinden başlar.
+2. **Eşyalar** — okuma bitince Rehber sorar: "Eşyaları kaldırayım mı?" → Evet, kaldır / Hayır, hepsi kalsın.
+3. **Oda** — dört köşeden okunan ölçü ve kapı-pencereler: "Odanı 4,2 × 3,5 m okudum. Doğru mu?" → Evet, doğru / Düzelt. (Sahibinin kararı: onay sorulur, otomatik kabul edilmez.)
+4. **İstekler** — "Şimdi sen: ne istersin?" Renk, stil, ürünler.
+5. **Tasarım** — yapay zekâ iç mimar olarak çizer; resim tam ekranda. "Yerlerini değiştirmek ister misin?"
+6. **3B** — evet dersen 3B oda **tasarımdaki yerleşimle dolu** açılır; buton yok. Tut, taşı.
+7. **Kayıt** — her hareket kaydedilir; şerit "Kayıt"ı tikler.
+8. **Render** — "Render al": yerleşim + ürünlerin gerçek fotoğrafları gider, aynısı çizilir.
+9. **360** — "360 tur oluşturayım mı? (20 kredi)" → Evet / Hayır.
+10. **Satın al** — render'daki ürünler listelenir, sepete gider.
+
+Ekran kuralı: her adım tek ekran (yükseklik pencere kadar), rehber solda sabit, adımın işi
+sağda; sayfa kaymaz, gerekirse panel kendi içinde kayar. Başlık, alt başlık, açıklama kartı,
+alt bilgi yok. Şerit on adımı gösterir; hiçbiri gizlenmez, hiçbiri atlanmaz.

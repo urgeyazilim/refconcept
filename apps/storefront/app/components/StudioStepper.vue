@@ -1,15 +1,18 @@
 <script setup lang="ts">
 /**
- * The studio's seven steps, and where the customer is in them.
+ * The studio's ten steps, and where the customer is in them.
  *
  * One strip at the top of every room screen — the room, the plan, the design — so
  * somebody always knows what they have done, what they are doing and what comes next. A
  * done step has a tick and stays a link; the current step is the one lit; the ones ahead
  * are visible and quiet. Nothing here is a button that does work: it is a map.
  *
- * The steps are the product contract's (docs/product/ODA_STUDYOSU_KURALLARI.md, §2).
+ * The ten are the product owner's, in their order (docs/product/ODA_STUDYOSU_KURALLARI.md
+ * §2): photographs, the furniture out, the room understood, what you want, the design, the
+ * 3D arrangement, saved, the render, the 360 tour, the purchase. None is skipped and none is
+ * hidden; the guide walks them one at a time.
  */
-export type StudioStep = 'photo' | 'recognise' | 'confirm' | 'plate' | 'propose' | 'edit' | 'render'
+export type StudioStep = 'photo' | 'plate' | 'recognise' | 'propose' | 'design' | 'edit' | 'save' | 'render' | 'video' | 'buy'
 
 const props = defineProps<{
   projectId: string
@@ -18,11 +21,13 @@ const props = defineProps<{
   current: StudioStep
   /** Which steps are done, as far as this screen knows. Unknown steps are shown quiet. */
   done: Partial<Record<StudioStep, boolean>>
+  /** The design the design steps link to, when the screen knows one. */
+  designId?: string | null
   /**
-   * Whether the room screen's own steps are chosen here rather than navigated to: the
-   * strip then emits `select` for a step that is done or current, and the steps that
-   * live on other screens stay links.
+   * The steps this screen shows itself. With `selectable`, these become buttons that emit
+   * `select` when done or current; the steps on other screens stay links.
    */
+  own?: StudioStep[]
   selectable?: boolean
 }>()
 
@@ -32,26 +37,30 @@ const emit = defineEmits<{ (event: 'select', step: StudioStep): void }>()
 // is auto-imported, not registered — the strip rendered `<nuxtlink>` elements nobody could click.
 const NuxtLink = resolveComponent('NuxtLink')
 
-/** The steps the room screen shows itself; the rest are other screens. */
-const ON_ROOM: StudioStep[] = ['photo', 'recognise', 'confirm', 'plate', 'propose']
+/** The room screen's own steps, unless the screen says otherwise. */
+const own = computed<StudioStep[]>(() => props.own ?? ['photo', 'plate', 'recognise', 'propose'])
 
 /**
- * Every room step opens once there is a photograph: somebody who does not want to wait
- * for the reading can type the size themselves, or look back at what was read.
+ * Every own step opens once there is a photograph: somebody who does not want to wait for
+ * the reading can type the size themselves, or look back at what was read.
  */
 const choosable = (key: StudioStep): boolean =>
-  props.selectable === true && ON_ROOM.includes(key) && (props.done.photo === true || key === props.current)
+  props.selectable === true && own.value.includes(key) && (props.done.photo === true || key === props.current)
 
 const room = computed(() => `/projects/${props.projectId}/rooms/${props.roomId}`)
+const design = computed(() => (props.designId ? `${room.value}/designs/${props.designId}` : `${room.value}#tasarim`))
 
 const steps = computed(() => [
   { key: 'photo' as const, label: 'Fotoğraf', to: `${room.value}#fotograf` },
-  { key: 'recognise' as const, label: 'Tanıma', to: `${room.value}#olculer` },
-  { key: 'plate' as const, label: 'Boş oda', to: `${room.value}#fotograf` },
-  { key: 'confirm' as const, label: 'Onay', to: `${room.value}/plan` },
-  { key: 'propose' as const, label: 'Öneri', to: `${room.value}#tasarim` },
-  { key: 'edit' as const, label: 'Düzenle', to: `${room.value}/plan` },
-  { key: 'render' as const, label: 'Render', to: `${room.value}#tasarim` },
+  { key: 'plate' as const, label: 'Eşyalar', to: `${room.value}#esyalar` },
+  { key: 'recognise' as const, label: 'Oda', to: `${room.value}#oda` },
+  { key: 'propose' as const, label: 'İstekler', to: `${room.value}#istekler` },
+  { key: 'design' as const, label: 'Tasarım', to: `${design.value}#tasarim` },
+  { key: 'edit' as const, label: '3B', to: `${room.value}/plan` },
+  { key: 'save' as const, label: 'Kayıt', to: `${room.value}/plan` },
+  { key: 'render' as const, label: 'Render', to: `${design.value}#render` },
+  { key: 'video' as const, label: '360', to: `${design.value}#video` },
+  { key: 'buy' as const, label: 'Satın al', to: `${design.value}#alisveris` },
 ])
 
 const index = (key: StudioStep): number => steps.value.findIndex(step => step.key === key)
@@ -77,14 +86,14 @@ const next = computed(() => {
 </script>
 
 <template>
-  <nav aria-label="Oda stüdyosu adımları" class="rc-card overflow-x-auto px-4 py-3">
-    <ol class="flex min-w-max items-center gap-1 text-xs">
+  <nav aria-label="Oda stüdyosu adımları" class="rc-card overflow-x-auto px-3 py-2">
+    <ol class="flex min-w-max items-center gap-0.5 text-xs">
       <li v-for="(step, at) in steps" :key="step.key" class="flex items-center">
         <component
-          :is="choosable(step.key) ? 'button' : (selectable && ON_ROOM.includes(step.key) ? 'span' : NuxtLink)"
-          :to="choosable(step.key) || (selectable && ON_ROOM.includes(step.key)) ? undefined : step.to"
+          :is="choosable(step.key) ? 'button' : (selectable && own.includes(step.key) ? 'span' : NuxtLink)"
+          :to="choosable(step.key) || (selectable && own.includes(step.key)) ? undefined : step.to"
           :type="choosable(step.key) ? 'button' : undefined"
-          class="flex items-center gap-2 rounded-pill px-3 py-1.5 transition-colors"
+          class="flex items-center gap-1.5 rounded-pill px-2.5 py-1.5 transition-colors"
           :class="{
             'bg-charcoal text-white': stateOf(step.key) === 'current',
             'text-ink hover:bg-bg-muted': stateOf(step.key) === 'done',
@@ -107,7 +116,7 @@ const next = computed(() => {
           <span>{{ step.label }}</span>
         </component>
 
-        <span v-if="at < steps.length - 1" class="mx-1 h-px w-4 bg-line" aria-hidden="true" />
+        <span v-if="at < steps.length - 1" class="mx-0.5 h-px w-3 bg-line" aria-hidden="true" />
       </li>
 
       <li v-if="next && next.key !== current && index(next.key) > index(current)" class="ml-auto pl-4 text-muted">

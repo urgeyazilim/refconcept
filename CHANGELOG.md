@@ -5,6 +5,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed — Ten steps, one screen each
+
+- **The studio walks the product owner's ten steps in their order:** Fotoğraf, Eşyalar,
+  Oda, İstekler, Tasarım, 3B, Kayıt, Render, 360, Satın al. The strip shows all ten on every
+  studio screen; none is hidden and none is skipped. The room screen carries the first
+  four, the plan the sixth and seventh, the design screen the fifth and the last three —
+  one at a time, with the guide asking the next question.
+- **The measurement confirmation is step three's one question** ("Odanı 4,2 × 3,5 m
+  okudum. Doğru mu?"), the owner's choice over automatic acceptance; the doors and windows
+  are beside it. The old "Tanıma" panel of chips and warnings is gone.
+- **The design screen is staged.** The picture with "Yerlerini değiştirmek ister misin?",
+  then the render with "360 tur oluşturayım mı? (20 kredi)", then the tour with "Ürünleri
+  sepete koyayım mı?", then the shopping list. The version tree stays under the picture.
+- **The plan has the guide too**: "Ürünlerin odada; kaydettim. Bitince render alayım." with
+  "Render al" as its button; "Tasarıma göre yerleştir" became its quieter second.
+- **Every stage is as tall as the window.** The guide column never moves; the step's panel
+  scrolls inside its own column when it has to; the page does not scroll.
+
 ### Changed — The room, the plan and the design are one workspace each
 
 - **No footer, no sidebar, one line of chrome.** The room, plan and design pages leave

@@ -33,15 +33,114 @@ const working = ref(false)
  * A design screen is the last step of the studio; everything before it is behind us, and
  * the render is done when the version on screen is ready.
  */
+/**
+ * The four steps of the ten that live here — the design, the render, the 360 tour, the
+ * purchase — one at a time, like the room screen: the strip says which, the guide asks the
+ * next question, and only that step's panel is on the stage.
+ */
+type DesignStage = 'design' | 'render' | 'video' | 'buy'
+
+const ON_DESIGN: DesignStage[] = ['design', 'render', 'video', 'buy']
+
+/** A render made from the customer's own arrangement, rather than the first proposal. */
+const renderedFromPlan = computed(() => (shownVersion.value?.user_prompt ?? '').includes('Oda planındaki yerleşimi'))
+
 const studioDone = computed(() => ({
   photo: true,
-  recognise: true,
-  confirm: true,
   plate: shownVersion.value?.render_base === 'plate',
+  recognise: true,
   propose: true,
-  edit: (shownVersion.value?.user_prompt ?? '').includes('Oda planındaki yerleşimi'),
-  render: shownVersion.value?.status === 'ready',
+  design: shownVersion.value?.status === 'ready',
+  edit: renderedFromPlan.value,
+  save: renderedFromPlan.value,
+  render: renderedFromPlan.value && shownVersion.value?.status === 'ready',
+  video: video.value?.status === 'ready',
+  buy: false,
 }))
+
+/** The first of this screen's steps not done — where the guide takes the customer. */
+const autoStage = computed<DesignStage>(() => {
+  if (studioDone.value.design !== true) return 'design'
+  if (studioDone.value.render !== true) return 'design'
+  if (studioDone.value.video !== true) return 'render'
+
+  return 'video'
+})
+
+/** A step the customer opened from the strip, to look back or ahead. */
+const chosenStage = ref<DesignStage | null>(null)
+const stage = computed<DesignStage>(() => chosenStage.value ?? autoStage.value)
+
+/** The guide's question at each step (REHBER.md §3). */
+const designGuide = computed(() => {
+  const shown = shownVersion.value
+  const plan = `/projects/${projectId}/rooms/${roomId}/plan?compose=${shownVersionId.value ?? ''}`
+
+  if (!shown || (shown.status !== 'ready' && shown.status !== 'failed')) {
+    return { icon: 'sparkle' as const, say: 'Tasarımını çiziyorum.', detail: 'Ürünleri seçtim, odana yerleştiriyorum; bir-iki dakika. Buradayım.', action: null, secondary: null, busy: true }
+  }
+
+  if (shown.status === 'failed') {
+    return { icon: 'eye' as const, say: 'Bu sürümü çizemedim.', detail: shown.failure_reason ?? 'Bir daha deneyelim; alttan yeni bir sürüm isteyebilirsin.', action: null, secondary: null, busy: false }
+  }
+
+  switch (stage.value) {
+    case 'design':
+      return {
+        icon: 'check' as const,
+        say: renderedFromPlan.value ? 'Render hazır.' : 'Tasarımın hazır. Yerlerini değiştirmek ister misin?',
+        detail: renderedFromPlan.value
+          ? 'Yerleştirdiğin gibi, gerçek ürünlerle çizdim. İstersen 360 tura geçelim.'
+          : 'Evet dersen ürünleri 3B odana tasarımdaki gibi koyarım; tutar, taşırsın. Bitince render alırız.',
+        action: canEdit.value && !renderedFromPlan.value ? { label: 'Evet, 3B odayı aç', to: plan } : null,
+        secondary: renderedFromPlan.value ? { label: '360 tura geç' } : { label: 'Hayır, böyle iyi' },
+        busy: false,
+      }
+    case 'render':
+      if (videoInFlight.value) {
+        return { icon: 'sparkle' as const, say: 'Turu çekiyorum.', detail: 'Bir-iki dakika sürer; buradayım.', action: null, secondary: null, busy: true }
+      }
+
+      return {
+        icon: 'check' as const,
+        say: video.value?.status === 'ready' ? 'Tur hazır.' : '360 tur oluşturayım mı?',
+        detail: video.value?.status === 'ready'
+          ? 'Odanın içinde gezinebilirsin.'
+          : `Odanın içinde sekiz saniyelik bir tur; ${videoCost.value ?? 20} kredi. Evet dersen çekerim.`,
+        action: canEdit.value && video.value?.status !== 'ready' ? { label: `Evet, oluştur (${videoCost.value ?? 20} kredi)` } : null,
+        secondary: { label: video.value?.status === 'ready' ? 'Tura bak' : 'Hayır, ürünlere geç' },
+        busy: false,
+      }
+    case 'video':
+      return {
+        icon: 'check' as const,
+        say: 'Ürünleri sepete koyayım mı?',
+        detail: 'Render\'daki her ürün, satıcıya göre gruplu; stokta olmayan söylenir.',
+        action: { label: 'Evet, listeye geç' },
+        secondary: null,
+        busy: false,
+      }
+    default:
+      return {
+        icon: 'sparkle' as const,
+        say: 'Beğendiklerini sepete ekle.',
+        detail: 'Fiyatlar render\'daki fiyatlar; fark olursa söylerim.',
+        action: null,
+        secondary: null,
+        busy: false,
+      }
+  }
+})
+
+function designGuideAct(): void {
+  if (stage.value === 'render') void createVideo()
+  else if (stage.value === 'video') chosenStage.value = 'buy'
+}
+
+function designGuideSecondary(): void {
+  if (stage.value === 'design') chosenStage.value = 'render'
+  else if (stage.value === 'render') chosenStage.value = video.value?.status === 'ready' ? 'video' : 'buy'
+}
 
 const branchingFrom = ref<DesignTreeNode | null>(null)
 const branchPrompt = ref('')
@@ -707,29 +806,32 @@ const statusTone: Record<string, string> = {
           </span>
         </div>
 
-        <StudioStepper class="min-w-0 flex-1" :project-id="projectId" :room-id="roomId" current="render" :done="studioDone" />
+        <StudioStepper
+          class="min-w-0 flex-1"
+          :project-id="projectId"
+          :room-id="roomId"
+          :current="stage"
+          :done="studioDone"
+          :design-id="designId"
+          :own="ON_DESIGN"
+          selectable
+          @select="chosenStage = $event === autoStage ? null : ($event as DesignStage)"
+        />
       </div>
 
-      <div class="grid gap-4 lg:grid-cols-[minmax(320px,380px)_minmax(0,1fr)] lg:items-start">
-      <div class="space-y-3 lg:sticky lg:top-24">
+      <!-- The stage: as tall as the window; the guide stays, the step's panel scrolls in its column. -->
+      <div class="grid gap-4 lg:h-[calc(100vh-8.5rem)] lg:grid-cols-[minmax(320px,380px)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+      <div class="min-h-0 space-y-3 lg:overflow-y-auto">
       <!-- The guide's last question (REHBER.md §3): the picture is here; would you move things? -->
       <StudioGuide
-        :icon="shownVersion?.status === 'ready' ? 'check' : shownVersion?.status === 'failed' ? 'eye' : 'sparkle'"
-        :say="shownVersion?.status === 'ready'
-          ? 'Tasarımın hazır. Yerlerini değiştirmek ister misin?'
-          : shownVersion?.status === 'failed'
-            ? 'Bu sürümü çizemedim.'
-            : 'Tasarımını çiziyorum.'"
-        :detail="shownVersion?.status === 'ready'
-          ? 'Evet dersen bu yerleşimi 3B planda birebir açarım; ürünleri oklarla taşır, halkayla döndürürsün. Render al dediğinde yerleştirdiğin gibi çizerim.'
-          : shownVersion?.status === 'failed'
-            ? (shownVersion.failure_reason ?? 'Bir daha deneyelim; alttan yeni bir sürüm isteyebilirsin.')
-            : 'Ürünleri seçtim, odana yerleştiriyorum; bir-iki dakika. Buradayım.'"
-        :action="shownVersion?.status === 'ready' && canEdit
-          ? { label: 'Evet, düzenleyelim', to: `/projects/${projectId}/rooms/${roomId}/plan?compose=${shownVersionId ?? ''}` }
-          : null"
-        :secondary="shownVersion?.status === 'ready' ? { label: 'Hayır, böyle iyi — ürünlere bak', to: '#alisveris' } : null"
-        :busy="shownVersion?.status !== 'ready' && shownVersion?.status !== 'failed'"
+        :icon="designGuide.icon"
+        :say="designGuide.say"
+        :detail="designGuide.detail"
+        :action="designGuide.action"
+        :secondary="designGuide.secondary"
+        :busy="designGuide.busy"
+        @act="designGuideAct"
+        @secondary="designGuideSecondary"
       />
 
       <RcAlert v-if="actionError" tone="danger">{{ actionError }}</RcAlert>
@@ -740,7 +842,7 @@ const statusTone: Record<string, string> = {
       </RcAlert>
       </div>
 
-      <div class="min-w-0 space-y-6">
+      <div class="min-h-0 min-w-0 space-y-6 lg:overflow-y-auto lg:pr-1">
 
       <!--
         The versions as pictures, above the picture. Only once there is more than one: a strip
@@ -773,10 +875,10 @@ const statusTone: Record<string, string> = {
         that arrangement makes it hardest — the eye has to hold one image while it reads the
         other, and it cannot. Under a wipe the walls line up and dragging is the proof.
       -->
-      <section v-if="design.source_image_url" class="rc-card overflow-hidden">
+      <section v-if="design.source_image_url && (stage === 'design' || stage === 'render')" id="tasarim" class="rc-card overflow-hidden">
         <div class="flex flex-wrap items-end justify-between gap-4 p-6 pb-5 sm:px-8 sm:pt-8">
           <div>
-            <h2 class="text-xl font-medium">Odanız</h2>
+            <h2 class="text-xl font-medium">{{ stage === 'render' && renderedFromPlan ? 'Render' : 'Odan' }}</h2>
             <p class="mt-1.5 max-w-[52ch] text-sm leading-relaxed text-ink-secondary">
               {{ compareVersion?.image_url && shownVersion?.image_url
                 ? `v${shownVersion.version_number} ile v${compareVersion.version_number} yan yana. Aynı odadan, aynı boş plakadan.`
@@ -910,10 +1012,10 @@ const statusTone: Record<string, string> = {
         shown once there is a finished design to film — offering it over a render that does
         not exist yet would be selling something that cannot be made.
       -->
-      <section v-if="shownVersion?.image_url" class="rc-card overflow-hidden">
+      <section v-if="shownVersion?.image_url && (stage === 'video' || (stage === 'render' && video?.status === 'ready'))" id="video" class="rc-card overflow-hidden">
         <div class="flex flex-wrap items-end justify-between gap-4 p-6 pb-5 sm:px-8 sm:pt-8">
           <div>
-            <h2 class="text-xl font-medium">Odanızda gezinin</h2>
+            <h2 class="text-xl font-medium">Odanda gezin</h2>
             <p class="mt-1.5 max-w-[52ch] text-sm leading-relaxed text-ink-secondary">
               {{ video?.status === 'ready'
                 ? 'Kamera odanızın içinde ilerliyor. Durdurup yakınlaştırarak ürünlere yakından bakabilirsiniz.'
@@ -1043,7 +1145,7 @@ const statusTone: Record<string, string> = {
         right. Alternatives sit under the row that owns them rather than competing with it
         for the same shelf.
       -->
-      <section v-if="shoppingList && shoppingList.placements.length > 0" id="alisveris" class="rc-card overflow-hidden">
+      <section v-if="shoppingList && shoppingList.placements.length > 0 && stage === 'buy'" id="alisveris" class="rc-card overflow-hidden">
         <div class="flex flex-wrap items-start justify-between gap-4 p-6 pb-5 sm:px-8 sm:pt-8">
           <div>
             <h2 class="text-xl font-medium">Alışveriş listesi</h2>
@@ -1237,8 +1339,8 @@ const statusTone: Record<string, string> = {
         </RcAlert>
       </section>
 
-      <!-- The tree -->
-      <section class="rc-card p-6 sm:p-8">
+      <!-- The tree: with the picture, under it; the other steps have their own panels. -->
+      <section v-if="stage === 'design'" class="rc-card p-6 sm:p-8">
         <h2 class="text-lg font-medium">Sürümler</h2>
         <p class="mt-1.5 max-w-[62ch] text-sm leading-relaxed text-ink-secondary">
           Her değişiklik yeni bir sürüm oluşturur; öncekiler kaybolmaz. Beğendiğiniz bir
