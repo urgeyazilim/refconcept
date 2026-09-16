@@ -72,11 +72,90 @@ export class CameraManager {
    * planner sits still most of the time it is open.
    */
   update(): boolean {
+    if (this.flight !== null) {
+      return this.fly()
+    }
+
     if (this.mode === 'inside') {
       return this.walkUpdate()
     }
 
     return this.controls.update()
+  }
+
+  // --- flights -------------------------------------------------------------------
+
+  /**
+   * A camera move in progress: from where it was to where it is going, eased.
+   *
+   * A view that cuts from one angle to another loses the customer for a moment — which wall
+   * is which, where did the sofa go. A short flight keeps the room continuous under them.
+   */
+  private flight: {
+    fromPosition: Vector3
+    toPosition: Vector3
+    fromTarget: Vector3
+    toTarget: Vector3
+    startedAt: number
+    ms: number
+  } | null = null
+
+  /** Flies the perspective camera to a position and a point to look at. */
+  flyTo(position: Vector3, target: Vector3, ms = 650): void {
+    this.flight = {
+      fromPosition: this.perspective.position.clone(),
+      toPosition: position.clone(),
+      fromTarget: this.controls.target.clone(),
+      toTarget: target.clone(),
+      startedAt: performance.now(),
+      ms,
+    }
+  }
+
+  /**
+   * Flies to look at a point in the room from where the camera is now, closer.
+   *
+   * A double-click on a sofa: the camera keeps its direction and comes in to a distance the
+   * piece fills, so the customer is looking at the thing they clicked rather than at a room
+   * with that thing somewhere in it.
+   */
+  focusOn(point: Vector3, distance: number): void {
+    if (this.mode !== 'perspective') {
+      return
+    }
+
+    const direction = this.perspective.position.clone().sub(this.controls.target).normalize()
+
+    if (direction.lengthSq() === 0) {
+      direction.set(0.6, 0.5, 0.6).normalize()
+    }
+
+    const position = point.clone().add(direction.multiplyScalar(Math.max(distance, this.controls.minDistance * 2)))
+
+    this.flyTo(position, point)
+  }
+
+  private fly(): boolean {
+    const flight = this.flight
+
+    if (flight === null) {
+      return false
+    }
+
+    const t = Math.min(1, (performance.now() - flight.startedAt) / flight.ms)
+    // Ease out: fast to leave, slow to arrive, which is how a camera on a crane moves.
+    const eased = 1 - (1 - t) ** 3
+
+    this.perspective.position.lerpVectors(flight.fromPosition, flight.toPosition, eased)
+    this.controls.target.lerpVectors(flight.fromTarget, flight.toTarget, eased)
+    this.perspective.lookAt(this.controls.target)
+
+    if (t >= 1) {
+      this.flight = null
+      this.controls.update()
+    }
+
+    return true
   }
 
   /**
@@ -92,10 +171,29 @@ export class CameraManager {
   }
 
   setMode(mode: ViewMode): void {
+    const previous = this.mode
     this.mode = mode
 
     if (this.geometry !== null) {
+      // Between two perspective views the camera flies; to or from the plan it cuts, because
+      // an orthographic camera has nowhere to fly from.
+      const flies = previous === 'perspective' && mode === 'perspective'
+      const before = this.perspective.position.clone()
+      const beforeTarget = this.controls.target.clone()
+
       this.frame(this.geometry)
+
+      if (flies) {
+        const destination = this.perspective.position.clone()
+        const destinationTarget = this.controls.target.clone()
+
+        this.perspective.position.copy(before)
+        this.controls.target.copy(beforeTarget)
+        this.flyTo(destination, destinationTarget)
+      }
+      else {
+        this.flight = null
+      }
     }
 
     // Inside, the orbit controls are off and the walk takes the pointer and the keys.
@@ -242,6 +340,25 @@ export class CameraManager {
    * 3-metre bedroom shows a corner of a 6-metre living room and reads as a broken scene
    * rather than a camera that needs moving.
    */
+  /** Flies back to the whole room, from wherever the customer has orbited to. */
+  reframe(): void {
+    if (this.geometry === null || this.mode !== 'perspective') {
+      return
+    }
+
+    const before = this.perspective.position.clone()
+    const beforeTarget = this.controls.target.clone()
+
+    this.frame(this.geometry)
+
+    const destination = this.perspective.position.clone()
+    const destinationTarget = this.controls.target.clone()
+
+    this.perspective.position.copy(before)
+    this.controls.target.copy(beforeTarget)
+    this.flyTo(destination, destinationTarget)
+  }
+
   frame(geometry: RoomGeometry): void {
     this.geometry = geometry
 

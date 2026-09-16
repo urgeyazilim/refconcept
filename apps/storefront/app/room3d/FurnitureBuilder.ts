@@ -1,13 +1,16 @@
 import {
   Box3,
   BoxGeometry,
+  CanvasTexture,
   Color,
   EdgesGeometry,
   Group,
   LineBasicMaterial,
   LineSegments,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
+  PlaneGeometry,
   Vector3,
   type Object3D,
 } from 'three'
@@ -110,6 +113,44 @@ export class FurnitureBuilder {
 
   private readonly selectedEdgeMaterial = new LineBasicMaterial({ color: 0xb08f52, linewidth: 2 })
 
+  private readonly hoverEdgeMaterial = new LineBasicMaterial({ color: 0x8c7141 })
+
+  /** The outline of what a piece takes up on the floor, shown for the selected one. */
+  private readonly footprintMaterial = new LineBasicMaterial({ color: 0xb08f52, transparent: true, opacity: 0.9 })
+
+  /**
+   * A soft dark disc under everything that stands on the floor.
+   *
+   * The sun's shadow is one hard edge in one direction; the darkening right under a piece,
+   * where the floor gets no light from anywhere, is what makes it sit on the floor instead
+   * of hovering a millimetre above it. Painted once, on a canvas, and shared.
+   */
+  private readonly contactShadowMaterial = new MeshBasicMaterial({
+    map: FurnitureBuilder.contactShadowTexture(),
+    transparent: true,
+    opacity: 0.38,
+    depthWrite: false,
+  })
+
+  private static contactShadowTexture(): CanvasTexture {
+    const size = 128
+    const canvas = document.createElement('canvas')
+    canvas.width = size
+    canvas.height = size
+
+    const context = canvas.getContext('2d')!
+    const gradient = context.createRadialGradient(size / 2, size / 2, size * 0.18, size / 2, size / 2, size / 2)
+
+    gradient.addColorStop(0, 'rgba(0,0,0,0.9)')
+    gradient.addColorStop(0.55, 'rgba(0,0,0,0.35)')
+    gradient.addColorStop(1, 'rgba(0,0,0,0)')
+
+    context.fillStyle = gradient
+    context.fillRect(0, 0, size, size)
+
+    return new CanvasTexture(canvas)
+  }
+
   /** @param onDressed called when a model or shape has replaced a box, so the scene redraws */
   constructor(private readonly onDressed: () => void = () => {}) {}
 
@@ -156,6 +197,25 @@ export class FurnitureBuilder {
 
     group.add(body, edges)
 
+    // Only for what stands on the floor: a picture on the wall casts nothing on it.
+    if (measured && item.position_y_mm === 0) {
+      const shadow = new Mesh(new PlaneGeometry(toUnits(width) * 1.25, toUnits(depth) * 1.25), this.contactShadowMaterial)
+      shadow.name = 'shadow'
+      shadow.rotation.x = -Math.PI / 2
+      shadow.position.y = 0.004
+      shadow.renderOrder = 1
+      group.add(shadow)
+
+      const outline = new PlaneGeometry(toUnits(width), toUnits(depth))
+      const footprint = new LineSegments(new EdgesGeometry(outline), this.footprintMaterial)
+      footprint.name = 'footprint'
+      footprint.rotation.x = -Math.PI / 2
+      footprint.position.y = 0.006
+      footprint.visible = false
+      outline.dispose()
+      group.add(footprint)
+    }
+
     this.place(group, item)
 
     /*
@@ -199,17 +259,27 @@ export class FurnitureBuilder {
     group.rotation.y = (-(at?.rotation ?? item.rotation_y_deg) * Math.PI) / 180
   }
 
-  /** Recolours a piece for its state, and outlines it when it is the one selected. */
-  paint(group: Group, item: LayoutItem, state: CollisionState, selected: boolean): void {
+  /**
+   * Recolours a piece for its state, outlines it when it is the one selected, and lifts it
+   * a little when the pointer rests on it.
+   */
+  paint(group: Group, item: LayoutItem, state: CollisionState, selected: boolean, hovered = false): void {
     const body = group.getObjectByName('body')
     const edges = group.getObjectByName('edges')
+    const footprint = group.getObjectByName('footprint')
 
     if (body instanceof Mesh) {
       body.material = isMeasured(item) ? this.materials[state] : this.materials.placeholder
     }
 
     if (edges instanceof LineSegments) {
-      edges.material = selected ? this.selectedEdgeMaterial : this.edgeMaterial
+      edges.material = selected ? this.selectedEdgeMaterial : hovered ? this.hoverEdgeMaterial : this.edgeMaterial
+    }
+
+    // The footprint on the floor is the selection's: it says exactly what the piece takes
+    // up, which the piece itself — a sofa with arms, a lamp on a stem — does not.
+    if (footprint !== undefined) {
+      footprint.visible = selected || hovered
     }
   }
 

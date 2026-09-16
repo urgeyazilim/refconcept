@@ -232,6 +232,39 @@ export class SceneManager {
     return this.layout.children
   }
 
+  /** The piece the resting pointer is over, lit a little, and the cursor saying it can be taken. */
+  private hoveredId: string | null = null
+
+  setHover(id: string | null, items: LayoutItem[], states: Map<string, CollisionState>, selectedId: string | null): void {
+    if (id === this.hoveredId) {
+      return
+    }
+
+    const previous = this.hoveredId
+    this.hoveredId = id
+
+    for (const candidate of [previous, id]) {
+      if (candidate === null) {
+        continue
+      }
+
+      const group = this.pieces.get(candidate)
+      const item = items.find(entry => entry.id === candidate)
+
+      if (group !== undefined && item !== undefined) {
+        this.furniture.paint(group, item, states.get(candidate) ?? 'ok', candidate === selectedId, candidate === id)
+      }
+    }
+
+    this.canvas.style.cursor = id === null ? '' : 'grab'
+    this.invalidate()
+  }
+
+  /** Whether a wall is currently drawn, or hidden so the room can be looked into. */
+  wallVisible(name: string): boolean {
+    return this.room?.getObjectByName(`wall-${name}`)?.visible ?? false
+  }
+
   /** The walls, casings and all, for a door or window being dragged onto one. */
   walls(): Mesh[] {
     return (this.room?.children ?? []).filter((child): child is Mesh => child instanceof Mesh && typeof child.userData.wall === 'string')

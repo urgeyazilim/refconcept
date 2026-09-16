@@ -31,6 +31,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   expected price and the ceiling before it queues anything, and saying plainly when the
   task is still routed to the simulator.
 
+### Changed — the 3D room, made to feel like a tool
+
+- **The camera flies** between views and in to a double-clicked piece, and "Odayı sığdır"
+  brings it back out; a view that cut from one angle to another lost the customer for a
+  moment. **Hover** lights the piece under a resting pointer and the cursor says it can be
+  taken. **Contact shadows** sit every piece on the floor, and the selected piece shows its
+  exact **footprint** on the floor — what it takes up, which a sofa with arms does not say.
+- **The walls are named** at the top of each (Kuzey, Doğu, Güney, Batı) so the plan and the
+  room agree on which is which; hidden walls carry no label.
+- **A toolbar on the room itself** for the selected piece — turn, align to the wall, copy,
+  lock, zoom in, delete — and the keys that go with it: Delete, Ctrl+D, Esc, R, arrows.
+  Keys typed into a field beside the scene stay the field's.
+
 ### Added — doors and windows you pick up and put on a wall
 
 - **In the 3D room too.** A door or window is picked up where it is (its casing, its glass)

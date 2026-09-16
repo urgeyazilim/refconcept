@@ -1,3 +1,5 @@
+import { Vector3 } from 'three'
+
 import { CollisionEngine, type CollisionState } from './CollisionEngine'
 import { ConstraintEngine } from './ConstraintEngine'
 import { DragController } from './DragController'
@@ -7,7 +9,7 @@ import { type Measurement, MeasurementEngine, formatDistance } from './Measureme
 import { SceneManager } from './SceneManager'
 import { SnapEngine } from './SnapEngine'
 import { againstWall, footprintOf, isWallMounted, wallMountHeight } from './footprint'
-import { type LayoutItem, type RoomGeometry, type RoomOpening, type ViewMode, type WallName, toMm } from './types'
+import { type LayoutItem, type RoomGeometry, type RoomOpening, type ViewMode, type WallName, toMm, toUnits } from './types'
 
 /** A measurement, already placed on the screen, for the HTML overlay to draw. */
 export interface OverlayLabel {
@@ -174,6 +176,7 @@ export class RoomEditor {
       camera: () => this.scene.cameras.active,
       setOrbitEnabled: enabled => this.scene.cameras.setOrbitEnabled(enabled),
       onSelect: id => this.select(id),
+      onHover: id => this.scene.setHover(id, this.items, this.states, this.selectedId),
       onPreview: (id, at, state, guides) => {
         const item = this.find(id)
 
@@ -721,6 +724,32 @@ export class RoomEditor {
   }
 
   /** The canvas as a PNG, for the render pipeline and for thumbnails. */
+  /** Flies the camera in to the selected piece, or back out to the whole room. */
+  focusSelected(): void {
+    const item = this.selectedId === null ? undefined : this.find(this.selectedId)
+
+    if (item === undefined) {
+      this.scene.cameras.reframe()
+      this.scene.invalidate()
+
+      return
+    }
+
+    const size = Math.max(item.width_mm ?? 1_000, item.depth_mm ?? 1_000, item.height_mm ?? 800)
+
+    this.scene.cameras.focusOn(
+      new Vector3(toUnits(item.position_x_mm), toUnits(item.position_y_mm + (item.height_mm ?? 800) / 2), toUnits(item.position_z_mm)),
+      toUnits(size) * 2.2,
+    )
+    this.scene.invalidate()
+  }
+
+  /** Flies back out to the whole room. */
+  frameRoom(): void {
+    this.scene.cameras.reframe()
+    this.scene.invalidate()
+  }
+
   /** The doors and windows as the editor has them now, for the browser tests. */
   openingsNow(): RoomOpening[] {
     return this.openings
@@ -872,13 +901,13 @@ export class RoomEditor {
   private publishOverlay(): void {
     const selected = this.selectedId === null ? undefined : this.find(this.selectedId)
 
+    const labels: OverlayLabel[] = this.wallLabels()
+
     if (selected === undefined) {
-      this.options.onOverlay([])
+      this.options.onOverlay(labels)
 
       return
     }
-
-    const labels: OverlayLabel[] = []
 
     for (const [index, measurement] of this.measurements.measure(selected, this.items).entries()) {
       const middle = {
@@ -902,6 +931,46 @@ export class RoomEditor {
     }
 
     this.options.onOverlay(labels)
+  }
+
+  /**
+   * The walls named, at the top of each, so the plan and the room agree on which is which.
+   *
+   * Not inside the room — from in there the customer can see which wall is which — and never
+   * for a wall the camera is looking through, because a label floating where a hidden wall
+   * would be is a label pointing at air.
+   */
+  private wallLabels(): OverlayLabel[] {
+    if (this.scene.cameras.mode === 'inside') {
+      return []
+    }
+
+    const { width_mm: width, length_mm: length, height_mm: height } = this.geometry
+
+    const walls: Array<{ id: WallName, text: string, x: number, z: number }> = [
+      { id: 'north', text: 'Kuzey', x: width / 2, z: 0 },
+      { id: 'south', text: 'Güney', x: width / 2, z: length },
+      { id: 'west', text: 'Batı', x: 0, z: length / 2 },
+      { id: 'east', text: 'Doğu', x: width, z: length / 2 },
+    ]
+
+    const labels: OverlayLabel[] = []
+
+    for (const wall of walls) {
+      if (!this.scene.wallVisible(wall.id)) {
+        continue
+      }
+
+      const point = this.scene.projectToScreen({ x: wall.x, y: height, z: wall.z })
+
+      if (point === null) {
+        continue
+      }
+
+      labels.push({ id: `wall-${wall.id}`, x: point.x, y: point.y, text: wall.text, towards: 'wall' })
+    }
+
+    return labels
   }
 
   /**

@@ -30,6 +30,8 @@ export interface DragDelegate {
   stateAt: (item: LayoutItem, at: { x: number, z: number, rotation?: number }) => CollisionState
   /** Whether the pointer is on the gizmo's handles, which then own the gesture. */
   gizmoActive: () => boolean
+  /** The piece under a resting pointer changed: this one, or none. */
+  onHover: (id: string | null) => void
 }
 
 /**
@@ -140,8 +142,20 @@ export class DragController {
     this.canvas.setPointerCapture(event.pointerId)
   }
 
+  /** What the resting pointer was last over, so hover is reported on change only. */
+  private hovered: string | null = null
+
   private onPointerMove(event: PointerEvent): void {
     if (this.dragging === null) {
+      // A resting pointer: say what it is over, once per change. Not while the gizmo has the
+      // gesture — its handles are over the piece and would flicker the hover on and off.
+      const over = this.delegate.gizmoActive() ? this.hovered : (this.itemUnder(event)?.id ?? null)
+
+      if (over !== this.hovered) {
+        this.hovered = over
+        this.delegate.onHover(over)
+      }
+
       return
     }
 

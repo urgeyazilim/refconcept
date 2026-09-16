@@ -123,6 +123,14 @@ function onKeydown(event: KeyboardEvent): void {
     return
   }
 
+  // Keys typed into a field beside the scene are the field's: a Backspace in the product
+  // search must not delete the sofa.
+  const target = event.target as HTMLElement | null
+
+  if (target !== null && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) {
+    return
+  }
+
   // Undo works with nothing selected; everything else needs something to act on.
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
     event.preventDefault()
@@ -139,6 +147,27 @@ function onKeydown(event: KeyboardEvent): void {
   const id = state.value.selectedId
 
   if (id === null) {
+    return
+  }
+
+  // The piece's own shortcuts: delete it, copy it, let go of it.
+  if (event.key === 'Delete' || event.key === 'Backspace') {
+    event.preventDefault()
+    editor.value.remove(id)
+
+    return
+  }
+
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'd') {
+    event.preventDefault()
+    editor.value.duplicate(id)
+
+    return
+  }
+
+  if (event.key === 'Escape') {
+    editor.value.select(null)
+
     return
   }
 
@@ -260,7 +289,8 @@ defineExpose({
         getting one back costs a visible pause and, after a few switches, a browser that
         refuses — there is a hard limit on live contexts per page.
       -->
-      <canvas v-show="display === '3d'" ref="canvas" class="block size-full touch-none" />
+      <!-- A double-click flies in to the selected piece, or back out to the whole room. -->
+      <canvas v-show="display === '3d'" ref="canvas" class="block size-full touch-none" @dblclick="editor?.focusSelected()" />
 
       <!-- Inside the room the camera is walked, not orbited, and that has to be said once. -->
       <p
@@ -286,7 +316,7 @@ defineExpose({
         The palette: a door, a window, a balcony door. One tap puts it in the room; then it is
         picked up and put on a wall like anything else. Nobody types where a door is.
       -->
-      <div v-if="editable" class="absolute top-4 left-4 flex flex-col gap-1 rounded-md bg-surface/90 p-1 backdrop-blur-sm" role="toolbar" aria-label="Kapı ve pencere ekle">
+      <div v-if="editable" class="absolute top-16 left-4 flex flex-col gap-1 rounded-md bg-surface/90 p-1 backdrop-blur-sm" role="toolbar" aria-label="Kapı ve pencere ekle">
         <button
           v-for="entry in PALETTE"
           :key="entry.type"
@@ -307,13 +337,41 @@ defineExpose({
         either a texture that blurs the moment somebody zooms or a font atlas nobody wants to
         maintain for the sake of "185 cm".
       -->
-      <div v-if="display === '3d' && showMeasurements" class="pointer-events-none absolute inset-0">
-        <span
-          v-for="label in labels"
-          :key="label.id"
-          class="absolute -translate-x-1/2 -translate-y-1/2 rounded-pill bg-charcoal/85 px-2 py-0.5 text-[11px] whitespace-nowrap text-white tabular-nums"
-          :style="{ left: `${label.x}px`, top: `${label.y}px` }"
-        >{{ label.text }}</span>
+      <div v-if="display === '3d'" class="pointer-events-none absolute inset-0">
+        <template v-for="label in labels" :key="label.id">
+          <!-- Wall names sit quietly at the top of each wall; measurements ride on the piece. -->
+          <span
+            v-if="label.towards === 'wall'"
+            class="absolute -translate-x-1/2 -translate-y-full pb-1 text-[10px] font-medium tracking-wide text-ink-secondary/70 uppercase"
+            :style="{ left: `${label.x}px`, top: `${label.y}px` }"
+          >{{ label.text }}</span>
+          <span
+            v-else-if="showMeasurements"
+            class="absolute -translate-x-1/2 -translate-y-1/2 rounded-pill bg-charcoal/85 px-2 py-0.5 text-[11px] whitespace-nowrap text-white tabular-nums"
+            :style="{ left: `${label.x}px`, top: `${label.y}px` }"
+          >{{ label.text }}</span>
+        </template>
+      </div>
+
+      <!--
+        The tools for the selected piece, on the room itself, where the hand already is.
+        The panel below still explains; this is for doing.
+      -->
+      <div
+        v-if="editable && selected !== null && display === '3d'"
+        class="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-pill bg-surface/95 p-1 shadow-md backdrop-blur-sm"
+        role="toolbar"
+        :aria-label="`${selected.name} için araçlar`"
+      >
+        <button type="button" class="rounded-pill px-2.5 py-1.5 text-xs text-ink-secondary hover:bg-bg-muted" title="Sola çevir (90°)" @click="editor?.rotate(selected.id, -90)">⟲</button>
+        <button type="button" class="rounded-pill px-2.5 py-1.5 text-xs text-ink-secondary hover:bg-bg-muted" title="Sağa çevir (90°) · R" @click="editor?.rotate(selected.id, 90)">⟳</button>
+        <span class="mx-0.5 h-4 w-px bg-line" />
+        <button type="button" class="rounded-pill px-2.5 py-1.5 text-xs text-ink-secondary hover:bg-bg-muted" @click="editor?.alignToWall(selected.id)">Duvara hizala</button>
+        <button type="button" class="rounded-pill px-2.5 py-1.5 text-xs text-ink-secondary hover:bg-bg-muted" title="Ctrl+D" @click="editor?.duplicate(selected.id)">Kopyala</button>
+        <button type="button" class="rounded-pill px-2.5 py-1.5 text-xs text-ink-secondary hover:bg-bg-muted" @click="editor?.toggleLock(selected.id)">{{ selected.locked ? 'Kilidi aç' : 'Kilitle' }}</button>
+        <button type="button" class="rounded-pill px-2.5 py-1.5 text-xs text-ink-secondary hover:bg-bg-muted" title="Çift tık da yakınlaştırır" @click="editor?.focusSelected()">Yakınlaş</button>
+        <span class="mx-0.5 h-4 w-px bg-line" />
+        <button type="button" class="rounded-pill px-2.5 py-1.5 text-xs text-danger-strong hover:bg-danger-subtle" title="Delete" @click="editor?.remove(selected.id)">Sil</button>
       </div>
 
       <div class="absolute top-4 right-4 flex gap-1 rounded-pill bg-surface/90 p-1 backdrop-blur-sm">
@@ -337,6 +395,15 @@ defineExpose({
           @click="showMeasurements = !showMeasurements"
         >
           Ölçüler
+        </button>
+        <button
+          type="button"
+          class="rounded-pill px-3 py-1.5 text-xs text-ink-secondary transition-colors hover:bg-bg-muted disabled:opacity-40"
+          :disabled="display === 'plan' || view !== 'perspective'"
+          title="Kamerayı odaya geri getir"
+          @click="editor?.frameRoom()"
+        >
+          Odayı sığdır
         </button>
 
         <span class="my-1 w-px bg-line" />
