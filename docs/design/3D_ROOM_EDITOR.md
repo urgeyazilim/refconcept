@@ -193,3 +193,27 @@ convincing and it does not fit.
   generation (ControlNet on SD/Flux). That would need a third provider and is the next real
   step for wall fidelity.
 - Kitchen-specific rules (worktop runs, appliance clearances) are not in the composer.
+
+## Professional pass (2026-09-16)
+
+What the editor gained in one day, in the order the owner would notice it:
+
+- **Doors and windows are things you pick up.** A palette (Kapı, Pencere, Balkon kapısı)
+  puts one in the room; it is taken by its casing or glass in 3D and follows the pointer onto
+  whichever wall it is over (`OpeningDragController`, registered ahead of the furniture drag;
+  hidden walls are skipped by the ray). On the plan the same drag crosses walls and a handle
+  at each end resizes. No numeric form remains.
+- **The camera flies** (`CameraManager.flyTo/focusOn/reframe`): between perspective views,
+  in to a double-clicked piece, back out on "Odayı sığdır". Cuts only to and from the plan.
+- **Hover, footprint, contact shadow** (`FurnitureBuilder.paint(…, hovered)`, `shadow` and
+  `footprint` children of every floor-standing piece).
+- **Wall names** as HTML overlay labels (`RoomEditor.wallLabels`), hidden with the wall.
+- **Toolbar on the room** for the selected piece; Delete / Ctrl+D / Esc / R / arrows; keys in
+  fields beside the scene are left alone.
+- **Running total** (K20) with each piece's photograph, size and price; "Render al" and the
+  basket beside it. The layout endpoint sends `price`.
+- Test hooks on the editor for the browser tests: `openingsNow()`, `openingScreenPoint(id)`,
+  `wallScreenPoint(wall, along, height)`.
+
+Still open: SSAO/quality toggle, non-rectangular rooms, resizing openings in 3D (only on the
+plan today), a right-hand catalogue column beside the scene.
