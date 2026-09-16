@@ -827,6 +827,7 @@ final class RoomLayoutController
             'id' => $constraint->id,
             'type' => $constraint->type->value,
             'variant' => $constraint->variant?->value,
+            'swing' => $constraint->swing?->value,
             'wall' => $constraint->wall,
             'offset_mm' => $constraint->offset_mm,
             'width_mm' => $constraint->width_mm,

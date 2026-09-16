@@ -47,6 +47,8 @@ const openings = ref<RoomOpening[]>([
   {
     id: 'd1',
     type: 'door',
+    // Hung on the south jamb and opening out into the corridor: the floor inside it is free.
+    swing: 'end_out',
     wall: 'east',
     offset_mm: 400,
     width_mm: 900,

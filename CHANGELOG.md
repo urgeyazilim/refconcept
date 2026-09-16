@@ -22,6 +22,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   be one its type can be: the API refuses a sliding window.
 - `room_constraints.variant` (nullable, checked); `variant` and `variant_label` on the
   constraint and `variant` on the layout's openings.
+- **Which way the door goes.** A door hangs on one jamb and opens into the room or out of
+  it, and the quarter of floor it sweeps is floor nothing may stand on. Both are on the
+  opening now: the plan draws the leaf standing open and its arc from the right jamb in the
+  right direction, the 3D room hangs it there, and two chips beside the door — "Menteşe
+  solda ⇄", "İçeri açılır ⇄" — turn it round. Left and right are what the customer sees
+  from inside; the row keeps which end of the wall, which does not reverse per wall. A
+  door opening out sweeps the corridor and its floor inside is free. `room_constraints.swing`
+  (`start_in`, `end_in`, `start_out`, `end_out`; null means start, in); a window cannot
+  have one.
 
 ### Added — Products in three dimensions
 

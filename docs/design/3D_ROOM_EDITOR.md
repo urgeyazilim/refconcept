@@ -233,3 +233,14 @@ An opening with no variant — everything read before today — is judged by its
 `variantOf` (browser) and `OpeningVariant::guess` (adopter), with the same thresholds:
 casements under a metre are single, under 1.8 m double; a door leaf over 1.3 m is a pair;
 a balcony door over 2 m slides; a window on the floor is a French balcony.
+
+**Which way a door goes** is `room_constraints.swing`: `start_in`, `end_in`, `start_out`,
+`end_out` — the jamb it hangs on named along the wall's axis (start = lower offset, so it
+does not reverse per wall) and whether it opens into the room. Null means the start jamb,
+opening in, which is how every door was drawn before. `hingeIsLeft` (browser) turns the end
+into what the customer sees from inside: on the north and east walls the start jamb is on the
+left, on the south and west it is on the right. The plan draws the leaf open at a right angle
+and its quarter arc; the 3D room hangs the leaf on that jamb, on the inner or outer face.
+The collision rules do not read it yet: `DOOR_CLEARANCE_MM` keeps 900 mm inside the room in
+front of every doorway whichever way it opens, because somebody still walks through it. A
+smaller zone for an outward door is a later refinement, on both copies of the rules at once.

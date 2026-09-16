@@ -59,6 +59,8 @@ export interface RoomOpening {
   type: string
   /** Which kind: single, double, triple, french_balcony, single_door, double_door, sliding. Null when never asked. */
   variant?: string | null
+  /** A door's hinge jamb and direction: start_in, end_in, start_out, end_out. Null means start_in. */
+  swing?: string | null
   wall: WallName | null
   offset_mm: number | null
   width_mm: number | null

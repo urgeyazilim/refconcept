@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { RoomConstraintItem } from '@refconcept/ui/types'
-import { OPENING_TYPES, type OpeningKind, TYPE_LABELS, describeKind, kindsFor, variantOf } from '~/room3d/openings'
+import { OPENING_TYPES, type OpeningKind, TYPE_LABELS, describeKind, hasSwing, hingeIsLeft, kindsFor, opensIn, otherJamb, otherWay, swingOf, variantOf } from '~/room3d/openings'
 import type { RoomOpening, WallName } from '~/room3d/types'
 
 /**
@@ -41,6 +41,7 @@ const openings = computed<RoomOpening[]>(() =>
       id: item.id,
       type: item.type,
       variant: item.variant,
+      swing: item.swing,
       wall: (item.wall as WallName | null) ?? null,
       offset_mm: item.offset_mm,
       width_mm: item.width_mm,
@@ -223,6 +224,29 @@ const cm = (mm: number | null): string => (mm === null ? '' : String(Math.round(
               @click="rekind(opening, kind)"
             >
               {{ kind.label }}
+            </button>
+          </div>
+
+          <!-- Which jamb it hangs on and which way it opens: the quarter of floor a door needs. -->
+          <div v-if="canEdit && hasSwing(opening)" class="mt-1.5 flex flex-wrap gap-1" role="group" :aria-label="`${describeKind(opening)} yönü`">
+            <button
+              v-if="variantOf(opening) !== 'double_door'"
+              type="button"
+              class="rounded-pill border border-line px-2 py-0.5 text-[11px] text-ink-secondary transition-colors hover:bg-bg-muted disabled:opacity-40"
+              :disabled="busy !== null"
+              title="Menteşeyi öbür tarafa al"
+              @click="patch(opening.id, { swing: otherJamb(swingOf(opening)) })"
+            >
+              Menteşe {{ hingeIsLeft(opening.wall, swingOf(opening)) ? 'solda' : 'sağda' }} ⇄
+            </button>
+            <button
+              type="button"
+              class="rounded-pill border border-line px-2 py-0.5 text-[11px] text-ink-secondary transition-colors hover:bg-bg-muted disabled:opacity-40"
+              :disabled="busy !== null"
+              title="Öbür yöne açılsın"
+              @click="patch(opening.id, { swing: otherWay(swingOf(opening)) })"
+            >
+              {{ opensIn(swingOf(opening)) ? 'İçeri açılır' : 'Dışarı açılır' }} ⇄
             </button>
           </div>
         </li>

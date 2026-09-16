@@ -87,3 +87,33 @@ it('hands the plan the kind with the opening', function (): void {
         ->assertOk()
         ->assertJsonPath('data.openings.0.variant', 'sliding');
 });
+
+it('records which jamb a door hangs on and which way it opens', function (): void {
+    $door = RoomConstraint::query()->create([
+        'room_id' => $this->room->getKey(),
+        'type' => 'door',
+        'wall' => 'north',
+        'offset_mm' => 400,
+        'width_mm' => 900,
+        'height_mm' => 2_100,
+    ]);
+
+    // Moved to the other jamb, opening out of the room: the quarter of floor it swept is free.
+    $this->actingAs($this->owner)->patchJson("{$this->url}/constraints/{$door->getKey()}", ['swing' => 'end_out'])
+        ->assertOk()
+        ->assertJsonPath('data.swing', 'end_out');
+
+    $this->actingAs($this->owner)->getJson("{$this->url}/layout")
+        ->assertOk()
+        ->assertJsonPath('data.openings.0.swing', 'end_out');
+});
+
+it('will not hang a window on a hinge', function (): void {
+    $this->actingAs($this->owner)->postJson("{$this->url}/constraints", [
+        'type' => 'window',
+        'swing' => 'start_in',
+        'wall' => 'north',
+        'offset_mm' => 1_000,
+        'width_mm' => 1_400,
+    ])->assertUnprocessable()->assertJsonValidationErrors(['swing']);
+});

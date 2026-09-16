@@ -9,6 +9,7 @@ use App\Domains\Ai\Enums\AiTask;
 use App\Domains\Ai\Models\AiJob;
 use App\Domains\Catalog\Enums\RoomType;
 use App\Domains\Projects\Enums\ConstraintType;
+use App\Domains\Projects\Enums\DoorSwing;
 use App\Domains\Projects\Enums\MeasurementQuality;
 use App\Domains\Projects\Enums\OpeningVariant;
 use App\Domains\Projects\Jobs\AnalyseRoom;
@@ -277,6 +278,9 @@ final class RoomController
             // window and a French-balcony door are not things, and drawing one would be a
             // room the customer does not have.
             'variant' => ['sometimes', 'nullable', Rule::enum(OpeningVariant::class)],
+            // Which jamb a door hangs on and which way it opens. Doors only: a window does
+            // not sweep the floor, and a sliding door sweeps nothing.
+            'swing' => ['sometimes', 'nullable', Rule::enum(DoorSwing::class)],
             'label' => ['sometimes', 'nullable', 'string', 'max:160'],
             'wall' => ['sometimes', 'nullable', Rule::in(['north', 'east', 'south', 'west', 'ceiling', 'floor'])],
             'offset_mm' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:100000'],
@@ -296,6 +300,13 @@ final class RoomController
 
             if ($variant !== null && $type !== null && ! $variant->fits($type)) {
                 $check->errors()->add('variant', sprintf('%s bir %s olamaz.', $variant->label(), mb_strtolower($type->label())));
+            }
+
+            $swing = DoorSwing::tryFrom((string) $request->input('swing', ''));
+            $isDoor = in_array($type, [ConstraintType::Door, ConstraintType::BalconyDoor], true);
+
+            if ($swing !== null && $type !== null && ! $isDoor) {
+                $check->errors()->add('swing', 'Yalnızca bir kapı bir yöne açılır.');
             }
         });
 
@@ -487,6 +498,7 @@ final class RoomController
             'type_label' => $constraint->type->label(),
             'variant' => $constraint->variant?->value,
             'variant_label' => $constraint->variant?->label(),
+            'swing' => $constraint->swing?->value,
             'label' => $constraint->label,
             'wall' => $constraint->wall,
             'offset_mm' => $constraint->offset_mm,

@@ -25,7 +25,7 @@ import {
   trimMaterial,
   wallMaterial,
 } from './RoomMaterials'
-import { leavesOf, variantOf } from './openings'
+import { hingeAtStart, leavesOf, opensIn, swingOf, variantOf } from './openings'
 import { type RoomGeometry, type RoomOpening, type WallName, toUnits } from './types'
 
 /**
@@ -380,19 +380,28 @@ export class RoomGeometryBuilder {
       const leafW = w / leaves
       const material = opening.type === 'balcony_door' ? this.glassMaterial : this.leafMaterial
 
+      /*
+       * Which way it goes. A door opening out of the room hangs on the wall's outer face and
+       * sweeps the corridor; the floor inside it is free, which is what the customer wants
+       * to see. The jamb it hangs on decides which quarter of the floor it sweeps.
+       */
+      const swing = swingOf(opening)
+      const dir = opensIn(swing) ? inward : -inward
+      const faceZ = opensIn(swing) ? innerZ : innerZ - inward * thickness
+
       for (let index = 0; index < leaves; index++) {
-        // The first leaf hangs on the left jamb and opens rightwards; a second hangs on the
-        // right jamb and opens leftwards, so the pair meets in the middle.
-        const mirrored = index === 1
-        const hingeX = mirrored ? x1 + w : x1
+        // A single leaf hangs on the jamb the swing names. A pair hangs one on each jamb and
+        // meets in the middle.
+        const atEnd = leaves === 1 ? !hingeAtStart(swing) : index === 1
+        const hingeX = atEnd ? x1 + w : x1
         const hinge = new Group()
 
-        hinge.position.set(hingeX, 0, innerZ)
-        hinge.rotation.y = (mirrored ? 1 : -1) * inward * (RoomGeometryBuilder.DOOR_OPEN_DEG * Math.PI) / 180
+        hinge.position.set(hingeX, 0, faceZ)
+        hinge.rotation.y = (atEnd ? 1 : -1) * dir * (RoomGeometryBuilder.DOOR_OPEN_DEG * Math.PI) / 180
 
         const leaf = new Mesh(new BoxGeometry(leafW - 0.02, h - 0.02, leafThickness), material)
 
-        leaf.position.set((mirrored ? -1 : 1) * ((leafW - 0.02) / 2 + 0.01), (h - 0.02) / 2 + 0.01, inward * leafThickness / 2)
+        leaf.position.set((atEnd ? -1 : 1) * ((leafW - 0.02) / 2 + 0.01), (h - 0.02) / 2 + 0.01, dir * leafThickness / 2)
         leaf.castShadow = true
         hinge.add(leaf)
         parts.push(hinge)
@@ -403,7 +412,7 @@ export class RoomGeometryBuilder {
         for (let step = 0; step <= 16; step++) {
           const angle = (step / 16) * (Math.PI / 2)
 
-          points.push(new Vector3(hingeX + (mirrored ? -1 : 1) * leafW * Math.cos(angle), 0.004, innerZ + inward * leafW * Math.sin(angle)))
+          points.push(new Vector3(hingeX + (atEnd ? -1 : 1) * leafW * Math.cos(angle), 0.004, faceZ + dir * leafW * Math.sin(angle)))
         }
 
         parts.push(new Line(new BufferGeometry().setFromPoints(points), this.swingMaterial))

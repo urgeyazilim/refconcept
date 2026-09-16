@@ -1,4 +1,4 @@
-import type { RoomOpening } from './types'
+import type { RoomOpening, WallName } from './types'
 
 /**
  * What kind of door or window an opening is.
@@ -91,6 +91,51 @@ export function describeKind(opening: Pick<RoomOpening, 'type' | 'variant' | 'wi
   const kind = kindOf(opening.type, variant)
 
   return kind ? `${kind.label} ${type.toLocaleLowerCase('tr-TR')}` : type
+}
+
+/**
+ * Which way a door goes.
+ *
+ * The jamb is named along the wall's own axis — `start` is the jamb at the lower offset —
+ * because "left" reverses on two walls out of four. `hingeIsLeft` turns it into what the
+ * customer sees from inside the room.
+ */
+export type DoorSwing = 'start_in' | 'end_in' | 'start_out' | 'end_out'
+
+export function swingOf(opening: Pick<RoomOpening, 'swing'>): DoorSwing {
+  const swing = opening.swing
+
+  return swing === 'end_in' || swing === 'start_out' || swing === 'end_out' ? swing : 'start_in'
+}
+
+export const opensIn = (swing: DoorSwing): boolean => swing === 'start_in' || swing === 'end_in'
+
+export const hingeAtStart = (swing: DoorSwing): boolean => swing === 'start_in' || swing === 'start_out'
+
+/**
+ * Whether the hinge is on the left as seen from inside the room. Facing the north wall the
+ * axis runs left to right, so the start jamb is on the left; facing south it runs the other
+ * way. On the east wall the start (north end) is on the left; on the west it is on the right.
+ */
+export function hingeIsLeft(wall: WallName | null, swing: DoorSwing): boolean {
+  const startIsLeft = wall === 'north' || wall === 'east'
+
+  return hingeAtStart(swing) === startIsLeft
+}
+
+/** The swing with the hinge moved to the other jamb. */
+export function otherJamb(swing: DoorSwing): DoorSwing {
+  return opensIn(swing) ? (hingeAtStart(swing) ? 'end_in' : 'start_in') : (hingeAtStart(swing) ? 'end_out' : 'start_out')
+}
+
+/** The swing opening the other way. */
+export function otherWay(swing: DoorSwing): DoorSwing {
+  return hingeAtStart(swing) ? (opensIn(swing) ? 'start_out' : 'start_in') : (opensIn(swing) ? 'end_out' : 'end_in')
+}
+
+/** Whether the kind swings at all: a sliding door and a window do not. */
+export function hasSwing(opening: Pick<RoomOpening, 'type' | 'variant' | 'width_mm' | 'sill_height_mm'>): boolean {
+  return (opening.type === 'door' || opening.type === 'balcony_door') && variantOf(opening) !== 'sliding'
 }
 
 /** How many leaves or panes across: what both the plan and the 3D room draw. */

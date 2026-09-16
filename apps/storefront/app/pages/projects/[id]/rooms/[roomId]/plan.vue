@@ -12,7 +12,7 @@
  * sixty requests a second; not on a button either, because a plan somebody spent twenty
  * minutes on and lost to a closed tab is a plan they do not make again.
  */
-import { type OpeningKind, describeKind, kindsFor, variantOf } from '~/room3d/openings'
+import { type DoorSwing, type OpeningKind, describeKind, hasSwing, hingeIsLeft, kindsFor, opensIn, otherJamb, otherWay, swingOf, variantOf } from '~/room3d/openings'
 import type { LayoutItem, RoomGeometry, RoomOpening, WallName } from '~/room3d/types'
 
 definePageMeta({ middleware: ['auth', 'verified'], layout: 'account' })
@@ -172,6 +172,7 @@ function asOpening(raw: Record<string, unknown>): RoomOpening {
     id: String(raw.id),
     type: String(raw.type),
     variant: typeof raw.variant === 'string' ? raw.variant : null,
+    swing: typeof raw.swing === 'string' ? raw.swing : null,
     wall: (raw.wall as RoomOpening['wall']) ?? null,
     offset_mm: typeof raw.offset_mm === 'number' ? raw.offset_mm : null,
     width_mm: typeof raw.width_mm === 'number' ? raw.width_mm : null,
@@ -278,6 +279,21 @@ async function rekindOpening(id: string, kind: OpeningKind): Promise<void> {
   catch (error) {
     openings.value = previous
     openingNotice.value = error instanceof ApiError ? error.message : 'Tür değiştirilemedi.'
+  }
+}
+
+/** A door hung on the other jamb, or opening the other way. */
+async function setSwing(id: string, swing: DoorSwing): Promise<void> {
+  const previous = openings.value
+
+  openings.value = previous.map(opening => (opening.id === id ? { ...opening, swing } : opening))
+
+  try {
+    await api.patch(`${base}/constraints/${id}`, { swing, notes: 'Sizin düzelttiğiniz.' })
+  }
+  catch (error) {
+    openings.value = previous
+    openingNotice.value = error instanceof ApiError ? error.message : 'Kapının yönü değiştirilemedi.'
   }
 }
 
@@ -1197,6 +1213,26 @@ onMounted(async () => {
                 @click="rekindOpening(opening.id, kind)"
               >
                 {{ kind.label }}
+              </button>
+            </div>
+            <!-- Which jamb it hangs on and which way it opens: the quarter of floor a door needs. -->
+            <div v-if="hasSwing(opening)" class="mt-1.5 flex flex-wrap gap-1" role="group" :aria-label="`${describeKind(opening)} yönü`">
+              <button
+                v-if="variantOf(opening) !== 'double_door'"
+                type="button"
+                class="rounded-pill border border-line px-2 py-0.5 text-[11px] text-ink-secondary transition-colors hover:bg-bg-muted"
+                :title="'Menteşeyi öbür tarafa al'"
+                @click="setSwing(opening.id, otherJamb(swingOf(opening)))"
+              >
+                Menteşe {{ hingeIsLeft(opening.wall, swingOf(opening)) ? 'solda' : 'sağda' }} ⇄
+              </button>
+              <button
+                type="button"
+                class="rounded-pill border border-line px-2 py-0.5 text-[11px] text-ink-secondary transition-colors hover:bg-bg-muted"
+                :title="'Öbür yöne açılsın'"
+                @click="setSwing(opening.id, otherWay(swingOf(opening)))"
+              >
+                {{ opensIn(swingOf(opening)) ? 'İçeri açılır' : 'Dışarı açılır' }} ⇄
               </button>
             </div>
           </li>

@@ -19,7 +19,7 @@
  */
 import { formatDistance } from '~/room3d/MeasurementEngine'
 import { footprintOf, isMeasured } from '~/room3d/footprint'
-import { leavesOf, variantOf } from '~/room3d/openings'
+import { hasSwing, hingeAtStart, leavesOf, opensIn, swingOf, variantOf } from '~/room3d/openings'
 import type { LayoutItem, RoomGeometry, RoomOpening, WallName } from '~/room3d/types'
 
 const props = withDefaults(defineProps<{
@@ -410,6 +410,45 @@ function ticks(gap: Opening): Mark[] {
   return marks
 }
 
+/**
+ * A door's swing on the plan: the leaf standing open at a right angle and the quarter arc it
+ * sweeps, from the jamb it hangs on, into the room or out of it. The one drawing that says
+ * which quarter of the floor a door needs; the rest of the plan is where things are.
+ */
+function swingArcs(gap: Opening): string[] {
+  if (!hasSwing(gap.opening)) {
+    return []
+  }
+
+  const swing = swingOf(gap.opening)
+  const horizontal = gap.y1 === gap.y2
+  const inward = (horizontal ? gap.y1 === 0 : gap.x1 === 0) ? 1 : -1
+  const side = opensIn(swing) ? inward : -inward
+  // The normal into the swept floor, and the unit vector along the wall from start to end.
+  const n = horizontal ? { x: 0, y: side } : { x: side, y: 0 }
+  const u = horizontal ? { x: 1, y: 0 } : { x: 0, y: 1 }
+  const length = gap.leaves === 1 ? Math.hypot(gap.x2 - gap.x1, gap.y2 - gap.y1) : Math.hypot(gap.x2 - gap.x1, gap.y2 - gap.y1) / 2
+
+  const leafFrom = (hinge: { x: number, y: number }, dir: 1 | -1): string => {
+    const free = { x: hinge.x + u.x * dir * length, y: hinge.y + u.y * dir * length }
+    const open = { x: hinge.x + n.x * length, y: hinge.y + n.y * length }
+    // SVG's sweep flag is clockwise on a y-down plan; the turn from the wall to the normal says which.
+    const clockwise = (u.x * dir) * n.y - (u.y * dir) * n.x > 0
+    const arc = `M ${free.x} ${free.y} A ${length} ${length} 0 0 ${clockwise ? 1 : 0} ${open.x} ${open.y}`
+
+    return `${arc} M ${hinge.x} ${hinge.y} L ${open.x} ${open.y}`
+  }
+
+  const start = { x: gap.x1, y: gap.y1 }
+  const end = { x: gap.x2, y: gap.y2 }
+
+  if (gap.leaves === 1) {
+    return [hingeAtStart(swing) ? leafFrom(start, 1) : leafFrom(end, -1)]
+  }
+
+  return [leafFrom(start, 1), leafFrom(end, -1)]
+}
+
 /** A sliding door's second panel, drawn just inside the first from the middle to the end. */
 function slidingPanel(gap: Opening): Mark {
   const horizontal = gap.y1 === gap.y2
@@ -505,6 +544,8 @@ const LABEL_MM = 150
         <template v-for="gap in gaps" :key="`t${gap.opening.id}`">
           <line v-for="(tick, index) in ticks(gap)" :key="index" :x1="tick.x1" :y1="tick.y1" :x2="tick.x2" :y2="tick.y2" />
           <line v-if="gap.sliding" :x1="slidingPanel(gap).x1" :y1="slidingPanel(gap).y1" :x2="slidingPanel(gap).x2" :y2="slidingPanel(gap).y2" :stroke-width="WALL_MM * 0.5" class="stroke-accent-500" />
+          <!-- The leaf standing open and the quarter of floor it sweeps: which jamb, which way. -->
+          <path v-for="(arc, index) in swingArcs(gap)" :key="`s${index}`" :d="arc" fill="none" :stroke-width="WALL_MM * 0.2" class="stroke-warning" stroke-dasharray="80 60" />
         </template>
       </g>
       <!-- A wider, invisible handle over each opening: a 60 mm line is a hard thing to grab. -->

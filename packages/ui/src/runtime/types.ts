@@ -591,6 +591,8 @@ export interface RoomConstraintItem {
   /** Which kind of door or window (single, double, triple, french_balcony, single_door, double_door, sliding); null when never asked. */
   variant: string | null
   variant_label: string | null
+  /** A door's hinge jamb and direction (start_in, end_in, start_out, end_out); null means start_in. */
+  swing: string | null
   label: string | null
   wall: string | null
   offset_mm: number | null

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domains\Projects\Models;
 
 use App\Domains\Projects\Enums\ConstraintType;
+use App\Domains\Projects\Enums\DoorSwing;
 use App\Domains\Projects\Enums\OpeningVariant;
 use App\Support\Concerns\HasUuidV7;
 use Illuminate\Database\Eloquent\Model;
@@ -22,6 +23,7 @@ use Illuminate\Support\Carbon;
  * @property string $room_id
  * @property ConstraintType $type
  * @property OpeningVariant|null $variant which kind of door or window; null for anything read before it was asked
+ * @property DoorSwing|null $swing which jamb a door hangs on and which way it opens; null means the start jamb, into the room
  * @property string|null $label
  * @property string|null $wall
  * @property int|null $offset_mm distance along the wall axis from the origin: x=0 for north and south, z=0 for east and west
@@ -51,6 +53,7 @@ class RoomConstraint extends Model
         'room_id',
         'type',
         'variant',
+        'swing',
         'label',
         'wall',
         'offset_mm',
@@ -70,6 +73,7 @@ class RoomConstraint extends Model
         return [
             'type' => ConstraintType::class,
             'variant' => OpeningVariant::class,
+            'swing' => DoorSwing::class,
             'offset_mm' => 'integer',
             'width_mm' => 'integer',
             'height_mm' => 'integer',
