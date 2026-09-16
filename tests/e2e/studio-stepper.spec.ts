@@ -61,6 +61,11 @@ test.describe('studio stepper', () => {
     await expect(strip.getByRole('button', { name: /✓\s*Fotoğraf/ })).toBeVisible()
     await expect(strip.getByRole('button', { name: /✓\s*Onay/ })).toBeVisible()
 
+    // Back on the Onay step the doors and windows are drawn from above, ready to drag.
+    await strip.getByRole('button', { name: /Onay/ }).click()
+    await expect(page.getByRole('button', { name: '+ Pencere' })).toBeVisible()
+    // Let the step's fade finish before the picture is taken.
+    await page.waitForTimeout(400)
     await page.screenshot({ path: 'test-results/studio-stepper-room.png', fullPage: true })
 
     // --- the plan: the confirmed size is already there, and the strip says so ----------

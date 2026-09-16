@@ -31,6 +31,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   expected price and the ceiling before it queues anything, and saying plainly when the
   task is still routed to the simulator.
 
+### Added — doors and windows you can drag
+
+- **`RoomOpeningsEditor`** on the Onay step: the room from above with every door and window
+  as a handle on its wall — drag it along, change its wall from the list, type the distance
+  from the corner, add one with "+ Kapı" / "+ Pencere" and drag it into place. Saved as it
+  happens and marked as the customer's own. The reading has no compass and is often a wall
+  out; the answer is to make the correction take seconds, not to trust it more.
+- A reading's openings now go into a room whose size was already agreed (when it has none of
+  its own), and the reading must give every opening a place and a size or leave it out.
+
 ### Changed — one step on the screen, and the guide moves on by itself
 
 - **The room screen shows one step at a time**: the strip, the guide, and that step's panel.

@@ -43,6 +43,9 @@ derse üç boyutta yerleştir."
   tasarım → tasarım ekranında "Yerlerini değiştirmek ister misin?" → **Evet, düzenleyelim** →
   3B plan, tasarımdaki yerleşimle birebir.
 - Beklemek istemeyen, şeritten istediği adıma gidebilir (ölçüyü kendisi yazabilir).
+- **Kapı ve pencere (K6):** okuma tahmin eder, müşteri düzeltir — Onay adımında üstten
+  planda sürükleyerek, duvarını seçerek, "+ Kapı / + Pencere" ile ekleyerek. Modelin duvar
+  adlandırması güvenilir değildir; düzeltme saniyeler sürmelidir.
 
 ## 3. Yolculuk boyunca Rehber'in cümleleri
 

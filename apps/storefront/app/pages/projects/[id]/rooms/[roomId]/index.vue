@@ -300,6 +300,25 @@ const proposedSize = computed(() => {
   }
 })
 
+/** The room the openings editor draws: the agreed size, else the proposal, else the room's own. */
+const editorGeometry = computed(() => {
+  const g = confirmedGeometry.value ?? pendingGeometry.value
+
+  return {
+    width_mm: g?.width_mm ?? room.value?.width_mm ?? 4_000,
+    length_mm: g?.length_mm ?? room.value?.length_mm ?? 5_000,
+    height_mm: g?.height_mm ?? room.value?.height_mm ?? 2_700,
+  }
+})
+
+const OPENING_TYPES = ['door', 'balcony_door', 'window']
+const otherFixtures = computed(() => (room.value?.constraints ?? []).filter(item => !OPENING_TYPES.includes(item.type)))
+
+async function onOpeningsChanged() {
+  await load()
+  await loadLayout()
+}
+
 const editingSize = ref(false)
 const confirmingSize = ref(false)
 
@@ -1008,21 +1027,20 @@ function guideSecondary() {
               </div>
             </form>
 
-            <!-- Doors and windows: what was read, what was added; moved on the plan. -->
+            <!-- Doors and windows: dragged into place, added with a click (K6). -->
             <div class="mt-8 border-t border-line pt-6">
-              <div class="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <h3 class="font-medium">Kapılar, pencereler ve sabitler</h3>
-                  <p class="mt-1 max-w-[60ch] text-sm leading-relaxed text-ink-secondary">
-                    Nerede olduklarını bilirsem kapının önüne bir şey koymam, pencereyi kapatmam.
-                    Yerlerini planda sürükleyerek düzeltebilirsin.
-                  </p>
-                </div>
+              <RoomOpeningsEditor
+                :base="base"
+                :geometry="editorGeometry"
+                :constraints="room.constraints"
+                :can-edit="canEdit"
+                @changed="onOpeningsChanged"
+              />
 
-                <div class="flex items-center gap-2">
-                  <NuxtLink :to="`/projects/${projectId}/rooms/${roomId}/plan`" class="rounded-pill border border-line px-3 py-1.5 text-xs text-ink-secondary hover:bg-bg-muted">
-                    Planda düzelt
-                  </NuxtLink>
+              <!-- Everything else that is fixed to the room: radiators, columns, built-ins. -->
+              <div class="mt-6">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <p class="text-sm text-ink-secondary">Radyatör, kolon, şömine gibi sabitler de varsa söyle; önüne bir şey koymam.</p>
                   <RcButton
                     v-if="canEdit && !addingConstraint"
                     size="sm"
@@ -1032,83 +1050,79 @@ function guideSecondary() {
                     Ekle
                   </RcButton>
                 </div>
-              </div>
 
-              <form v-if="addingConstraint" class="mt-5 space-y-5 rounded-md bg-bg-muted p-5" @submit.prevent="addConstraint">
-                <div class="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label for="ctype" class="mb-1.5 block text-sm font-medium">Ne?</label>
-                    <select
-                      id="ctype"
-                      v-model="constraintForm.type"
-                      class="w-full rounded-sm border border-line bg-surface px-4 py-2.5 text-sm"
-                    >
-                      <option v-for="type in constraintTypes" :key="type.value" :value="type.value">
-                        {{ type.label }}
-                      </option>
-                    </select>
+                <form v-if="addingConstraint" class="mt-4 space-y-5 rounded-md bg-bg-muted p-5" @submit.prevent="addConstraint">
+                  <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label for="ctype" class="mb-1.5 block text-sm font-medium">Ne?</label>
+                      <select
+                        id="ctype"
+                        v-model="constraintForm.type"
+                        class="w-full rounded-sm border border-line bg-surface px-4 py-2.5 text-sm"
+                      >
+                        <option v-for="type in constraintTypes" :key="type.value" :value="type.value">
+                          {{ type.label }}
+                        </option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label for="wall" class="mb-1.5 block text-sm font-medium">Hangi duvarda?</label>
+                      <select
+                        id="wall"
+                        v-model="constraintForm.wall"
+                        class="w-full rounded-sm border border-line bg-surface px-4 py-2.5 text-sm"
+                      >
+                        <option v-for="wall in walls" :key="wall.value" :value="wall.value">
+                          {{ wall.label }}
+                        </option>
+                      </select>
+                    </div>
                   </div>
 
-                  <div>
-                    <label for="wall" class="mb-1.5 block text-sm font-medium">Hangi duvarda?</label>
-                    <select
-                      id="wall"
-                      v-model="constraintForm.wall"
-                      class="w-full rounded-sm border border-line bg-surface px-4 py-2.5 text-sm"
-                    >
-                      <option v-for="wall in walls" :key="wall.value" :value="wall.value">
-                        {{ wall.label }}
-                      </option>
-                    </select>
-                  </div>
-                </div>
-
-                <div class="grid gap-4 sm:grid-cols-3">
-                  <RcField
-                    v-model="constraintForm.offset"
-                    label="Duvarın solundan uzaklık (cm)"
-                    name="offset"
-                  />
-                  <RcField v-model="constraintForm.width" label="Genişlik (cm)" name="cwidth" />
-                  <RcField v-model="constraintForm.sill" label="Yerden yükseklik (cm)" name="sill" />
-                </div>
-
-                <div class="flex items-center gap-3">
-                  <RcButton type="submit" size="sm" :loading="savingConstraint" :disabled="savingConstraint">
-                    Ekle
-                  </RcButton>
-                  <RcButton size="sm" variant="ghost" @click="addingConstraint = false">Vazgeç</RcButton>
-                </div>
-              </form>
-
-              <ul v-if="room.constraints.length > 0" class="mt-5 space-y-2">
-                <li
-                  v-for="constraint in room.constraints"
-                  :key="constraint.id"
-                  class="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3 text-sm last:border-0"
-                >
-                  <div>
-                    <p>{{ constraint.description }}</p>
-                    <p class="mt-0.5 text-xs text-muted">
-                      {{ walls.find(w => w.value === constraint.wall)?.label ?? 'Konum belirtilmedi' }}
-                      <span v-if="!constraint.is_placed"> · yerleşim için yeterli bilgi yok</span>
-                    </p>
+                  <div class="grid gap-4 sm:grid-cols-3">
+                    <RcField
+                      v-model="constraintForm.offset"
+                      label="Duvarın solundan uzaklık (cm)"
+                      name="offset"
+                    />
+                    <RcField v-model="constraintForm.width" label="Genişlik (cm)" name="cwidth" />
+                    <RcField v-model="constraintForm.sill" label="Yerden yükseklik (cm)" name="sill" />
                   </div>
 
-                  <button
-                    v-if="canEdit"
-                    type="button"
-                    class="rounded-sm px-2.5 py-1.5 text-xs text-danger hover:bg-danger-subtle"
-                    @click="removeConstraint(constraint.id)"
+                  <div class="flex items-center gap-3">
+                    <RcButton type="submit" size="sm" :loading="savingConstraint" :disabled="savingConstraint">
+                      Ekle
+                    </RcButton>
+                    <RcButton size="sm" variant="ghost" @click="addingConstraint = false">Vazgeç</RcButton>
+                  </div>
+                </form>
+
+                <ul v-if="otherFixtures.length > 0" class="mt-4 space-y-2">
+                  <li
+                    v-for="constraint in otherFixtures"
+                    :key="constraint.id"
+                    class="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3 text-sm last:border-0"
                   >
-                    Kaldır
-                  </button>
-                </li>
-              </ul>
+                    <div>
+                      <p>{{ constraint.description }}</p>
+                      <p class="mt-0.5 text-xs text-muted">
+                        {{ walls.find(w => w.value === constraint.wall)?.label ?? 'Konum belirtilmedi' }}
+                        <span v-if="!constraint.is_placed"> · yerleşim için yeterli bilgi yok</span>
+                      </p>
+                    </div>
 
-              <p v-else-if="!addingConstraint" class="mt-5 text-sm text-muted">
-                Okumada kapı ya da pencere bulursam buraya yazarım; sen de ekleyebilirsin.
-              </p>
+                    <button
+                      v-if="canEdit"
+                      type="button"
+                      class="rounded-sm px-2.5 py-1.5 text-xs text-danger hover:bg-danger-subtle"
+                      @click="removeConstraint(constraint.id)"
+                    >
+                      Kaldır
+                    </button>
+                  </li>
+                </ul>
+              </div>
             </div>
           </section>
 
