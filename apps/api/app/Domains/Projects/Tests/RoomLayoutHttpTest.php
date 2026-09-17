@@ -391,3 +391,44 @@ it('keeps a stranger out of somebody elses plan', function (): void {
         ->postJson("{$this->url}/geometry", ['width_mm' => 4_000, 'length_mm' => 4_000, 'height_mm' => 2_500])
         ->assertForbidden();
 });
+
+it('carries the room colours through to the planner', function (): void {
+    confirmGeometry(4_500, 5_500, 2_800);
+
+    $photo = RoomMedia::query()->create([
+        'room_id' => $this->room->getKey(),
+        'type' => 'photo',
+        'disk' => 'room-photos',
+        'storage_path' => 'test/oda.jpg',
+        'original_name' => 'oda.jpg',
+        'mime_type' => 'image/jpeg',
+        'size_bytes' => 1_024,
+        'checksum_sha256' => hash('sha256', 'oda'),
+    ]);
+
+    RoomAnalysis::query()->create([
+        'room_id' => $this->room->getKey(),
+        'media_id' => $photo->getKey(),
+        'payload' => ['fixed_elements' => [['type' => 'crown_molding', 'wall' => 'all']]],
+        'surfaces' => [
+            'walls' => ['material' => 'plaster_paint', 'color_hex' => '#8f8f8f'],
+            'ceiling' => ['material' => 'plaster_paint', 'color_hex' => '#f4f4f2'],
+            'floor' => ['material' => 'wood_floor'],
+        ],
+        'is_current' => true,
+    ]);
+
+    /*
+     * The planner draws the customer's room, not a cream box.
+     *
+     * This is the wire the colour travels along, and it was not connected: the reading knew
+     * the walls were grey and the screen painted them the same off-white it paints every
+     * room.
+     */
+    $geometry = $this->actingAs($this->owner)->getJson("{$this->url}/layout")->json('data.geometry');
+
+    expect($geometry['wall_color'])->toBe('#8f8f8f')
+        ->and($geometry['ceiling_color'])->toBe('#f4f4f2')
+        ->and($geometry['crown_molding'])->toBeTrue()
+        ->and($geometry['floor'])->toBe('wood');
+});
