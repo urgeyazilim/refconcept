@@ -92,6 +92,25 @@ final class RoomGeometryProposer
             return $existing;
         }
 
+        $openings = $this->openings($analysis);
+
+        /*
+         * Put on the walls now, not when the size is agreed to.
+         *
+         * They used to be carried in the proposal and written only on confirmation, so that
+         * nothing appeared in a customer's room that they had not been shown. In practice it
+         * did the opposite: the reading found a three-metre window and a door, the room step
+         * drew an empty box, and the panel beside it said "Fotoğraftan kapı ya da pencere
+         * çıkaramadım" about a reading that had found both. The product owner's answer was
+         * the right one — the photograph is taken so that nobody has to do this by hand.
+         *
+         * Nothing is silent about it. This is the step whose whole job is to ask "Doğru mu?",
+         * the openings are on the walls in front of that question, each is marked as the
+         * photograph's rather than the customer's, and any of them can be dragged, retyped or
+         * removed in a tap. Only ever into a room that has none of its own.
+         */
+        $this->adopt($room, $openings);
+
         return RoomGeometryVersion::query()->create([
             'room_id' => $room->getKey(),
             'version' => ((int) RoomGeometryVersion::query()->where('room_id', $room->getKey())->max('version')) + 1,
@@ -102,9 +121,10 @@ final class RoomGeometryProposer
             'confidence_bps' => $this->confidenceToBps($estimate['confidence'] ?? null)
                 ?? $analysis->confidence_bps,
             'analysis_id' => $analysis->getKey(),
-            // Carried rather than applied. They become constraints when the measurements
-            // they were measured against are agreed to.
-            'payload' => ['openings' => $this->openings($analysis)],
+            // Kept on the version as well as on the walls: it is the record of what this
+            // particular reading saw, and adoptOpenings() still has something to work from
+            // for a room that had openings of its own at the time and lost them since.
+            'payload' => ['openings' => $openings],
         ]);
     }
 

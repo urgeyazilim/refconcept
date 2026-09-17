@@ -167,7 +167,7 @@ const cm = (mm: number | null): string => (mm === null ? '' : String(Math.round(
       <template #side-start>
         <ul class="space-y-2">
           <li v-if="openings.length === 0" class="rounded-md bg-bg-muted p-3 text-xs leading-relaxed text-ink-secondary">
-            Fotoğraftan kapı ya da pencere çıkaramadım. Soldaki simgelerden türünü seç, sonra odada tutup duvara sürükle.
+            Bu odada kapı ya da pencere yok. Soldaki simgelerden türünü seç, sonra odada tutup duvara sürükle.
           </li>
           <li
             v-for="opening in openings"

@@ -297,8 +297,19 @@ const autoStep = computed<StudioStep>(() => {
 const chosenStep = ref<StudioStep | null>(null)
 const activeStep = computed<StudioStep>(() => chosenStep.value ?? autoStep.value)
 
+/**
+ * Opens a step, and stays on it.
+ *
+ * It used to forget the choice whenever it happened to match the step the guide would have
+ * picked anyway — tidier, and wrong: the automatic step is "the first one not finished", so
+ * a reading landing a second later could make an earlier step unfinished again and take the
+ * screen with it. A customer typing their measurements on step three was dropped back onto
+ * step two mid-word, because the reading had just found a sofa to ask about.
+ *
+ * The guide moves the screen by calling this itself, so nothing is lost by remembering.
+ */
 function goTo(step: StudioStep) {
-  chosenStep.value = step === autoStep.value ? null : step
+  chosenStep.value = step
   editingSize.value = false
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
@@ -372,6 +383,20 @@ const editorGeometry = computed(() => {
 
 const OPENING_TYPES = ['door', 'balcony_door', 'window']
 const otherFixtures = computed(() => (room.value?.constraints ?? []).filter(item => !OPENING_TYPES.includes(item.type)))
+
+/**
+ * How many doors and windows are on the walls, so the guide can say so.
+ *
+ * It used to claim it had put them there whether or not it had. The reading had found a
+ * three-metre window and a door and the screen said neither — a promise the room in front
+ * of the customer did not keep.
+ */
+const openingCount = computed(() => (room.value?.constraints ?? []).filter(item => OPENING_TYPES.includes(item.type)).length)
+
+/** What the guide says it did with the doors and windows, which is what it did. */
+const openingsSaid = computed(() => (openingCount.value === 0
+  ? 'Kapı ya da pencere seçemedim; soldaki simgelerden ekleyebilirsin'
+  : `${openingCount.value} kapı/pencere buldum, duvarlara yerleştirdim`))
 
 async function onOpeningsChanged() {
   await load()
@@ -783,7 +808,7 @@ const guide = computed<GuideState>(() => {
         return quiet({
           icon: 'ruler',
           say: `Odan ${mm(current.width_mm)} × ${mm(current.length_mm)} m.`,
-          detail: `${photoCount.value} kareden okudum. Kapı ve pencereler yanda; yeri yanlışsa tutup sürükle. Hazırsan devam edelim.`,
+          detail: `${photoCount.value} kareden okudum. ${openingsSaid.value} — yeri yanlışsa tutup sürükle. Hazırsan devam edelim.`,
           action: { label: 'Devam et' },
           secondary: analysis?.is_stale ? { label: 'Yeniden oku' } : null,
         })
@@ -793,7 +818,7 @@ const guide = computed<GuideState>(() => {
         return quiet({
           icon: 'ruler',
           say: `Odanı ${proposedSize.value.text} okudum. Doğru mu?`,
-          detail: `${photoCount.value} kareden çıkardım; kapı ve pencereleri de yana koydum. Doğruysa onayla, değilse düzelt — ölçü doğru olunca önerdiğim her şey gerçekten sığar.`,
+          detail: `${photoCount.value} kareden çıkardım; ${openingsSaid.value}. Doğruysa onayla, değilse düzelt — ölçü doğru olunca önerdiğim her şey gerçekten sığar.`,
           action: { label: 'Evet, doğru', busy: confirmingSize.value },
           secondary: { label: 'Düzelt' },
         })

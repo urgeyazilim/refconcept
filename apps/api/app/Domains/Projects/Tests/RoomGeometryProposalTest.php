@@ -112,7 +112,7 @@ it('proposes once per analysis rather than once per reading', function (): void 
 
 // --- openings ---------------------------------------------------------------------
 
-it('carries the openings on the proposal instead of adding them to the room', function (): void {
+it('puts the openings it read straight onto the walls', function (): void {
     $version = $this->proposer->propose(analysed([
         'estimated_dimensions' => ['width_mm' => 4_850, 'length_mm' => 5_200, 'height_mm' => 2_720],
         'openings' => [
@@ -122,11 +122,18 @@ it('carries the openings on the proposal instead of adding them to the room', fu
     ]));
 
     /*
-     * A door detected in a photograph and silently added to the customer's fixed elements is
-     * a door they did not put there and will not think to check.
+     * The photograph is taken so that nobody has to do this by hand.
+     *
+     * They were held on the proposal until the size was agreed to, on the grounds that a door
+     * nobody had been shown should not appear in their room. It read as the opposite: the
+     * reading found a window and a door, the room step drew an empty box, and the panel said
+     * it could not find either. They go on the walls now, in front of the question the step
+     * already asks, marked as the photograph's and correctable in a tap.
      */
     expect($version->payload['openings'])->toHaveCount(2)
-        ->and(RoomConstraint::query()->where('room_id', $this->room->getKey())->count())->toBe(0);
+        ->and(RoomConstraint::query()->where('room_id', $this->room->getKey())->count())->toBe(2)
+        ->and(RoomConstraint::query()->where('room_id', $this->room->getKey())->pluck('notes')->unique()->all())
+        ->toBe(['Fotoğraftan tespit edildi.']);
 });
 
 it('drops an opening it cannot place', function (): void {
@@ -144,7 +151,7 @@ it('drops an opening it cannot place', function (): void {
     expect($version->payload['openings'])->toBe([]);
 });
 
-it('adopts the openings when the measurements are agreed to', function (): void {
+it('says where an opening it read came from', function (): void {
     $version = $this->proposer->propose(analysed([
         'estimated_dimensions' => ['width_mm' => 4_850, 'length_mm' => 5_200, 'height_mm' => 2_720],
         'openings' => [
@@ -152,13 +159,14 @@ it('adopts the openings when the measurements are agreed to', function (): void 
         ],
     ]));
 
-    expect($this->proposer->adoptOpenings($version))->toBe(1);
-
     $constraint = RoomConstraint::query()->where('room_id', $this->room->getKey())->firstOrFail();
 
     // Said plainly, so the customer can see at a glance which entries are their own.
     expect($constraint->wall)->toBe('east')
-        ->and($constraint->notes)->toBe('Fotoğraftan tespit edildi.');
+        ->and($constraint->notes)->toBe('Fotoğraftan tespit edildi.')
+        // Asking again changes nothing: the door is already on that wall, and a second one
+        // beside it is the mess this guard exists to prevent.
+        ->and($this->proposer->adoptOpenings($version))->toBe(0);
 });
 
 it('says which kind an adopted opening most likely is, from its width', function (): void {

@@ -5,6 +5,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed — The reading puts the doors and windows on the walls itself
+
+- **It had them all along.** The reading found a three-metre window on the north wall and a
+  door on the east wall, with positions and sizes, and held them on the unconfirmed
+  proposal. The room step drew an empty box and the panel beside it said "Fotoğraftan kapı
+  ya da pencere çıkaramadım" — about a reading that had found both. They go onto the walls
+  as soon as the reading lands. The photograph is taken so that nobody has to do this by
+  hand.
+- **Nothing is silent about it.** That step's whole job is to ask "Doğru mu?", each opening
+  is marked as the photograph's rather than the customer's, and any of them can be dragged,
+  retyped or removed in a tap. A room that already has openings of its own is left alone.
+- **The guide says what it did.** It claimed to have put the doors and windows aside whether
+  or not it had; it now says how many it found, or that it found none.
+
+### Fixed — The screen wandered off the step the customer was on
+
+- **A step opened from the strip is stayed on.** The chosen step was forgotten whenever it
+  matched the step the guide would have picked anyway, and the guide's step is "the first one
+  not finished" — so a reading landing a second later could make an earlier step unfinished
+  again and take the screen with it. Somebody typing measurements on step three was dropped
+  onto step two mid-word, because the reading had just found a sofa to ask about.
+
 ### Fixed — The room had no way to a basket
 
 - **Buying what is standing in the room came back.** Taking the duplicated "Render al" off
