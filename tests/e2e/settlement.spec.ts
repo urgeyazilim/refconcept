@@ -125,7 +125,11 @@ test.describe('settlement', () => {
   })
 
   test('a delivery inside the hold cannot be paid out', async ({ request }) => {
-    const listing = await listProduct(request, `Bekleme Kanepe ${Date.now()}`, 500_000, 2)
+    // Named once and matched exactly. `buildAll` walks every active seller and hands back
+    // any settlement already open, so a draft left by an earlier run of this same test
+    // answered to 'Bekleme Kanepe' and failed a rule that was working perfectly.
+    const sellerName = `Bekleme Kanepe ${Date.now()}`
+    const listing = await listProduct(request, sellerName, 500_000, 2)
 
     await sellAndDeliver(request, listing)
 
@@ -143,7 +147,7 @@ test.describe('settlement', () => {
      * The return window. Paying before it closes means chasing a seller for money they
      * have already spent — so a delivery from a minute ago is not in the run.
      */
-    expect(settlements.some(row => row.seller_name?.includes('Bekleme Kanepe'))).toBe(false)
+    expect(settlements.some(row => row.seller_name?.includes(sellerName))).toBe(false)
   })
 
   /*

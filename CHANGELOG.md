@@ -5,6 +5,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — The room had no way to a basket
+
+- **Buying what is standing in the room came back.** Taking the duplicated "Render al" off
+  the plan took the basket button with it, and the design screen's is not the same thing:
+  that one buys what the designer chose, this one buys what is standing in the room after
+  the customer moved it, swapped it and took things out. The endpoint was still there with
+  nothing to reach it. It sits under the room's own list and its total.
+
+### Fixed — Two tests that were wrong about the product
+
+- **The listing test uploaded into whichever input came first.** A seller was given
+  somewhere to put their manufacturer's mesh, which made `input[type=file]` ambiguous on
+  that page; the photograph now goes into the one that takes photographs.
+- **The settlement hold test failed on somebody else's leftovers.** `buildAll` walks every
+  active seller and hands back any settlement already open, so a draft left by an earlier
+  run of the same test answered to the name it matched on. The rule it was testing —
+  fourteen days from delivery before a seller is paid — was working the whole time. The
+  test names its seller once and matches it exactly.
+
 ### Fixed — A size typed while the room is being read
 
 - **The measurements vanished as they were typed.** While the photographs are being read the

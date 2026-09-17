@@ -105,7 +105,10 @@ test.describe('product lifecycle', () => {
     await expect(page.getByText('Ürün açıklaması')).toHaveCount(0)
 
     // --- imagery ----------------------------------------------------------------
-    await page.locator('input[type="file"]').setInputFiles({
+    // The photographs, not the 3D model: the listing gained a second file input when a
+    // seller was given somewhere to put their manufacturer's mesh, and an unscoped
+    // 'input[type=file]' has been ambiguous ever since.
+    await page.locator('input[accept*="image/"][type="file"]').setInputFiles({
       name: 'kanepe.png',
       mimeType: 'image/png',
       buffer: pngBuffer(),
