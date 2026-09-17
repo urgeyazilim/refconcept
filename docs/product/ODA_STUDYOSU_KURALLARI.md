@@ -40,6 +40,11 @@ Her kural bir "her zaman" ya da "asla"dır. Kod bu listeye göre test edilir.
 - **K4.** Analiz **teklif eder, karar vermez.** Ölçüler müşteri "evet" deyinceye kadar tahmindir ve hiçbir hesap onlara dayanmaz.
 - **K5.** Analiz bulduğunu **fotoğrafın üstünde gösterir** (kutular). Yanlış bulduğu şey görünür olmalıdır; %71 güven yazısı kimseye bir şey söylemez.
 - **K6.** Müşteri her ölçüyü ve her kapı/pencereyi düzeltebilir; düzeltme analizin üstüne yazar ve *kaynak: kullanıcı* olarak işaretlenir.
+- **K5a.** Okumanın gördüğü **ekrana da yansır**. Duvar ve tavan rengi, zemin malzemesi ve
+  kartonpiyer 3B odada çizilir; radyatör, kolon, şömine, gömme dolap, priz ve aplik odanın
+  sabitleri olarak kaydedilir, listede görünür ve önlerine ürün konmaz. Süpürgelik ve
+  kartonpiyer bu listeye girmez: onlar odanın parçası olarak çizilir (2026-09-18, sahibinin
+  kararı: "sahne okumanın bulduğunu çizsin").
 - **K6a.** Okuma bir kapı ya da pencere bulduğunda **onu duvara kendisi koyar** — onay beklemez. Fotoğrafı, müşteri bunu elle yapmasın diye alıyoruz. Odanın kendi kapı/penceresi varsa dokunmaz. Konulan her açıklık *Fotoğraftan tespit edildi* diye işaretlenir ve tek dokunuşla taşınır, türü değiştirilir ya da kaldırılır (2026-09-17, sahibinin kararı: "2 de zaten resim var, odamı anlasa kapıları pencereleri sistem kendisi yapsa olmaz mı").
 - **K7.** Kapı, pencere, radyatör gibi **sabit öğeler korunur**; hiçbir öneri ve hiçbir render bunları taşıyamaz, kapatamaz, kaldıramaz. Kapı önünde 90 cm, pencere önünde 30 cm boş kalır.
 

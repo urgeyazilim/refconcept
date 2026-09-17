@@ -646,6 +646,19 @@ export interface RoomAnalysisSummary {
   movable_objects: Array<{ type: string, label: string }>
   dominant_colors: string[]
   estimated_dimensions: { width_mm: number | null, length_mm: number | null, height_mm: number | null } | null
+  /**
+   * What the room is made of and painted, for the screen that draws it.
+   *
+   * The reading always described the surfaces and only the renderer ever saw the answer, so
+   * the planner drew every room as the same cream box with a wooden floor.
+   */
+  surfaces: {
+    floor: 'wood' | 'tile' | 'carpet' | null
+    wall_color: string | null
+    ceiling_color: string | null
+    floor_color: string | null
+    crown_molding: boolean
+  } | null
   warnings: string[]
   created_at: string | null
 }

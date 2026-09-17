@@ -41,6 +41,17 @@ export interface RoomGeometry {
   height_mm: number
   /** From the room photograph's analysis, when there was one. Boards when there was not. */
   floor?: FloorMaterial | null
+  /**
+   * What the photograph said the room is painted, as "#rrggbb".
+   *
+   * The reading has always described the surfaces and the planner drew every room in the
+   * same cream regardless, so a grey room with a white cornice came out white on white and
+   * the customer could not recognise their own room. Null keeps the default.
+   */
+  wall_color?: string | null
+  ceiling_color?: string | null
+  /** Whether the photograph showed a cornice. Drawn only when it did. */
+  crown_molding?: boolean | null
 }
 
 /**

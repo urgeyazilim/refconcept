@@ -373,11 +373,18 @@ const proposedSize = computed(() => {
 /** The room the openings editor draws: the agreed size, else the proposal, else the room's own. */
 const editorGeometry = computed(() => {
   const g = confirmedGeometry.value ?? pendingGeometry.value
+  // What the photograph said the room is made of and painted. The room step drew every room
+  // as the same cream box with a wooden floor until the reading's own answer was passed on.
+  const surfaces = room.value?.analysis?.surfaces ?? null
 
   return {
     width_mm: g?.width_mm ?? room.value?.width_mm ?? 4_000,
     length_mm: g?.length_mm ?? room.value?.length_mm ?? 5_000,
     height_mm: g?.height_mm ?? room.value?.height_mm ?? 2_700,
+    floor: surfaces?.floor ?? null,
+    wall_color: surfaces?.wall_color ?? null,
+    ceiling_color: surfaces?.ceiling_color ?? null,
+    crown_molding: surfaces?.crown_molding ?? false,
   }
 })
 

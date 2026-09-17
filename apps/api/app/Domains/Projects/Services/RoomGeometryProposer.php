@@ -110,6 +110,7 @@ final class RoomGeometryProposer
          * removed in a tap. Only ever into a room that has none of its own.
          */
         $this->adopt($room, $openings);
+        $this->adoptFixtures($room, $analysis);
 
         return RoomGeometryVersion::query()->create([
             'room_id' => $room->getKey(),
@@ -191,9 +192,16 @@ final class RoomGeometryProposer
             RoomConstraint::query()->create([
                 'room_id' => $room->getKey(),
                 'type' => $type,
-                // The reading is not asked which kind; the width says. A 2.1 m window is three
-                // panes, a 1.6 m door two leaves, and the customer can correct it in a tap.
-                'variant' => OpeningVariant::guess($type, $opening['width_mm'] ?? null, $opening['sill_height_mm'] ?? null)?->value,
+                /*
+                 * What the reading said it is, and the width only when it did not say.
+                 *
+                 * The kind used to be deduced from the width alone, which made every 1.2 m
+                 * opening a double casement whether the photograph showed two sashes or one
+                 * tall pane — and the customer met a room drawn with the wrong window. The
+                 * model is looking at the window and can say; the width stays as the answer
+                 * for a reading that does not.
+                 */
+                'variant' => self::variantOf($type, $opening)?->value,
                 'wall' => $opening['wall'],
                 'offset_mm' => $opening['offset_mm'],
                 'width_mm' => $opening['width_mm'],
@@ -261,6 +269,8 @@ final class RoomGeometryProposer
                 // asks for room in front of it, so a misreading costs a warning rather than
                 // a refusal the customer cannot explain.
                 'type' => ($type ?? ConstraintType::Window)->value,
+                // Kept as the reading gave it, valid or not; variantOf() is what decides.
+                'variant' => is_string($opening['variant'] ?? null) ? $opening['variant'] : null,
                 'wall' => $wall,
                 'offset_mm' => $offset,
                 'width_mm' => $width,
@@ -270,6 +280,155 @@ final class RoomGeometryProposer
         }
 
         return $kept;
+    }
+
+    /**
+     * The other things fixed to the walls: radiators, columns, sconces, built-ins.
+     *
+     * The reading has always seen them — it listed two wall sconces on the north wall of the
+     * product owner's room — and nothing was ever done with them beyond telling the renderer
+     * not to paint over them. So they were invisible to the customer and invisible to the
+     * arrangement: a bookcase could be planned across a radiator and nothing would object.
+     *
+     * Written without a position, because the reading is not asked for one. They show in the
+     * room's list as "yerleşim için yeterli bilgi yok" until somebody says where on the wall
+     * they are, which is a question worth asking of a radiator and not worth asking of a
+     * skirting board — so trim is not on this list at all: it is drawn, not worked around.
+     *
+     * Only into a room that has none of its own, like the openings.
+     */
+    private function adoptFixtures(Room $room, RoomAnalysis $analysis): int
+    {
+        // The column when the reading filled it, the payload otherwise: they are written
+        // together and either is the same list.
+        $elements = $analysis->fixed_elements ?? ($analysis->payload['fixed_elements'] ?? []);
+
+        if (! is_array($elements) || $elements === []) {
+            return 0;
+        }
+
+        $openings = [ConstraintType::Door->value, ConstraintType::Window->value, ConstraintType::BalconyDoor->value];
+
+        $has = RoomConstraint::query()
+            ->where('room_id', $room->getKey())
+            ->whereNotIn('type', $openings)
+            ->exists();
+
+        if ($has) {
+            return 0;
+        }
+
+        $added = 0;
+
+        foreach ($elements as $element) {
+            if (! is_array($element)) {
+                continue;
+            }
+
+            $type = self::fixtureType(is_string($element['type'] ?? null) ? $element['type'] : '');
+
+            if ($type === null) {
+                continue;
+            }
+
+            $wall = is_string($element['wall'] ?? null) && in_array($element['wall'], ['north', 'south', 'east', 'west'], true)
+                ? $element['wall']
+                : null;
+
+            RoomConstraint::query()->create([
+                'room_id' => $room->getKey(),
+                'type' => $type,
+                'wall' => $wall,
+                'label' => is_string($element['label'] ?? null) && $element['label'] !== ''
+                    ? $element['label']
+                    : self::fixtureLabel(is_string($element['type'] ?? null) ? $element['type'] : '', $type),
+                'width_mm' => is_int($element['width_mm'] ?? null) ? $element['width_mm'] : null,
+                'height_mm' => is_int($element['height_mm'] ?? null) ? $element['height_mm'] : null,
+                'offset_mm' => is_int($element['offset_mm'] ?? null) ? $element['offset_mm'] : null,
+                'sill_height_mm' => is_int($element['sill_height_mm'] ?? null) ? $element['sill_height_mm'] : null,
+                'is_blocking' => $type->blocksByDefault(),
+                'must_stay_visible' => $type->mustStayVisibleByDefault(),
+                'notes' => 'Fotoğraftan tespit edildi.',
+            ]);
+
+            $added++;
+        }
+
+        return $added;
+    }
+
+    /**
+     * What to call a fixture on the customer's list.
+     *
+     * The constraint type is a category, not a name: a wall sconce and a pendant are both
+     * "Diğer", and a list of three rows all saying "Diğer" tells the customer nothing about
+     * their own room. The reading's own word is turned into the Turkish for it, and the
+     * category is only the fallback.
+     */
+    private static function fixtureLabel(string $said, ConstraintType $type): string
+    {
+        $word = mb_strtolower($said);
+
+        return match (true) {
+            (bool) preg_match('/sconce|aplik/u', $word) => 'Aplik',
+            (bool) preg_match('/chandelier|avize/u', $word) => 'Avize',
+            (bool) preg_match('/pendant|sarkıt|sarkit/u', $word) => 'Sarkıt',
+            (bool) preg_match('/ceiling.?light|spot|tavan/u', $word) => 'Tavan aydınlatması',
+            (bool) preg_match('/wardrobe|closet|dolap/u', $word) => 'Gömme dolap',
+            (bool) preg_match('/kitchen|mutfak|cabinetry/u', $word) => 'Mutfak dolabı',
+            default => $type->label(),
+        };
+    }
+
+    /**
+     * The constraint an element the reading named corresponds to, or null to ignore it.
+     *
+     * Trim is ignored on purpose: a skirting board and a cornice are drawn as part of the
+     * room, and putting them on a list of things furniture must avoid would fill that list
+     * with two entries that apply to every wall and mean nothing.
+     */
+    private static function fixtureType(string $said): ?ConstraintType
+    {
+        $word = mb_strtolower($said);
+
+        return match (true) {
+            $word === '' => null,
+            (bool) preg_match('/baseboard|skirting|süpürgelik|supurgelik|crown|cornice|kartonpiyer|molding|moulding/u', $word) => null,
+            (bool) preg_match('/radiator|radyatör|radyator|petek|kalorifer|heater/u', $word) => ConstraintType::Radiator,
+            (bool) preg_match('/column|kolon|pillar|pier/u', $word) => ConstraintType::Column,
+            (bool) preg_match('/beam|kiriş|kiris/u', $word) => ConstraintType::Beam,
+            (bool) preg_match('/fireplace|şömine|somine|hearth/u', $word) => ConstraintType::Fireplace,
+            (bool) preg_match('/stair|merdiven/u', $word) => ConstraintType::Stairs,
+            (bool) preg_match('/socket|priz|outlet/u', $word) => ConstraintType::Socket,
+            (bool) preg_match('/switch|anahtar|düğme/u', $word) => ConstraintType::Switch_,
+            (bool) preg_match('/wardrobe|closet|dolap|built.?in|gömme|kitchen|mutfak|cabinetry/u', $word) => ConstraintType::FixedFurniture,
+            // A sconce, a pendant, a ceiling rose: not an obstacle a sofa cares about, but a
+            // tall piece planned across one is a light nobody can use again.
+            (bool) preg_match('/sconce|aplik|lamp|light|aydınlatma|aydinlatma|chandelier|avize|pendant/u', $word) => ConstraintType::Other,
+            default => null,
+        };
+    }
+
+    /**
+     * The kind of opening this is: the reading's answer, or the width's.
+     *
+     * A kind the reading gave is trusted only if it is a kind that type can be — "sliding"
+     * on a window is a misread, not a sliding window, and a room drawn from it would be
+     * wrong in a way the customer cannot explain to anybody.
+     *
+     * @param  array<string, mixed>  $opening
+     */
+    private static function variantOf(ConstraintType $type, array $opening): ?OpeningVariant
+    {
+        $said = is_string($opening['variant'] ?? null)
+            ? OpeningVariant::tryFrom($opening['variant'])
+            : null;
+
+        if ($said !== null && $said->fits($type)) {
+            return $said;
+        }
+
+        return OpeningVariant::guess($type, $opening['width_mm'] ?? null, $opening['sill_height_mm'] ?? null);
     }
 
     private function plausible(mixed $value): ?int

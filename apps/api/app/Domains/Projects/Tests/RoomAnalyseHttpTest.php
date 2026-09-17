@@ -144,3 +144,41 @@ it('queues a delayed reading after a photograph is uploaded', function (): void 
 
     Queue::assertPushed(AnalyseRoom::class, fn (AnalyseRoom $job): bool => count($job->photoIds) === 1 && $job->delay !== null);
 });
+
+it('hands the screen the colours and the cornice it read', function (): void {
+    ($this->photo)(0);
+
+    // Read here rather than through the endpoint: asking over HTTP queues the job and
+    // answers 202, and what is being tested is what the room then hands the screen.
+    app(RoomAnalyser::class)->forRoom($this->room, refresh: true);
+
+    /*
+     * The reading has always described the surfaces and only the renderer ever saw the
+     * answer, so the planner drew every customer's room as the same cream box. The room
+     * endpoint carries it now: what the walls are painted, what the ceiling is, what the
+     * floor is made of, and whether there is a cornice to draw.
+     */
+    $surfaces = $this->actingAs($this->owner)->getJson($this->url)->json('data.analysis.surfaces');
+
+    expect($surfaces['wall_color'])->toBe('#8f8f8f')
+        ->and($surfaces['ceiling_color'])->toBe('#f4f4f2')
+        ->and($surfaces['floor'])->toBe('wood')
+        ->and($surfaces['crown_molding'])->toBeTrue();
+});
+
+it('drops a colour it could not paint with', function (): void {
+    ($this->photo)(0);
+
+    // Read here rather than through the endpoint: asking over HTTP queues the job and
+    // answers 202, and what is being tested is what the room then hands the screen.
+    app(RoomAnalyser::class)->forRoom($this->room, refresh: true);
+
+    // A model that answers "beyaz" should leave the room its default, not paint it black.
+    RoomAnalysis::query()->firstOrFail()->forceFill([
+        'surfaces' => ['walls' => ['material' => 'plaster', 'color_hex' => 'beyaz']],
+    ])->save();
+
+    $surfaces = $this->actingAs($this->owner)->getJson($this->url)->json('data.analysis.surfaces');
+
+    expect($surfaces['wall_color'])->toBeNull();
+});

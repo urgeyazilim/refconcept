@@ -242,12 +242,47 @@ export function floorMaterial(kind: FloorMaterial = 'wood'): MeshStandardMateria
   }
 }
 
-export function wallMaterial(): MeshStandardMaterial {
-  return new MeshStandardMaterial({ map: plasterTexture(), roughness: 0.95, metalness: 0, side: DoubleSide })
+/**
+ * Plaster, tinted.
+ *
+ * The texture carries the grain and the colour multiplies it, so a dark wall stays a wall
+ * rather than becoming a flat rectangle — which is what setting the map aside for a plain
+ * colour would do. Cream when the photograph did not say.
+ */
+export function wallMaterial(color?: string | null): MeshStandardMaterial {
+  return new MeshStandardMaterial({
+    map: plasterTexture(),
+    color: paintColor(color) ?? 0xffffff,
+    roughness: 0.95,
+    metalness: 0,
+    side: DoubleSide,
+  })
 }
 
-export function ceilingMaterial(): MeshStandardMaterial {
-  return new MeshStandardMaterial({ color: 0xfbfaf8, roughness: 1, metalness: 0, side: DoubleSide })
+export function ceilingMaterial(color?: string | null): MeshStandardMaterial {
+  return new MeshStandardMaterial({ color: paintColor(color) ?? 0xfbfaf8, roughness: 1, metalness: 0, side: DoubleSide })
+}
+
+/**
+ * A colour the reading gave, as a number Three can use, or null.
+ *
+ * Anything that is not "#rrggbb" is dropped rather than coerced: a model that answers
+ * "beyaz" should leave the room its default, not paint it black. Very dark answers are
+ * lifted, because a photograph read in shadow reports a wall far darker than anybody would
+ * call it, and a room drawn nearly black is one nobody recognises either.
+ */
+export function paintColor(value?: string | null): number | null {
+  if (typeof value !== 'string' || !/^#[0-9a-f]{6}$/i.test(value.trim())) {
+    return null
+  }
+
+  const hex = Number.parseInt(value.trim().slice(1), 16)
+  const r = (hex >> 16) & 0xff
+  const g = (hex >> 8) & 0xff
+  const b = hex & 0xff
+  const lift = (channel: number): number => Math.round(channel + (255 - channel) * 0.18)
+
+  return (lift(r) << 16) | (lift(g) << 8) | lift(b)
 }
 
 /** Painted timber: skirting, door and window frames. */

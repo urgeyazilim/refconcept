@@ -5,6 +5,38 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed — The room is drawn the way it was read
+
+- **The kind of window comes from the reading, not from the width.** The model reported a
+  hole with a width and the kind — single, double, triple, French balcony — was deduced here
+  from that width alone, so a 1.2 m opening became a double casement whether the photograph
+  showed two sashes or one tall pane. It is asked for now, trusted only when it is a kind
+  that opening can be, and the width stays as the answer for a reading that does not say.
+- **The room is painted the colour it was photographed.** The reading always described the
+  surfaces and only the renderer ever saw the answer, so the planner drew every customer's
+  room as the same cream box: a grey room with a white cornice came back white on white and
+  the owner could not recognise it. Each surface now carries a colour, the walls and ceiling
+  are painted with it, and anything that is not a usable colour is dropped rather than
+  coerced.
+- **The cornice is drawn when there is one.** The skirting board was already there; the
+  moulding at the ceiling was not, though the reading had been listing it all along.
+- **The room step draws the right floor.** It drew boards for every room; the plan screen had
+  been reading the floor material from the same analysis for months.
+
+### Changed — The radiators and sconces reach the room
+
+- **Everything fixed to the wall is written down, not just the openings.** The reading listed
+  two wall sconces on the north wall of the product owner's room and nothing was done with
+  them beyond telling the renderer not to paint over them — so they were invisible to the
+  customer and invisible to the arrangement, and a bookcase could be planned across a
+  radiator with nothing to object. Radiators, columns, beams, fireplaces, stairs, built-ins,
+  sockets and wall lights now land in the room as constraints, marked as the photograph's.
+- **Called what they are.** The constraint type is a category, so three entries all read
+  "Diğer"; the reading's own word decides the name.
+- **Trim is not on that list.** A skirting board and a cornice are drawn as part of the room.
+  Putting them among the things furniture must avoid would fill the list with two entries
+  that apply to every wall and mean nothing.
+
 ### Changed — One frame, one strip, ten steps that are ten screens
 
 - **Every page starts in the same place.** A walk through the site measured the first row of

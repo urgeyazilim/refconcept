@@ -75,12 +75,17 @@ export class RoomGeometryBuilder {
   /** How far a door stands open into the room. Enough to read as a door; not in the way. */
   private static readonly DOOR_OPEN_DEG = 30
 
-  private readonly wallMaterial = wallMaterial()
+  /** The cornice, in millimetres: how far down the wall it comes and how far into the room. */
+  private static readonly CORNICE_HEIGHT_MM = 90
 
-  /** Rebuilt per room, because the room says what its floor is made of. */
+  private static readonly CORNICE_DEPTH_MM = 45
+
+  /** Rebuilt per room: the room says what colour it is painted and what its floor is made of. */
+  private wallMaterial = wallMaterial()
+
   private floorMaterial = floorMaterial()
 
-  private readonly ceilingMaterial = ceilingMaterial()
+  private ceilingMaterial = ceilingMaterial()
 
   private readonly trimMaterial = trimMaterial()
 
@@ -102,6 +107,15 @@ export class RoomGeometryBuilder {
   build(geometry: RoomGeometry, openings: RoomOpening[]): Group {
     const room = new Group()
     room.name = 'room'
+
+    /*
+     * Painted before anything is drawn.
+     *
+     * The reading reports a colour per surface and nothing used it, so every customer's room
+     * was the same cream box — the product owner's grey walls with a white cornice came back
+     * white on white and they could not recognise the room they had photographed.
+     */
+    this.repaint(geometry)
 
     room.add(this.floor(geometry))
     room.add(this.ceiling(geometry))
@@ -231,11 +245,50 @@ export class RoomGeometryBuilder {
 
     mesh.add(...this.skirting(spanMm, openings, inward, innerZ))
 
+    // The cornice, when the photograph showed one. Unbroken: a doorway stops at the lintel.
+    if (geometry.crown_molding === true) {
+      mesh.add(this.cornice(spanMm, geometry.height_mm, inward, innerZ))
+    }
+
     for (const opening of openings) {
       mesh.add(...this.fixture(opening, spanMm, geometry.height_mm, inward, innerZ, thickness))
     }
 
     this.placeWall(mesh, name, geometry, thickness)
+
+    return mesh
+  }
+
+  /**
+   * The room's own colours, rebuilt whenever the room changes.
+   *
+   * Materials are otherwise shared and built once — a new material per mesh is a new shader
+   * per mesh — so these three are replaced rather than tweaked, and the old ones disposed.
+   */
+  private repaint(geometry: RoomGeometry): void {
+    this.wallMaterial.dispose()
+    this.wallMaterial = wallMaterial(geometry.wall_color)
+
+    this.ceilingMaterial.dispose()
+    this.ceilingMaterial = ceilingMaterial(geometry.ceiling_color)
+  }
+
+  /**
+   * The cornice: the moulding where the wall meets the ceiling.
+   *
+   * The other half of what makes a box read as a room. Drawn only when the photograph showed
+   * one, because a cornice in a flat with none is as wrong as none in a flat that has one.
+   */
+  private cornice(spanMm: number, heightMm: number, inward: 1 | -1, innerZ: number): Mesh {
+    const height = toUnits(RoomGeometryBuilder.CORNICE_HEIGHT_MM)
+    const depth = toUnits(RoomGeometryBuilder.CORNICE_DEPTH_MM)
+    const span = toUnits(spanMm)
+
+    const mesh = new Mesh(new BoxGeometry(span, height, depth), this.trimMaterial)
+
+    mesh.position.set(span / 2, toUnits(heightMm) - height / 2, innerZ + inward * depth / 2)
+    mesh.castShadow = false
+    mesh.receiveShadow = true
 
     return mesh
   }

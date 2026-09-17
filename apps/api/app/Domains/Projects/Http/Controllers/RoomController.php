@@ -415,9 +415,83 @@ final class RoomController
                     'height_mm' => $analysis->payload['estimated_dimensions']['height_mm'] ?? null,
                 ]
                 : null,
+            /*
+             * What the room is made of and painted, for the screen that draws it.
+             *
+             * The reading has always described the surfaces and nothing but the renderer ever
+             * saw it, so the planner drew every room in the same cream box whatever the
+             * photograph showed. Colours only when they are usable; a cornice only when it
+             * was actually seen.
+             */
+            'surfaces' => [
+                // Boards, tiles or carpet; the room step drew boards for every room until now.
+                'floor' => $this->floorKind($analysis->surfaces['floor']['material'] ?? null),
+                'wall_color' => $this->hex($analysis->surfaces['walls']['color_hex'] ?? null),
+                'ceiling_color' => $this->hex($analysis->surfaces['ceiling']['color_hex'] ?? null),
+                'floor_color' => $this->hex($analysis->surfaces['floor']['color_hex'] ?? null),
+                'crown_molding' => $this->sawTrim($analysis, 'crown'),
+            ],
             'warnings' => array_values(array_filter((array) ($analysis->warnings ?? []), 'is_string')),
             'created_at' => $analysis->created_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * The floor material the reading saw, in the planner's three words.
+     *
+     * The model describes a floor in whatever words it likes — "parquet", "laminat",
+     * "porcelain tile" — and the planner has three textures. Anything it cannot place is
+     * null, and the planner draws its default rather than guessing.
+     */
+    private function floorKind(mixed $material): ?string
+    {
+        if (! is_string($material)) {
+            return null;
+        }
+
+        $word = mb_strtolower($material);
+
+        return match (true) {
+            (bool) preg_match('/wood|parquet|parke|ahşap|laminat|timber|oak|meşe/u', $word) => 'wood',
+            (bool) preg_match('/tile|ceramic|seramik|fayans|porcelain|marble|mermer|stone|taş|granit/u', $word) => 'tile',
+            (bool) preg_match('/carpet|halı|hali|rug|moquette|moket/u', $word) => 'carpet',
+            default => null,
+        };
+    }
+
+    /** A colour as "#rrggbb", or null for anything the planner could not paint with. */
+    private function hex(mixed $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $said = mb_strtolower(trim($value));
+
+        return preg_match('/^#[0-9a-f]{6}$/', $said) === 1 ? $said : null;
+    }
+
+    /**
+     * Whether the reading saw a piece of trim of this kind anywhere in the room.
+     *
+     * Asked of the whole room rather than of a wall: a cornice runs round all four, and the
+     * reading says so by listing it once with "all" for its wall.
+     */
+    private function sawTrim(RoomAnalysis $analysis, string $kind): bool
+    {
+        $pattern = $kind === 'crown'
+            ? '/crown|cornice|kartonpiyer|molding|moulding/u'
+            : '/baseboard|skirting|süpürgelik|supurgelik/u';
+
+        foreach ((array) ($analysis->payload['fixed_elements'] ?? []) as $element) {
+            $said = is_array($element) && is_string($element['type'] ?? null) ? $element['type'] : '';
+
+            if ($said !== '' && preg_match($pattern, mb_strtolower($said)) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

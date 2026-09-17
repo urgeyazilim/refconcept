@@ -27,6 +27,11 @@ interface GeometryVersion {
   floor_area_m2: number
   confidence_percent: number | null
   is_confirmed: boolean
+  /** The room as the photograph showed it: its floor, its colour, its cornice. */
+  floor?: 'wood' | 'tile' | 'carpet' | null
+  wall_color?: string | null
+  ceiling_color?: string | null
+  crown_molding?: boolean
 }
 
 interface LayoutPayload {
@@ -355,6 +360,11 @@ const geometry = computed<RoomGeometry | null>(() =>
         width_mm: confirmed.value.width_mm,
         length_mm: confirmed.value.length_mm,
         height_mm: confirmed.value.height_mm,
+        // The room as the photograph showed it: its floor, its colour, its cornice.
+        floor: confirmed.value.floor ?? null,
+        wall_color: confirmed.value.wall_color ?? null,
+        ceiling_color: confirmed.value.ceiling_color ?? null,
+        crown_molding: confirmed.value.crown_molding ?? false,
       },
 )
 

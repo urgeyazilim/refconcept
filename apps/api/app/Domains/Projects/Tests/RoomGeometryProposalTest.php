@@ -136,6 +136,78 @@ it('puts the openings it read straight onto the walls', function (): void {
         ->toBe(['Fotoğraftan tespit edildi.']);
 });
 
+it('takes the kind of window the reading named', function (): void {
+    $this->proposer->propose(analysed([
+        'estimated_dimensions' => ['width_mm' => 4_850, 'length_mm' => 5_200, 'height_mm' => 2_720],
+        'openings' => [
+            // A metre and a bit of glass: the width alone would call this a double casement.
+            // The reading looked at it and counted one sash.
+            ['type' => 'window', 'wall' => 'north', 'offset_mm' => 400, 'width_mm' => 1_200, 'sill_height_mm' => 400, 'variant' => 'single'],
+        ],
+    ]));
+
+    expect(RoomConstraint::query()->where('room_id', $this->room->getKey())->first()?->variant?->value)->toBe('single');
+});
+
+it('ignores a kind that opening cannot be', function (): void {
+    $this->proposer->propose(analysed([
+        'estimated_dimensions' => ['width_mm' => 4_850, 'length_mm' => 5_200, 'height_mm' => 2_720],
+        'openings' => [
+            // "Sliding" belongs to a balcony door. On a window it is a misread, and a room
+            // drawn from it is wrong in a way nobody can explain.
+            ['type' => 'window', 'wall' => 'north', 'offset_mm' => 400, 'width_mm' => 2_100, 'sill_height_mm' => 900, 'variant' => 'sliding'],
+        ],
+    ]));
+
+    expect(RoomConstraint::query()->where('room_id', $this->room->getKey())->first()?->variant?->value)->toBe('triple');
+});
+
+it('writes the radiators and sconces it saw into the room', function (): void {
+    $this->proposer->propose(analysed([
+        'estimated_dimensions' => ['width_mm' => 4_850, 'length_mm' => 5_200, 'height_mm' => 2_720],
+        'fixed_elements' => [
+            ['type' => 'wall_sconce', 'wall' => 'north'],
+            ['type' => 'wall_sconce', 'wall' => 'north'],
+            ['type' => 'radiator', 'wall' => 'east'],
+            // Trim is drawn as part of the room, not listed as something to work around.
+            ['type' => 'baseboard', 'wall' => 'all'],
+            ['type' => 'crown_molding', 'wall' => 'all'],
+        ],
+    ]));
+
+    $kinds = RoomConstraint::query()
+        ->where('room_id', $this->room->getKey())
+        ->orderBy('type')
+        ->get()
+        ->map(fn (RoomConstraint $c): string => $c->type->value)
+        ->all();
+
+    $radiator = RoomConstraint::query()->where('room_id', $this->room->getKey())->where('type', 'radiator')->firstOrFail();
+
+    // Called what it is, not what category it falls into: three rows saying "Diğer" tell the
+    // customer nothing about their own room.
+    expect(RoomConstraint::query()->where('type', 'other')->value('label'))->toBe('Aplik')
+        ->and($kinds)->toBe(['other', 'other', 'radiator'])
+        // A bookcase planned across a radiator is a radiator nobody can use again.
+        ->and($radiator->is_blocking)->toBeTrue()
+        ->and($radiator->notes)->toBe('Fotoğraftan tespit edildi.');
+});
+
+it('leaves the fixtures alone when the room already has some of its own', function (): void {
+    RoomConstraint::query()->create([
+        'room_id' => $this->room->getKey(),
+        'type' => 'radiator',
+        'wall' => 'south',
+    ]);
+
+    $this->proposer->propose(analysed([
+        'estimated_dimensions' => ['width_mm' => 4_850, 'length_mm' => 5_200, 'height_mm' => 2_720],
+        'fixed_elements' => [['type' => 'radiator', 'wall' => 'east']],
+    ]));
+
+    expect(RoomConstraint::query()->where('room_id', $this->room->getKey())->count())->toBe(1);
+});
+
 it('drops an opening it cannot place', function (): void {
     $version = $this->proposer->propose(analysed([
         'estimated_dimensions' => ['width_mm' => 4_850, 'length_mm' => 5_200, 'height_mm' => 2_720],

@@ -272,13 +272,22 @@ final class FakeAiProvider implements AiProvider
                 'fixed_elements' => [
                     ['type' => 'window', 'preserve' => true],
                     ['type' => 'radiator', 'preserve' => true],
+                    // Trim and a wall light, because the planner now draws the one and lists
+                    // the other: a stand-in that never mentions them lets both paths rot.
+                    ['type' => 'crown_molding', 'wall' => 'all', 'preserve' => true],
+                    ['type' => 'wall_sconce', 'wall' => 'north', 'preserve' => true],
                 ],
                 'movable_objects' => [
                     ['type' => 'sofa', 'condition' => 'good'],
                 ],
+                // A kind and a colour, the way the real reading answers since v9.
+                'openings' => [
+                    ['type' => 'window', 'wall' => 'north', 'offset_mm' => 900, 'width_mm' => 1_400, 'height_mm' => 1_400, 'sill_height_mm' => 900, 'variant' => 'double'],
+                ],
                 'surfaces' => [
-                    'floor' => ['material' => 'wood', 'change_allowed' => false],
-                    'walls' => ['material' => 'plaster', 'change_allowed' => true],
+                    'floor' => ['material' => 'wood', 'color_hex' => '#b9936c', 'change_allowed' => false],
+                    'walls' => ['material' => 'plaster', 'color_hex' => '#8f8f8f', 'change_allowed' => true],
+                    'ceiling' => ['material' => 'plaster', 'color_hex' => '#f4f4f2'],
                 ],
                 'measurement_quality' => 'estimated',
                 'warnings' => [],

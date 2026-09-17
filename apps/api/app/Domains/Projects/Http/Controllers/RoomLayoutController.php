@@ -77,7 +77,7 @@ final class RoomLayoutController
 
         return response()->json([
             'data' => [
-                'geometry' => $geometry === null ? null : $this->geometry($geometry, $this->floorMaterial($room)),
+                'geometry' => $geometry === null ? null : $this->geometry($geometry, $this->floorMaterial($room), $room),
                 // Proposals waiting to be confirmed or corrected. The screen asks "bu ölçüler
                 // doğru mu?" about the newest one.
                 'pending_geometry' => $this->pendingGeometry($room),
@@ -751,7 +751,7 @@ final class RoomLayoutController
     /**
      * @return array<string, mixed>
      */
-    private function geometry(RoomGeometryVersion $version, ?string $floor = null): array
+    private function geometry(RoomGeometryVersion $version, ?string $floor = null, ?Room $room = null): array
     {
         return [
             'id' => $version->id,
@@ -767,6 +767,55 @@ final class RoomLayoutController
             // What the floor is made of, as far as the photograph said: the planner draws
             // boards, tiles or carpet accordingly. Null when nothing said, and it draws boards.
             'floor' => $floor,
+            // And what it is painted, and whether it has a cornice: the rest of what makes a
+            // box read as the customer's own room rather than as a box. Only the room the
+            // planner is actually opening carries them; a list of past versions does not need
+            // one reading fetched per row.
+            ...($room === null
+                ? ['wall_color' => null, 'ceiling_color' => null, 'crown_molding' => false]
+                : $this->surfaces($room)),
+        ];
+    }
+
+    /**
+     * The room's colours and its cornice, as the planner draws them.
+     *
+     * @return array{wall_color: string|null, ceiling_color: string|null, crown_molding: bool}
+     */
+    private function surfaces(Room $room): array
+    {
+        $analysis = RoomAnalysis::query()
+            ->where('room_id', $room->getKey())
+            ->where('is_current', true)
+            ->latest('created_at')
+            ->first();
+
+        $hex = static function (mixed $value): ?string {
+            if (! is_string($value)) {
+                return null;
+            }
+
+            $said = mb_strtolower(trim($value));
+
+            return preg_match('/^#[0-9a-f]{6}$/', $said) === 1 ? $said : null;
+        };
+
+        $crown = false;
+
+        foreach ((array) ($analysis?->payload['fixed_elements'] ?? []) as $element) {
+            $said = is_array($element) && is_string($element['type'] ?? null) ? mb_strtolower($element['type']) : '';
+
+            if ($said !== '' && preg_match('/crown|cornice|kartonpiyer|molding|moulding/u', $said) === 1) {
+                $crown = true;
+
+                break;
+            }
+        }
+
+        return [
+            'wall_color' => $hex($analysis?->surfaces['walls']['color_hex'] ?? null),
+            'ceiling_color' => $hex($analysis?->surfaces['ceiling']['color_hex'] ?? null),
+            'crown_molding' => $crown,
         ];
     }
 
