@@ -5,6 +5,48 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed — One frame, one strip, ten steps that are ten screens
+
+- **Every page starts in the same place.** A walk through the site measured the first row of
+  content at three different heights depending on which family of page you were on, so moving
+  between them jumped the content under the reader's eye. There is one page shell now, with
+  the top and bottom rhythm as design tokens, and the first row sits at the same height on all
+  twenty-two screens.
+- **The studio scrolls by nothing.** It set its height to the window minus the header's
+  height and forgot the header's hairline, which is one pixel — and one pixel is all it takes
+  to put a scrollbar on a screen that promised not to scroll.
+- **The step strip has its own row.** Sharing a line with the chrome made how much of it you
+  could read depend on how long the project was called: the room step showed all ten names,
+  the questions step showed none, and the design screen wrapped "Satın al" outside its card.
+- **Ticks are monotonic.** Each screen worked out for itself what it could see and they saw
+  different things; the same room answered "Eşyalar" with a number on one screen and a tick on
+  another. You cannot be at step five without having passed step two, so the strip says so.
+- **Render, 360 and Satın al are three screens.** All three opened the design exactly as it
+  was, because nothing read the anchor the strip linked to. The anchor now opens the step and
+  the step writes the anchor back, so a reload lands where the customer was.
+- **The catalogue's heading came inside the frame**, and the four steps of a room with no
+  design yet link back to the room instead of building an address with two anchors in it.
+
+### Changed — Each step shows the thing it is asking about
+
+- **The furniture step shows the photograph.** It asked whether to take the furniture out of a
+  room it was not showing, and left six hundred pixels of empty screen under the question.
+- **The room step no longer prints a size nobody gave.** The scene falls back to a
+  room-shaped box before anything is measured, and it was showing that box's dimensions in the
+  corner as a fact, under a guide asking for the measurements.
+- **The room step says its own sentence.** The balloon told the customer to add a product from
+  a column that is not on that screen.
+- **The photograph step fills the screen** instead of ending a third of the way down it.
+
+### Changed — Nothing is cut off at the bottom
+
+- The radiators-and-columns form moved into the room's own side column, which scrolls by
+  itself; at 1440 by 900 its sentence and button were cut in half by the bottom edge.
+- The two lines under a render have room to be read.
+- The account pages lost their side column, which repeated the header's own links, and got one
+  quiet row of tabs.
+- An empty basket is a card with a sentence and a button, like every other empty state.
+
 ### Changed — The reading puts the doors and windows on the walls itself
 
 - **It had them all along.** The reading found a three-metre window on the north wall and a

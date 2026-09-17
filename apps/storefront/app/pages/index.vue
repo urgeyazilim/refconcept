@@ -115,7 +115,7 @@ const openFaq = ref<number | null>(0)
       mirroring design_refs/hero_room.jpg. The photograph is composed with an empty
       left third so the copy sits on plain wall rather than on busy detail.
     -->
-    <section class="rc-container rc-container--wide pt-6 lg:pt-8">
+    <section class="rc-page rc-page--wide pb-0">
       <div class="relative overflow-hidden rounded-2xl">
         <img
           src="/images/hero-living-room.webp"

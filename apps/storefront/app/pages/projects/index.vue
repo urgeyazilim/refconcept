@@ -77,7 +77,7 @@ async function create() {
 </script>
 
 <template>
-  <div class="rc-container rc-container--wide space-y-5 py-4">
+  <div class="rc-page rc-page--wide space-y-5">
     <!-- The same frame as the room, the plan and the design: one left edge, one top gap, no sidebar. -->
     <!--
       One line of chrome, the same as every other screen in the journey. The heading used to

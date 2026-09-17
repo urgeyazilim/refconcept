@@ -50,7 +50,7 @@ function coverOf(product: Product): string | null {
 </script>
 
 <template>
-  <div class="rc-container rc-container--wide py-10 lg:py-14">
+  <div class="rc-page rc-page--wide">
     <h1 class="text-2xl font-medium">Favorilerim</h1>
 
     <RcAlert v-if="loadError" tone="danger" class="mt-6">{{ loadError }}</RcAlert>

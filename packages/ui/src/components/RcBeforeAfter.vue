@@ -85,9 +85,10 @@ function nudge(step: number) {
 <template>
   <!-- Never taller than the stage it stands on: a 16:10 picture at full width was a screen and a half. -->
   <div class="overflow-hidden rounded-md bg-charcoal">
+    <!-- Room below for the two lines that say what is in the picture and what the check found. -->
     <div
       ref="frame"
-      class="relative aspect-[16/10] max-h-[calc(100vh-21rem)] w-full touch-none select-none"
+      class="relative aspect-[16/10] max-h-[calc(100vh-25rem)] w-full touch-none select-none"
       @pointerdown="startDrag"
       @pointermove="onDrag"
       @pointerup="endDrag"

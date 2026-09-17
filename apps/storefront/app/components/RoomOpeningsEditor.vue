@@ -17,6 +17,8 @@ const props = defineProps<{
   geometry: { width_mm: number, length_mm: number, height_mm: number }
   constraints: RoomConstraintItem[]
   canEdit: boolean
+  /** False while the size is still the fallback box rather than the customer's own. */
+  measured?: boolean
 }>()
 
 const emit = defineEmits<{ (event: 'changed'): void }>()
@@ -155,6 +157,7 @@ const cm = (mm: number | null): string => (mm === null ? '' : String(Math.round(
     <Room3DScene
       workspace
       openings-only
+      :measured="measured !== false"
       class="min-h-0 flex-1 lg:min-h-[420px]"
       :geometry="{ id: 'room', width_mm: geometry.width_mm, length_mm: geometry.length_mm, height_mm: geometry.height_mm }"
       :openings="openings"
@@ -226,6 +229,13 @@ const cm = (mm: number | null): string => (mm === null ? '' : String(Math.round(
           </div>
         </li>
         </ul>
+
+        <!--
+          Whatever else the page wants beside the room: the radiators and columns, on the
+          room step. The column scrolls on its own, so a long form here cannot push anything
+          off the bottom of a screen that is meant to stay still.
+        -->
+        <slot name="side" />
       </template>
     </Room3DScene>
   </div>

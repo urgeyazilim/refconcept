@@ -496,23 +496,41 @@ async function submitSize() {
 /** Signed links for the before/after on the plate step, asked for only while it is shown. */
 const plateLinks = ref<{ before: string, after: string } | null>(null)
 
-watch([activeStep, () => primaryPlate.value?.id ?? null], async ([step, plateId]) => {
-  if (step !== 'plate' || plateId === null || primaryPhoto.value === null) {
+/**
+ * The photograph on its own, while the room is still being emptied.
+ *
+ * The step asks "shall I take the furniture out?" about a room the screen was not showing:
+ * before a plate existed there was the question, and then six hundred pixels of nothing.
+ * Somebody is being asked to decide about a picture; the picture has to be on the screen.
+ */
+const photoLink = ref<string | null>(null)
+
+watch([activeStep, () => primaryPlate.value?.id ?? null, () => primaryPhoto.value?.id ?? null], async ([step, plateId, photoId]) => {
+  if (step !== 'plate' || photoId === null || typeof photoId !== 'string') {
     plateLinks.value = null
+    photoLink.value = null
 
     return
   }
 
   try {
-    const [before, after] = await Promise.all([
-      api.get<{ data: { url: string } }>(`${base}/media/${primaryPhoto.value.id}/link`),
-      api.get<{ data: { url: string } }>(`${base}/media/${plateId}/link`),
-    ])
+    const before = await api.get<{ data: { url: string } }>(`${base}/media/${photoId}/link`)
+
+    photoLink.value = before.data.url
+
+    if (plateId === null || typeof plateId !== 'string') {
+      plateLinks.value = null
+
+      return
+    }
+
+    const after = await api.get<{ data: { url: string } }>(`${base}/media/${plateId}/link`)
 
     plateLinks.value = { before: before.data.url, after: after.data.url }
   }
   catch {
     plateLinks.value = null
+    photoLink.value = null
   }
 }, { immediate: true })
 
@@ -1019,7 +1037,7 @@ function guideSecondary() {
 </script>
 
 <template>
-  <div class="rc-container rc-container--wide flex flex-col gap-3 py-4 lg:h-[calc(100vh-4.5rem)]">
+  <div class="rc-page rc-page--wide rc-page--workspace flex flex-col gap-3 lg:h-[calc(100vh-var(--rc-header))]">
   <!--
     A workspace: one line of chrome — where you came from, which room, which step — then the
     guide standing beside the step's work rather than above it. The first version stacked a
@@ -1030,7 +1048,7 @@ function guideSecondary() {
     <RcAlert v-if="loadError" tone="danger">{{ loadError }}</RcAlert>
 
     <template v-else-if="room && project">
-      <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <div class="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
         <div class="flex min-w-0 items-center gap-2 text-sm">
           <NuxtLink :to="`/projects/${projectId}`" class="shrink-0 text-ink-secondary hover:text-ink">
             ← {{ project.name }}
@@ -1047,7 +1065,7 @@ function guideSecondary() {
           guide is the only way forward; the strip is the way back.
         -->
         <StudioStepper
-          class="min-w-0 flex-1"
+          class="w-full min-w-0"
           :project-id="projectId"
           :room-id="roomId"
           :current="activeStep"
@@ -1082,9 +1100,9 @@ function guideSecondary() {
         nothing to discover at the bottom of the page.
       -->
       <Transition name="step" mode="out-in">
-        <div :key="activeStep" class="min-h-0 min-w-0 flex-1 lg:overflow-y-auto">
+        <div :key="activeStep" class="flex min-h-0 min-w-0 flex-1 flex-col lg:overflow-y-auto">
           <!-- 1 · Fotoğraf -->
-          <div v-if="activeStep === 'photo'" id="fotograf">
+          <div v-if="activeStep === 'photo'" id="fotograf" class="flex min-h-0 flex-1 flex-col">
             <RoomPhotoGallery
               :project-id="projectId"
               :room-id="roomId"
@@ -1137,111 +1155,124 @@ function guideSecondary() {
                 :geometry="editorGeometry"
                 :constraints="room.constraints"
                 :can-edit="canEdit"
+                :measured="measured || proposedSize !== null"
                 @changed="onOpeningsChanged"
-              />
+              >
 
-              <!-- Everything else that is fixed to the room: radiators, columns, built-ins. -->
-              <div class="mt-6">
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                  <p class="text-sm text-ink-secondary">Radyatör, kolon, şömine gibi sabitler de varsa söyle; önüne bir şey koymam.</p>
-                  <RcButton
-                    v-if="canEdit && !addingConstraint"
-                    size="sm"
-                    variant="secondary"
-                    @click="addingConstraint = true"
-                  >
-                    Ekle
-                  </RcButton>
-                </div>
-
-                <form v-if="addingConstraint" class="mt-4 space-y-5 rounded-md bg-bg-muted p-5" @submit.prevent="addConstraint">
-                  <div class="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <label for="ctype" class="mb-1.5 block text-sm font-medium">Ne?</label>
-                      <select
-                        id="ctype"
-                        v-model="constraintForm.type"
-                        class="w-full rounded-sm border border-line bg-surface px-4 py-2.5 text-sm"
-                      >
-                        <option v-for="type in constraintTypes" :key="type.value" :value="type.value">
-                          {{ type.label }}
-                        </option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label for="wall" class="mb-1.5 block text-sm font-medium">Hangi duvarda?</label>
-                      <select
-                        id="wall"
-                        v-model="constraintForm.wall"
-                        class="w-full rounded-sm border border-line bg-surface px-4 py-2.5 text-sm"
-                      >
-                        <option v-for="wall in walls" :key="wall.value" :value="wall.value">
-                          {{ wall.label }}
-                        </option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div class="grid gap-4 sm:grid-cols-3">
-                    <RcField
-                      v-model="constraintForm.offset"
-                      label="Duvarın solundan uzaklık (cm)"
-                      name="offset"
-                    />
-                    <RcField v-model="constraintForm.width" label="Genişlik (cm)" name="cwidth" />
-                    <RcField v-model="constraintForm.sill" label="Yerden yükseklik (cm)" name="sill" />
-                  </div>
-
-                  <div class="flex items-center gap-3">
-                    <RcButton type="submit" size="sm" :loading="savingConstraint" :disabled="savingConstraint">
+                <template #side>
+                <!-- Everything else that is fixed to the room: radiators, columns, built-ins. -->
+                <div class="mt-6">
+                  <div class="flex flex-wrap items-center justify-between gap-3">
+                    <p class="text-sm text-ink-secondary">Radyatör, kolon, şömine gibi sabitler de varsa söyle; önüne bir şey koymam.</p>
+                    <RcButton
+                      v-if="canEdit && !addingConstraint"
+                      size="sm"
+                      variant="secondary"
+                      @click="addingConstraint = true"
+                    >
                       Ekle
                     </RcButton>
-                    <RcButton size="sm" variant="ghost" @click="addingConstraint = false">Vazgeç</RcButton>
                   </div>
-                </form>
 
-                <ul v-if="otherFixtures.length > 0" class="mt-4 space-y-2">
-                  <li
-                    v-for="constraint in otherFixtures"
-                    :key="constraint.id"
-                    class="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3 text-sm last:border-0"
-                  >
-                    <div>
-                      <p>{{ constraint.description }}</p>
-                      <p class="mt-0.5 text-xs text-muted">
-                        {{ walls.find(w => w.value === constraint.wall)?.label ?? 'Konum belirtilmedi' }}
-                        <span v-if="!constraint.is_placed"> · yerleşim için yeterli bilgi yok</span>
-                      </p>
+                  <form v-if="addingConstraint" class="mt-4 space-y-5 rounded-md bg-bg-muted p-5" @submit.prevent="addConstraint">
+                    <div class="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label for="ctype" class="mb-1.5 block text-sm font-medium">Ne?</label>
+                        <select
+                          id="ctype"
+                          v-model="constraintForm.type"
+                          class="w-full rounded-sm border border-line bg-surface px-4 py-2.5 text-sm"
+                        >
+                          <option v-for="type in constraintTypes" :key="type.value" :value="type.value">
+                            {{ type.label }}
+                          </option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label for="wall" class="mb-1.5 block text-sm font-medium">Hangi duvarda?</label>
+                        <select
+                          id="wall"
+                          v-model="constraintForm.wall"
+                          class="w-full rounded-sm border border-line bg-surface px-4 py-2.5 text-sm"
+                        >
+                          <option v-for="wall in walls" :key="wall.value" :value="wall.value">
+                            {{ wall.label }}
+                          </option>
+                        </select>
+                      </div>
                     </div>
 
-                    <button
-                      v-if="canEdit"
-                      type="button"
-                      class="rounded-sm px-2.5 py-1.5 text-xs text-danger hover:bg-danger-subtle"
-                      @click="removeConstraint(constraint.id)"
+                    <div class="grid gap-4 sm:grid-cols-3">
+                      <RcField
+                        v-model="constraintForm.offset"
+                        label="Duvarın solundan uzaklık (cm)"
+                        name="offset"
+                      />
+                      <RcField v-model="constraintForm.width" label="Genişlik (cm)" name="cwidth" />
+                      <RcField v-model="constraintForm.sill" label="Yerden yükseklik (cm)" name="sill" />
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                      <RcButton type="submit" size="sm" :loading="savingConstraint" :disabled="savingConstraint">
+                        Ekle
+                      </RcButton>
+                      <RcButton size="sm" variant="ghost" @click="addingConstraint = false">Vazgeç</RcButton>
+                    </div>
+                  </form>
+
+                  <ul v-if="otherFixtures.length > 0" class="mt-4 space-y-2">
+                    <li
+                      v-for="constraint in otherFixtures"
+                      :key="constraint.id"
+                      class="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3 text-sm last:border-0"
                     >
-                      Kaldır
-                    </button>
-                  </li>
-                </ul>
-              </div>
+                      <div>
+                        <p>{{ constraint.description }}</p>
+                        <p class="mt-0.5 text-xs text-muted">
+                          {{ walls.find(w => w.value === constraint.wall)?.label ?? 'Konum belirtilmedi' }}
+                          <span v-if="!constraint.is_placed"> · yerleşim için yeterli bilgi yok</span>
+                        </p>
+                      </div>
+
+                      <button
+                        v-if="canEdit"
+                        type="button"
+                        class="rounded-sm px-2.5 py-1.5 text-xs text-danger hover:bg-danger-subtle"
+                        @click="removeConstraint(constraint.id)"
+                      >
+                        Kaldır
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+                </template>
+              </RoomOpeningsEditor>
             </div>
           </section>
 
-          <!-- 2 · Eşyalar: the room emptied, shown against the photograph -->
-          <!-- Nothing to show until there is an emptied room: the band asks the question, and a card with only a heading in it is a dead panel. -->
-          <section v-else-if="activeStep === 'plate' && (plateLinks || clearingPlate || primaryPlate)" id="esyalar" class="rc-card p-5 sm:p-6">
-            <h2 class="text-base font-medium">Boş oda</h2>
+          <!--
+            2 · Eşyalar: the room the question is about.
 
+            The emptied room against the photograph once there is one; the photograph on its
+            own until then. The panel used to wait for the plate, so the step asked whether to
+            take the furniture out of a room it was not showing.
+          -->
+          <section v-else-if="activeStep === 'plate'" id="esyalar" class="flex min-h-0 flex-1 flex-col items-center justify-center">
             <RoomPlateCompare
               v-if="plateLinks"
-              class="mt-5"
               :before="plateLinks.before"
               :after="plateLinks.after"
             />
-            <p v-else-if="clearingPlate" class="mt-5 text-sm text-muted">Eşyaları kaldırıyorum; bir dakika kadar sürer.</p>
-            <p v-else-if="primaryPlate" class="mt-5 text-sm text-muted">Boş oda hazır; görüntüsü yükleniyor…</p>
+
+            <figure v-else-if="photoLink" class="flex min-h-0 flex-col items-center gap-2">
+              <img :src="photoLink" alt="Odanın fotoğrafı" class="max-h-[calc(100vh-23rem)] w-auto rounded-lg border border-line object-contain">
+              <figcaption class="text-xs text-muted">
+                {{ clearingPlate ? 'Eşyaları kaldırıyorum; bir dakika kadar sürer.' : 'Kaldır dediklerin bu kareden çıkacak.' }}
+              </figcaption>
+            </figure>
+
+            <p v-else class="text-sm text-muted">Fotoğrafın yükleniyor…</p>
           </section>
 
           <!-- 4 · İstekler -->

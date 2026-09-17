@@ -86,6 +86,55 @@ const waiting = computed(() => {
 const chosenStage = ref<DesignStage | null>(null)
 const stage = computed<DesignStage>(() => chosenStage.value ?? autoStage.value)
 
+/**
+ * Which of this screen's four steps an address points at.
+ *
+ * Steps eight, nine and ten of the ten live here, and the strip linked to them by anchor —
+ * but nothing read the anchor, so Render, 360 and Satın al all opened the design exactly as
+ * it was. Four steps promised, one screen delivered. The anchor now decides the stage, and
+ * the stage writes the anchor back, so the address and the strip say the same thing and a
+ * reload lands where the customer was.
+ */
+const STAGE_HASH: Record<DesignStage, string> = {
+  design: '#tasarim',
+  render: '#render',
+  video: '#video',
+  buy: '#alisveris',
+}
+
+function stageFromHash(hash: string): DesignStage | null {
+  const found = (Object.keys(STAGE_HASH) as DesignStage[]).find(key => STAGE_HASH[key] === hash)
+
+  return found ?? null
+}
+
+/** Opens the step the address names, and keeps the address on the step being looked at. */
+function openStage(next: DesignStage) {
+  chosenStage.value = next
+
+  if (import.meta.client && window.location.hash !== STAGE_HASH[next]) {
+    history.replaceState(history.state, '', `${window.location.pathname}${window.location.search}${STAGE_HASH[next]}`)
+  }
+}
+
+onMounted(() => {
+  const asked = stageFromHash(window.location.hash)
+
+  if (asked !== null) chosenStage.value = asked
+
+  window.addEventListener('hashchange', onHashChange)
+})
+
+onBeforeUnmount(() => {
+  if (import.meta.client) window.removeEventListener('hashchange', onHashChange)
+})
+
+function onHashChange() {
+  const asked = stageFromHash(window.location.hash)
+
+  if (asked !== null) chosenStage.value = asked
+}
+
 /** The guide's question at each step (REHBER.md §3). */
 const designGuide = computed(() => {
   const shown = shownVersion.value
@@ -149,12 +198,12 @@ const designGuide = computed(() => {
 
 function designGuideAct(): void {
   if (stage.value === 'render') void createVideo()
-  else if (stage.value === 'video') chosenStage.value = 'buy'
+  else if (stage.value === 'video') openStage('buy')
 }
 
 function designGuideSecondary(): void {
-  if (stage.value === 'design') chosenStage.value = 'render'
-  else if (stage.value === 'render') chosenStage.value = video.value?.status === 'ready' ? 'video' : 'buy'
+  if (stage.value === 'design') openStage('render')
+  else if (stage.value === 'render') openStage(video.value?.status === 'ready' ? 'video' : 'buy')
 }
 
 const branchingFrom = ref<DesignTreeNode | null>(null)
@@ -797,7 +846,7 @@ const statusTone: Record<string, string> = {
 </script>
 
 <template>
-  <div class="rc-container rc-container--wide flex flex-col gap-3 py-4 lg:h-[calc(100vh-4.5rem)]">
+  <div class="rc-page rc-page--wide rc-page--workspace flex flex-col gap-3 lg:h-[calc(100vh-var(--rc-header))]">
   <!--
     A workspace like the room and the plan: one line of chrome, the guide beside the picture
     rather than above it, no footer. The name, the version count, the credits and the status
@@ -813,17 +862,32 @@ const statusTone: Record<string, string> = {
           </NuxtLink>
           <span class="text-muted" aria-hidden="true">·</span>
           <h1 class="truncate font-medium">{{ design.name }}</h1>
+          <!--
+            Only while there is something to say.
+
+            A finished design is announced by the guide a line below in a whole sentence, so
+            a pill repeating it was sixty pixels of chrome spent on nothing — and those sixty
+            pixels were what the ten step names needed to stay on the strip.
+          -->
           <RcStatusPill
-            :status="design.status === 'ready' ? 'approved' : design.status === 'failed' ? 'rejected' : 'in_review'"
+            v-if="design.status !== 'ready'"
+            :status="design.status === 'failed' ? 'rejected' : 'in_review'"
             :label="design.status_label"
           />
-          <span class="hidden shrink-0 text-xs text-muted sm:inline">
+          <!--
+            The version count and what it cost, when there is room for them.
+
+            They are the least urgent thing on the line and they were taking the seventy
+            pixels the ten step names needed: with them there the strip gave up every label
+            and the customer was looking at a row of anonymous circles.
+          -->
+          <span class="hidden shrink-0 text-xs text-muted 2xl:inline">
             {{ design.version_count }} sürüm<template v-if="design.total_credit_cost > 0"> · {{ design.total_credit_cost }} kredi</template>
           </span>
         </div>
 
         <StudioStepper
-          class="min-w-0 flex-1"
+          class="w-full min-w-0"
           :project-id="projectId"
           :room-id="roomId"
           :current="stage"
@@ -831,7 +895,7 @@ const statusTone: Record<string, string> = {
           :design-id="designId"
           :own="ON_DESIGN"
           selectable
-          @select="chosenStage = $event === autoStage ? null : ($event as DesignStage)"
+          @select="openStage($event as DesignStage)"
         />
       </div>
 

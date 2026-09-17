@@ -34,23 +34,36 @@ test.use({ viewport: { width: 1440, height: 900 } })
  * bottom of the screen it goes (the studio is meant to be a fixed screen and scroll by
  * nothing), and how tall the chrome above the first panel is.
  */
-const measured: Array<{ frame: string, left: number, overflow: number, chrome: number }> = []
+const measured: Array<{ frame: string, left: number, overflow: number, chrome: number, strip: number }> = []
 
 /** One frame, named so the gallery sorts into walking order. */
 async function frame(page: Page, at: number, name: string): Promise<void> {
-  // Let the step's fade settle; every screen in the studio crossfades.
-  await page.waitForTimeout(500)
-  await page.screenshot({ path: `${SHOT}/${String(at).padStart(2, '0')}-${name}.png` })
+  // Let the step's fade settle; every screen in the studio crossfades, and a frame taken
+  // halfway through one shows a washed-out page that is not what anybody sees.
+  await page.waitForTimeout(900)
+  await page.screenshot({
+    path: `${SHOT}/${String(at).padStart(2, '0')}-${name}.png`,
+    // The room keeps drawing itself, so a shutter that waits for the page to go still waits
+    // for ever. Frozen at the first frame, which is also what makes two runs comparable.
+    animations: 'disabled',
+    timeout: 60_000,
+  })
 
   const shape = await page.evaluate(() => {
-    const main = document.querySelector('main')
-    const first = main?.firstElementChild?.firstElementChild ?? main?.firstElementChild ?? null
+    // The page's own frame, and the first thing a reader sees inside it. Measuring whatever
+    // happened to be main's first child measured a different kind of element per page.
+    const frame = document.querySelector('main .rc-page') ?? document.querySelector('main .rc-container')
+    const first = frame?.firstElementChild ?? null
     const box = first?.getBoundingClientRect()
+
+    // How wide the step strip gets: under about 1040 it gives up the ten step names.
+    const strip = document.querySelector('nav[aria-label="Oda stüdyosu adımları"]')
 
     return {
       left: box ? Math.round(box.left) : -1,
       overflow: Math.max(0, document.documentElement.scrollHeight - window.innerHeight),
       chrome: box ? Math.round(box.top) : -1,
+      strip: strip ? Math.round(strip.getBoundingClientRect().width) : 0,
     }
   })
 
@@ -81,10 +94,10 @@ test.describe('studio walkthrough', () => {
 
   // The table is the point of the walk: the frames show it, these numbers say it.
   test.afterAll(() => {
-    console.log('kare                        sol   kayma   tepe')
+    console.log('kare                        sol   kayma   tepe  serit')
 
     for (const row of measured) {
-      console.log(`${row.frame.padEnd(26)} ${String(row.left).padStart(4)} ${String(row.overflow).padStart(6)} ${String(row.chrome).padStart(6)}`)
+      console.log(`${row.frame.padEnd(26)} ${String(row.left).padStart(4)} ${String(row.overflow).padStart(6)} ${String(row.chrome).padStart(6)} ${String(row.strip).padStart(6)}`)
     }
   })
 

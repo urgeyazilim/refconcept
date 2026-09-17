@@ -129,6 +129,32 @@
     max-width: calc(var(--rc-container-wide) + (var(--rc-gutter) * 2));
   }
 
+  /*
+   * A page's own frame: the container, plus the one vertical rhythm every page shares.
+   *
+   * Put on the outermost element of a page so that the first thing a reader sees sits at
+   * the same height whichever page they arrived on.
+   */
+  .rc-page {
+    width: 100%;
+    max-width: calc(var(--rc-container) + (var(--rc-gutter) * 2));
+    margin-inline: auto;
+    padding-inline: var(--rc-gutter);
+    padding-block: var(--rc-page-top) var(--rc-page-bottom);
+  }
+
+  .rc-page--wide {
+    max-width: calc(var(--rc-container-wide) + (var(--rc-gutter) * 2));
+  }
+
+  /*
+   * A workspace rather than a page: it fills the window and never scrolls, so it keeps the
+   * shared top and gives its bottom back to the room.
+   */
+  .rc-page--workspace {
+    padding-block-end: var(--rc-page-top);
+  }
+
   /* Soft rounded card — the primary surface unit across all three apps. */
   .rc-card {
     background-color: var(--rc-surface);

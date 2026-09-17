@@ -154,18 +154,23 @@ function goToPage(page: number) {
 
 <template>
   <div>
-    <section class="border-b border-line bg-bg-muted">
-      <div class="rc-container rc-container--wide py-12 sm:py-16">
-        <h1 class="text-3xl font-medium tracking-tight sm:text-4xl">Ürünler</h1>
-        <p class="mt-4 max-w-[62ch] leading-relaxed text-ink-secondary">
-          RefConcept'te satılan her ürün, onaylı satıcılar tarafından listelenir ve
-          yayına alınmadan önce ekibimizin incelemesinden geçer. Ölçüleri girilmiş
-          ürünler, yapay zekânın hazırladığı oda tasarımlarında da kullanılabilir.
-        </p>
-      </div>
-    </section>
+    <!--
+      The heading sits inside the frame like every other page's.
 
-    <div class="rc-container rc-container--wide grid gap-10 py-10 lg:grid-cols-[240px_minmax(0,1fr)]">
+      It used to be a grey band from edge to edge, so the catalogue was the one page whose
+      first row ignored the gutter every other page keeps — the product owner's "tüm
+      sayfaları eşitlemedin" was about exactly this kind of thing.
+    -->
+    <div class="rc-page rc-page--wide pb-0">
+      <h1 class="text-3xl font-medium tracking-tight sm:text-4xl">Ürünler</h1>
+      <p class="mt-3 max-w-[62ch] leading-relaxed text-ink-secondary">
+        RefConcept'te satılan her ürün, onaylı satıcılar tarafından listelenir ve
+        yayına alınmadan önce ekibimizin incelemesinden geçer. Ölçüleri girilmiş
+        ürünler, yapay zekânın hazırladığı oda tasarımlarında da kullanılabilir.
+      </p>
+    </div>
+
+    <div class="rc-page rc-page--wide grid gap-10 lg:grid-cols-[240px_minmax(0,1fr)]">
       <!-- Filters -->
       <aside class="space-y-7 lg:sticky lg:top-24 lg:self-start">
         <div>

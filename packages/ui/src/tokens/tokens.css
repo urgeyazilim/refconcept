@@ -109,6 +109,26 @@
   --rc-prose: 720px;
   --rc-gutter: 20px;
 
+  /*
+   * How far below the header every page starts, and how far above its end it stops.
+   *
+   * One number, because there were three. A walk through the site measured the first row of
+   * content at 73, 89 and 129 pixels depending on which family of page you were on, so
+   * moving between them jumped the content under the reader's eye. Pages set this through
+   * .rc-page rather than each choosing their own padding.
+   */
+  /*
+   * The sticky header, hairline included.
+   *
+   * A workspace that sets its height to 100vh minus 4.5rem is one pixel too tall, because
+   * the header is 72 pixels of bar and one of border — and one pixel is all it takes to put
+   * a scrollbar on a screen that promised not to scroll.
+   */
+  --rc-header: 73px;
+
+  --rc-page-top: 24px;
+  --rc-page-bottom: 40px;
+
   /* --- motion --- */
   --rc-duration-fast: 150ms;
   --rc-duration-normal: 240ms;
@@ -120,12 +140,16 @@
 @media (min-width: 768px) {
   :root {
     --rc-gutter: 32px;
+    --rc-page-top: 28px;
+    --rc-page-bottom: 56px;
   }
 }
 
 @media (min-width: 1024px) {
   :root {
     --rc-gutter: 48px;
+    --rc-page-top: 32px;
+    --rc-page-bottom: 72px;
   }
 }
 

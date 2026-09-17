@@ -78,7 +78,22 @@ const roomFacts = ref<{ width_mm: number | null, length_mm: number | null, heigh
 /** Whether every move so far has been written; step 7 of the ten is "saved". */
 const saved = ref(true)
 
-const studioCurrent = computed<'edit' | 'save'>(() => (liveItems.value.length > 0 && saved.value ? 'save' : 'edit'))
+/**
+ * Which of the two steps this screen is showing.
+ *
+ * Six and seven are the same screen — arranging, and arranged — so the strip could not say
+ * which one you had pressed: clicking "3B" on a room already saved answered "Kayıt". The
+ * anchor the strip links to decides when there is one, and the state decides otherwise.
+ */
+const askedStep = ref<'edit' | 'save' | null>(null)
+
+onMounted(() => {
+  if (window.location.hash === '#duzenle') askedStep.value = 'edit'
+  else if (window.location.hash === '#kayit') askedStep.value = 'save'
+})
+
+const studioCurrent = computed<'edit' | 'save'>(() => askedStep.value
+  ?? (liveItems.value.length > 0 && saved.value ? 'save' : 'edit'))
 const studioDone = computed(() => ({
   photo: (roomFacts.value?.photo_count ?? 0) > 0,
   plate: true,
@@ -920,7 +935,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="rc-container rc-container--wide flex flex-col gap-3 py-4 lg:h-[calc(100vh-4.5rem)]">
+  <div class="rc-page rc-page--wide rc-page--workspace flex flex-col gap-3 lg:h-[calc(100vh-var(--rc-header))]">
   <!--
     A workspace rather than a page: the room fills the height of the window and everything
     that acts on it stands in one column beside it. The first version stacked the stepper, a
@@ -928,10 +943,9 @@ onMounted(async () => {
     catalogue one under the other, and the product owner's verdict was a screen full of empty
     space and a mouse wheel that never stopped. Nothing here needs the page to scroll.
   -->
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <StudioStepper :project-id="projectId" :room-id="roomId" :current="studioCurrent" :done="studioDone" :design-id="design?.design_id ?? null" class="min-w-0 flex-1" />
-
-      <div class="flex items-center gap-4">
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <!-- The same two lines as the room and the design: where you are, then the map. -->
+      <div class="flex min-w-0 items-center gap-4">
         <h1 class="sr-only">Oda planı</h1>
         <!--
           Sharing is a property of the project, not of this screen.
@@ -948,6 +962,8 @@ onMounted(async () => {
           Odaya dön
         </NuxtLink>
       </div>
+
+      <StudioStepper :project-id="projectId" :room-id="roomId" :current="studioCurrent" :done="studioDone" :design-id="design?.design_id ?? null" class="w-full min-w-0" />
     </div>
 
     <p v-if="loadError" class="rounded-sm bg-danger-subtle p-3 text-sm text-danger-strong">

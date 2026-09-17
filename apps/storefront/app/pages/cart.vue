@@ -142,7 +142,7 @@ const blockingIssues = computed(() => issues.value.filter(issue => issue.blocks_
 </script>
 
 <template>
-  <div class="rc-container rc-container--wide py-10 lg:py-14">
+  <div class="rc-page rc-page--wide">
     <h1 class="text-2xl font-medium">Sepetim</h1>
 
     <RcAlert v-if="loadError" tone="danger" class="mt-6">{{ loadError }}</RcAlert>
@@ -180,9 +180,31 @@ const blockingIssues = computed(() => issues.value.filter(issue => issue.blocks_
         </RcButton>
       </section>
 
-      <p v-if="cart.item_count === 0" class="mt-8 text-sm text-muted">
-        Sepetiniz boş. <NuxtLink to="/catalog" class="underline">Ürünlere göz atın</NuxtLink>.
-      </p>
+      <!--
+        An empty basket, said the way every other empty thing on the site is said.
+
+        It was one grey sentence and an underlined word floating above five hundred pixels of
+        nothing — the only page that answered a reader with bare text where the rest of the
+        site answers with a card and something to press.
+      -->
+      <section v-if="cart.item_count === 0" class="rc-card mt-8 flex flex-col items-center gap-3 px-6 py-14 text-center">
+        <span class="grid size-12 place-items-center rounded-full bg-bg-muted text-ink-secondary">
+          <svg class="rc-icon size-6" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 6h15l-1.5 9h-12z" />
+            <path d="M6 6 5 3H2" />
+            <circle cx="9" cy="20" r="1.5" />
+            <circle cx="18" cy="20" r="1.5" />
+          </svg>
+        </span>
+
+        <p class="text-base font-medium">Sepetin boş.</p>
+        <p class="max-w-[46ch] text-sm text-ink-secondary">
+          Beğendiklerini buraya ekle; odana yerleştirdiğin ürünleri de plan ekranından tek
+          seferde getirebilirsin.
+        </p>
+
+        <RcButton :to="'/catalog'" size="sm" class="mt-1">Ürünlere göz at</RcButton>
+      </section>
 
       <div v-else class="mt-8 grid gap-8 lg:grid-cols-[1fr_320px]">
         <div class="space-y-8">

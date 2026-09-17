@@ -5,7 +5,7 @@ const version = '2026-01'
 </script>
 
 <template>
-  <div class="rc-container rc-container--wide py-16">
+  <div class="rc-page rc-page--wide">
     <article class="max-w-[var(--rc-prose)]">
     <p class="text-xs tracking-wide text-muted uppercase">Sürüm {{ version }}</p>
     <h1 class="mt-3 text-3xl font-medium">Kullanım Koşulları</h1>

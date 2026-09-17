@@ -48,29 +48,61 @@ const choosable = (key: StudioStep): boolean =>
   props.selectable === true && own.value.includes(key) && (props.done.photo === true || key === props.current)
 
 const room = computed(() => `/projects/${props.projectId}/rooms/${props.roomId}`)
-const design = computed(() => (props.designId ? `${room.value}/designs/${props.designId}` : `${room.value}#tasarim`))
+
+/**
+ * The design screen's address, with the step's own anchor on it.
+ *
+ * Built here rather than glued together at each use, because it was glued together wrongly:
+ * with no design yet the base already ended in an anchor and every link came out as
+ * ".../rooms/x#tasarim#tasarim". A room with no design sends all four of its steps back to
+ * the room, which is where the design is asked for.
+ */
+const design = (at: string): string => (props.designId
+  ? `${room.value}/designs/${props.designId}${at}`
+  : `${room.value}#istekler`)
 
 const steps = computed(() => [
   { key: 'photo' as const, label: 'Fotoğraf', to: `${room.value}#fotograf` },
   { key: 'plate' as const, label: 'Eşyalar', to: `${room.value}#esyalar` },
   { key: 'recognise' as const, label: 'Oda', to: `${room.value}#oda` },
   { key: 'propose' as const, label: 'İstekler', to: `${room.value}#istekler` },
-  { key: 'design' as const, label: 'Tasarım', to: `${design.value}#tasarim` },
-  { key: 'edit' as const, label: '3B', to: `${room.value}/plan` },
-  { key: 'save' as const, label: 'Kayıt', to: `${room.value}/plan` },
-  { key: 'render' as const, label: 'Render', to: `${design.value}#render` },
-  { key: 'video' as const, label: '360', to: `${design.value}#video` },
-  { key: 'buy' as const, label: 'Satın al', to: `${design.value}#alisveris` },
+  { key: 'design' as const, label: 'Tasarım', to: design('#tasarim') },
+  // Six and seven are the same screen in two states: arranging, and arranged. The anchor is
+  // what tells the plan which of the two the customer asked for.
+  { key: 'edit' as const, label: '3B', to: `${room.value}/plan#duzenle` },
+  { key: 'save' as const, label: 'Kayıt', to: `${room.value}/plan#kayit` },
+  { key: 'render' as const, label: 'Render', to: design('#render') },
+  { key: 'video' as const, label: '360', to: design('#video') },
+  { key: 'buy' as const, label: 'Satın al', to: design('#alisveris') },
 ])
 
 const index = (key: StudioStep): number => steps.value.findIndex(step => step.key === key)
+
+/**
+ * The last step anybody has finished; everything before it counts as finished too.
+ *
+ * Each screen works out for itself what it can see, and they saw different things: the room
+ * screen left "Eşyalar" on its number because the customer never emptied the room, while the
+ * design screen ticked it because a design existed. Same room, two answers, one strip. A
+ * stepper is read as a road — you cannot be at step five without having passed step two — so
+ * the tick is monotonic, and the screens no longer have to agree about the middle.
+ */
+const furthest = computed(() => {
+  let at = -1
+
+  steps.value.forEach((step, index) => {
+    if (props.done[step.key] === true) at = index
+  })
+
+  return at
+})
 
 function stateOf(key: StudioStep): 'done' | 'current' | 'ahead' {
   if (key === props.current) {
     return 'current'
   }
 
-  if (props.done[key] === true) {
+  if (props.done[key] === true || index(key) < furthest.value) {
     return 'done'
   }
 
@@ -120,7 +152,7 @@ const next = computed(() => {
             <template v-else>{{ at + 1 }}</template>
           </span>
           <!-- The current step keeps its name whatever the width; it is the one being read. -->
-          <span :class="stateOf(step.key) === 'current' ? '' : 'hidden @[820px]:inline'">{{ step.label }}</span>
+          <span :class="stateOf(step.key) === 'current' ? '' : 'hidden @[1020px]:inline'">{{ step.label }}</span>
         </component>
 
         <span v-if="at < steps.length - 1" class="mx-0.5 hidden h-px w-3 bg-line @[560px]:block" aria-hidden="true" />

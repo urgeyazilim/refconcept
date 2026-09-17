@@ -39,11 +39,20 @@ const props = withDefaults(defineProps<{
    * inspector and the product list beside it are somebody else's step and are hidden.
    */
   openingsOnly?: boolean
+  /**
+   * Whether the size drawn is the customer's or the fallback box.
+   *
+   * The scene has to draw something before anybody has measured anything, so it falls back
+   * to a room-shaped default. Saying so keeps the corner from printing that default as if
+   * it were a measurement.
+   */
+  measured?: boolean
 }>(), {
   items: () => [],
   editable: false,
   workspace: false,
   openingsOnly: false,
+  measured: true,
 })
 
 /**
@@ -342,7 +351,13 @@ defineExpose({
         v-else-if="display === '3d' && editable && selected === null"
         class="pointer-events-none absolute bottom-3 left-1/2 max-w-[46ch] -translate-x-1/2 rounded-pill bg-charcoal/80 px-3 py-1 text-center text-[11px] leading-relaxed text-white"
       >
-        <template v-if="state.items.length === 0">Odan boş. {{ workspace ? 'Sağdan' : 'Aşağıdan' }} ürün ekle ya da "Tasarıma göre yerleştir" de; kapıyı ve pencereyi tutup duvara sürükleyebilirsin.</template>
+        <!--
+          The room step has no product list and cannot arrange anything, so it was being told
+          to "add a product from the right" beside a column that was not there. Each screen
+          gets its own sentence.
+        -->
+        <template v-if="openingsOnly">Soldaki simgelerden kapı ya da pencere seç, sonra odada tutup duvara sürükle.</template>
+        <template v-else-if="state.items.length === 0">Odan boş. {{ workspace ? 'Sağdan' : 'Aşağıdan' }} ürün ekle ya da "Tasarıma göre yerleştir" de; kapıyı ve pencereyi tutup duvara sürükleyebilirsin.</template>
         <template v-else>Bir ürüne tıkla: oklarla taşı, halkayla döndür. Kapı ve pencereyi tutup duvara sürükle.</template>
       </p>
 
@@ -494,9 +509,20 @@ defineExpose({
         </button>
       </div>
 
+      <!--
+        The room's size, when there is one.
+
+        The scene falls back to a default box so that it has something to draw before anybody
+        has measured anything — and it was printing that default in the corner as though it
+        were the customer's room, under a guide asking them for the measurements. A number
+        nobody gave should not be shown as a fact.
+      -->
       <p class="absolute right-4 bottom-4 left-4 text-right text-xs text-muted">
-        {{ (geometry.width_mm / 1000).toFixed(2) }} × {{ (geometry.length_mm / 1000).toFixed(2) }} m ·
-        tavan {{ (geometry.height_mm / 1000).toFixed(2) }} m
+        <template v-if="measured">
+          {{ (geometry.width_mm / 1000).toFixed(2) }} × {{ (geometry.length_mm / 1000).toFixed(2) }} m ·
+          tavan {{ (geometry.height_mm / 1000).toFixed(2) }} m
+        </template>
+        <template v-else>Ölçü bekleniyor</template>
       </p>
     </div>
 

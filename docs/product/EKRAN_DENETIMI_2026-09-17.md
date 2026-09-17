@@ -115,7 +115,50 @@ kuralı.
 
 Kazanç: "mouse ile aşağı inmek zorunda kalıyorum" tamamen biter.
 
-## Sıradaki
+## Yapıldı (17 Eylül 2026)
 
-Aşama 1 ile başlanması önerilir: en az kodla en çok görünen fark ve diğer aşamaların üstüne
-oturacağı zemin.
+Dört aşamanın hepsi uygulandı. Yürüyüş her koşuda aynı tabloyu basıyor; aşağıdaki sayılar
+düzeltme sonrası koşudan.
+
+| Ekran grubu | Sol kenar | Üst kroma | Taşma | Şerit |
+|---|---|---|---|---|
+| Hepsi (22 ekran) | 48 px | 105 px | stüdyoda 0 | stüdyoda 1344 px |
+
+### Aşama 1 — tek çerçeve
+
+- `--rc-page-top`, `--rc-page-bottom` ve `--rc-header` tokenları; her sayfanın dış sarmalayıcısı
+  artık `.rc-page`. Üç ayrı yükseklik (73 / 89 / 129) tek sayıya indi: 105.
+- Stüdyonun yüksekliği başlığın 1 piksellik çizgisini de sayıyor; taşma sıfır.
+- Katalogun tam genişlikteki gri şeridi çerçeveye alındı.
+
+### Aşama 2 — şerit
+
+- Şerit üç stüdyo ekranında da kendi satırında ve tam genişlikte; on adımın adı her zaman
+  okunuyor. Kroma satırının uzunluğu artık şeridi etkilemiyor.
+- Tikler tek kurala bağlandı: bitmiş en ileri adımdan öncesi bitmiş sayılır. Ekranların
+  ortadaki adımlar hakkında anlaşması gerekmiyor.
+- 8, 9 ve 10 gerçekten ayrı ekranlar: adres çıpası aşamayı açıyor, aşama da çıpayı yazıyor.
+- 6 ve 7 ayrıldı: `#duzenle` ve `#kayit`.
+- Tasarımı olmayan bir odada dört adımın bağlantısı odaya dönüyor; eskiden çift çıpalı bozuk
+  adres üretiliyordu.
+
+### Aşama 3 — her adım kendi konusu
+
+- 2. adım fotoğrafı gösteriyor; plaka gelmeden de.
+- 3. adım ölçü yokken "Ölçü bekleniyor" diyor, uydurma ölçü yazmıyor.
+- 3. adımın balonu o adıma ait cümleyi söylüyor.
+- 1. adımın yükleme alanı ekranı dolduruyor.
+
+### Aşama 4 — kesilme yok
+
+- Sabit öğeler formu odanın yan sütununa taşındı.
+- Render altındaki iki satır için yer açıldı.
+- Hesap sayfasının sol sütunu tek satır sekmeye dönüştü.
+- Boş sepet kart, açıklama ve düğme oldu.
+
+## Açık kalan
+
+- **Seyrek bir sıçrama.** Yoğun bir test koşusunda, oda adımında sabit öğe formu doldurulurken
+  ekran kendiliğinden 4. adıma (İstekler) geçebiliyor. Tek başına art arda üç koşuda
+  üretilemedi; düzeltmelerden önce de aynı biçimde görülmüştü, yani bu denetimin getirdiği bir
+  gerileme değil. Yürüyüş ve yolculuk testleri onu yakalıyor; ayrı ele alınacak.

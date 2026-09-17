@@ -188,7 +188,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="rc-card p-6 sm:p-8">
+  <!--
+    Fills the step rather than sitting as a strip at the top of it.
+
+    Step one used to end a third of the way down a screen that is supposed to be fixed and
+    full, with the drop zone as a thin band and four hundred pixels of nothing under it.
+  -->
+  <section class="rc-card flex min-h-0 flex-1 flex-col p-6 sm:p-8">
     <header class="flex flex-wrap items-start justify-between gap-4">
       <div>
         <h2 class="text-base font-medium">Fotoğraflar</h2>
@@ -335,7 +341,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div v-if="canEdit" class="mt-6">
+    <div v-if="canEdit" class="mt-6 flex min-h-0 flex-1 flex-col">
       <input
         ref="fileInput"
         type="file"
@@ -348,7 +354,7 @@ onBeforeUnmount(() => {
 
       <button
         type="button"
-        class="flex w-full items-center justify-center gap-2.5 rounded-md border border-dashed border-line-strong px-6 py-8 text-sm text-ink-secondary transition-colors hover:bg-bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+        class="flex w-full min-h-0 flex-1 items-center justify-center gap-2.5 rounded-md border border-dashed border-line-strong px-6 py-8 text-sm text-ink-secondary transition-colors hover:bg-bg-muted disabled:cursor-not-allowed disabled:opacity-50"
         :disabled="uploading || media.length >= 20"
         @click="fileInput?.click()"
       >
