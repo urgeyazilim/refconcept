@@ -76,7 +76,7 @@ final class RoomGeometryProposer
              * the door would otherwise be left with a sealed box and a door in a photograph.
              * Only into a room that has none of its own, as always.
              */
-            $this->adopt($room, $this->openings($analysis));
+            $this->adopt($room, $this->openings($analysis, $width, $length));
 
             return null;
         }
@@ -92,7 +92,7 @@ final class RoomGeometryProposer
             return $existing;
         }
 
-        $openings = $this->openings($analysis);
+        $openings = $this->openings($analysis, $width, $length);
 
         /*
          * Put on the walls now, not when the size is agreed to.
@@ -231,7 +231,7 @@ final class RoomGeometryProposer
      *
      * @return list<array<string, mixed>>
      */
-    private function openings(RoomAnalysis $analysis): array
+    private function openings(RoomAnalysis $analysis, int $roomWidthMm, int $roomLengthMm): array
     {
         $reported = $analysis->payload['openings'] ?? null;
 
@@ -261,6 +261,26 @@ final class RoomGeometryProposer
             if ($offset < 0 || $width < 200 || $width > 6_000) {
                 continue;
             }
+
+            /*
+             * It has to fit the wall it says it is on.
+             *
+             * The wall names are defined against the main photograph and the measurements are
+             * defined against the wall names, so the two can disagree — and when they do, the
+             * room is drawn with its proportions the wrong way round and a window hanging off
+             * the end of a wall. A window wider than the wall it claims is a reading that went
+             * wrong somewhere; keeping it would put a hole in a wall of somebody's room that
+             * does not have one.
+             */
+            $wallMm = $wall === 'north' || $wall === 'south' ? $roomWidthMm : $roomLengthMm;
+
+            if ($width > $wallMm) {
+                continue;
+            }
+
+            // Past the end but narrow enough to belong there: slid back onto the wall rather
+            // than thrown away, because where it is is a guess and that it exists is not.
+            $offset = min($offset, $wallMm - $width);
 
             $type = ConstraintType::tryFrom((string) ($opening['type'] ?? ''));
 

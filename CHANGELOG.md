@@ -5,6 +5,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — We asked for a compass bearing and never said where north was
+
+- **The wall names had no meaning.** The reading was told "the wall names, seen from inside the
+  room: north, south, east, west" and nothing more. A model looking at a photograph of a living
+  room has no compass, so it picked one. It was also never told that the planner measures
+  `width_mm` along the north and south walls and `length_mm` along the east and west ones, so
+  the two numbers and the four names were free to disagree — and they did. The product owner's
+  room is a long wall with two sconces facing the camera and a window on the short wall to the
+  right; it came back four metres wide by six long with the window on a six-metre wall, and the
+  room step drew the proportions the wrong way round. The model answered the question it was
+  asked.
+- **North is now the wall you are facing in the first photograph**, east is on your right, west
+  on your left, south behind the camera. The measurements are tied to those names, and the
+  prompt carries the arithmetic to check the answer against itself before giving it.
+- **An opening has to fit the wall it claims.** A window wider than its wall is a reading that
+  went wrong somewhere and is dropped; one that merely hangs off the end is slid back on,
+  because where it is was a guess and that it exists was not.
+
 ### Changed — The system picks the photograph, not the customer
 
 - **"Bunu kullan" was the wrong question.** Three photographs, three buttons saying "use this

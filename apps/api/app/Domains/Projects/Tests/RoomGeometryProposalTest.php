@@ -136,6 +136,37 @@ it('puts the openings it read straight onto the walls', function (): void {
         ->toBe(['Fotoğraftan tespit edildi.']);
 });
 
+it('refuses an opening wider than the wall it claims', function (): void {
+    $version = $this->proposer->propose(analysed([
+        // Four metres across the wall you face, six deep. So north is four metres long.
+        'estimated_dimensions' => ['width_mm' => 4_000, 'length_mm' => 6_000, 'height_mm' => 2_800],
+        'openings' => [
+            ['type' => 'window', 'wall' => 'north', 'offset_mm' => 0, 'width_mm' => 5_000, 'height_mm' => 1_400],
+        ],
+    ]));
+
+    /*
+     * The wall names are defined against the photograph and the measurements against the wall
+     * names, so the two can disagree — and when they do the room comes out with its
+     * proportions the wrong way round and a window hanging off the end of a wall.
+     */
+    expect($version->payload['openings'])->toBe([]);
+});
+
+it('slides an opening back onto its wall rather than losing it', function (): void {
+    $this->proposer->propose(analysed([
+        'estimated_dimensions' => ['width_mm' => 4_000, 'length_mm' => 6_000, 'height_mm' => 2_800],
+        'openings' => [
+            // Three and a half metres along a four-metre wall, and 1.2 m wide: a third of it
+            // would be past the corner.
+            ['type' => 'window', 'wall' => 'north', 'offset_mm' => 3_500, 'width_mm' => 1_200, 'height_mm' => 1_400],
+        ],
+    ]));
+
+    // Where it is was a guess; that it exists was not.
+    expect(RoomConstraint::query()->where('room_id', $this->room->getKey())->value('offset_mm'))->toBe(2_800);
+});
+
 it('takes the kind of window the reading named', function (): void {
     $this->proposer->propose(analysed([
         'estimated_dimensions' => ['width_mm' => 4_850, 'length_mm' => 5_200, 'height_mm' => 2_720],

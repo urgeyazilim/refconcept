@@ -29,7 +29,7 @@ beforeEach(function (): void {
     $this->room = $this->project->rooms()->firstOrFail();
     $this->chooser = app(PrimaryPhotoChooser::class);
 
-    $this->photo = function (int $width, int $height, int $position = 0, string $type = 'photo', ?string $from = null) use (&$c): RoomMedia {
+    $this->photo = function (int $width, int $height, int $position = 0, string $type = 'photo', ?string $from = null): RoomMedia {
         return RoomMedia::query()->create([
             'room_id' => $this->room->getKey(),
             'type' => $type,
