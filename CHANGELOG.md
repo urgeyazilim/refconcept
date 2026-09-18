@@ -5,6 +5,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed — The system picks the photograph, not the customer
+
+- **"Bunu kullan" was the wrong question.** Three photographs, three buttons saying "use this
+  one", shown to somebody who had just been told to photograph four corners of their room —
+  and the product owner asked, fairly, what they had taken four for. Every photograph is read
+  and merged into one description of the room, and the others go to the renderer as
+  references; what was being chosen was only the viewpoint of the finished picture, because a
+  render is one view of a room.
+- **So the system chooses it.** Widest shape first, then the corner the reading saw most of
+  the room in, then the most pixels; an emptied room beats the furnished one it came from. It
+  costs nothing — the shape of a photograph is recorded on upload and the reading already says
+  which corner it saw each fixture in. The button stays as an override and says "Bundan çiz",
+  and a customer who uses it is not overruled by the next upload.
+- **Landscape, and the screen says so.** A render is a wide picture of a room, so a photograph
+  taken with the phone upright hands the model a strip of one: ceiling and floor, with the
+  walls the furniture goes against cut off at both sides. The guide asks for the phone to be
+  turned sideways and an upright photograph says so on its own card. The product owner worked
+  this out before we did.
+
+### Fixed — Two buttons a metre apart called "Ekle"
+
+- The one that opens the fixtures form and the one that submits it had the same name, which is
+  confusing to read and was wrong to click: the opener removes itself the moment it is pressed.
+  The opener is "Sabit ekle" now.
+- **The studio step is kept in the address.** The design screen and the plan already did this;
+  the room did not, so anything that reloaded the page threw the customer back to the
+  beginning mid-sentence.
+
 ### Changed — The room is drawn the way it was read
 
 - **The kind of window comes from the reading, not from the width.** The model reported a

@@ -103,7 +103,7 @@ test.describe('project journey', () => {
       buffer: pngBuffer(1024, 768),
     })
 
-    await expect(page.getByText('Tasarım bu fotoğraftan')).toBeVisible()
+    await expect(page.getByText('Tasarımı bundan çiziyorum')).toBeVisible()
 
     /*
      * And the thumbnail actually loads.
@@ -141,7 +141,10 @@ test.describe('project journey', () => {
     // --- something to design around ------------------------------------------------
     // Saving the size moved the guide on; the doors and windows are back on the Oda step.
     await page.getByRole('navigation', { name: 'Oda stüdyosu adımları' }).getByRole('button', { name: /Oda/ }).click()
-    await page.getByRole('button', { name: 'Ekle', exact: true }).click()
+    // The step crossfades in; a button clicked while it is still moving is a click the page
+    // never sees. The palette only exists on the Oda step, so it is the signal that we are on it.
+    await expect(page.getByRole('toolbar', { name: 'Kapı ve pencere ekle' })).toBeVisible()
+    await page.getByRole('button', { name: 'Sabit ekle' }).click()
     await page.locator('#ctype').selectOption('window')
     await page.locator('#wall').selectOption('south')
     await fillStable(page, '#offset', '120')

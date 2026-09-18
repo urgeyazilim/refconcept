@@ -31,6 +31,19 @@ const uploading = ref(false)
 const busyId = ref<string | null>(null)
 const error = ref<string | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
+
+/**
+ * A photograph taken with the phone upright.
+ *
+ * A render is a wide picture of a room, and a tall narrow photograph gives the model a strip
+ * of it: two metres of ceiling and floor, and the walls the furniture has to go against cut
+ * off at both sides. The reading copes; the design has less room to work in and it shows. The
+ * product owner noticed it before we did, so the screen says it now rather than leaving
+ * somebody to wonder why one room came out worse than another.
+ */
+function isPortrait(item: RoomMediaItem): boolean {
+  return item.width !== null && item.height !== null && item.height > item.width * 1.1
+}
 const lightbox = ref<RoomMediaItem | null>(null)
 
 const base = computed(() => `/api/v1/projects/${props.projectId}/rooms/${props.roomId}/media`)
@@ -198,8 +211,17 @@ onBeforeUnmount(() => {
     <header class="flex flex-wrap items-start justify-between gap-4">
       <div>
         <h2 class="text-base font-medium">Fotoğraflar</h2>
-        <p class="mt-1 max-w-[60ch] text-xs leading-relaxed text-muted">
-          Gündüz, birkaç köşeden. Fotoğrafların yalnızca sana ait.
+        <!--
+          Said because the screen was read the other way round.
+
+          "Bunu kullan" beside three of four photographs looks like a choice of which one
+          counts, and the product owner asked, fairly, why they had been told to photograph
+          four corners at all. Every photograph is read; only the finished picture has to be
+          drawn from one of them, because a render is one view of a room.
+        -->
+        <p class="mt-1 max-w-[62ch] text-xs leading-relaxed text-muted">
+          Gündüz, birkaç köşeden, telefonu yan çevirerek. Hepsini birlikte okuyorum; tasarımın
+          çizileceği kareyi de ben seçiyorum. Fotoğrafların yalnızca sana ait.
         </p>
       </div>
 
@@ -234,7 +256,7 @@ onBeforeUnmount(() => {
             v-if="item.is_primary"
             class="absolute left-2 top-2 rounded-pill bg-charcoal px-2.5 py-1 text-[11px] text-white"
           >
-            Tasarım bu fotoğraftan
+            Tasarımı bundan çiziyorum
           </span>
 
           <span
@@ -245,6 +267,11 @@ onBeforeUnmount(() => {
           </span>
         </button>
 
+        <p v-if="isPortrait(item)" class="px-3 pt-2 text-[11px] leading-relaxed text-warning">
+          Dikey kare. Telefonu yan çevirip çekersen odanın tamamı girer ve tasarım daha iyi
+          çıkar.
+        </p>
+
         <figcaption v-if="canEdit" class="flex flex-wrap items-center gap-1.5 p-3">
           <button
             v-if="!item.is_primary && item.type === 'photo'"
@@ -253,7 +280,7 @@ onBeforeUnmount(() => {
             :disabled="busyId !== null"
             @click="makePrimary(item)"
           >
-            Bunu kullan
+            Bundan çiz
           </button>
 
           <!--
@@ -309,7 +336,7 @@ onBeforeUnmount(() => {
       -->
       <RcAlert v-if="!plateOf(primary) && emptied.length > 0" tone="warning" class="mt-4">
         Ana fotoğrafın boş hâli henüz yok; render dolu fotoğraftan yapılır. Ana fotoğrafın
-        eşyalarını kaldırın ya da boşaltılmış fotoğrafı "Bunu kullan" ile ana fotoğraf yapın.
+        eşyalarını kaldırın ya da boşaltılmış fotoğrafı "Bundan çiz" ile seçin.
       </RcAlert>
 
       <p v-if="clearing !== null" class="mt-3 text-xs text-muted">

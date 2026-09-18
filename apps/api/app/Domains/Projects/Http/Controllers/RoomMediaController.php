@@ -11,6 +11,7 @@ use App\Domains\Projects\Models\DesignAsset;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\Room;
 use App\Domains\Projects\Models\RoomMedia;
+use App\Domains\Projects\Services\PrimaryPhotoChooser;
 use App\Domains\Projects\Services\RoomAnalyser;
 use App\Domains\Projects\Services\RoomPhotoStorage;
 use Illuminate\Http\JsonResponse;
@@ -37,6 +38,7 @@ final class RoomMediaController
         private readonly RoomPhotoStorage $storage,
         private readonly AuditLogger $audit,
         private readonly RoomAnalyser $analyser,
+        private readonly PrimaryPhotoChooser $primaries,
     ) {}
 
     public function index(Request $request, Project $project, Room $room): JsonResponse
@@ -81,14 +83,17 @@ final class RoomMediaController
             throw ValidationException::withMessages(['file' => [$e->getMessage()]]);
         }
 
-        // The first photograph becomes the primary one without being asked: a customer
-        // who uploads one picture and finds the room still "not ready" has been given a
-        // puzzle rather than a product.
-        $shouldSetPrimary = ($validated['set_primary'] ?? null) === true
-            || ($room->primary_media_id === null && $media->type === 'photo');
-
-        if ($shouldSetPrimary) {
-            $room->forceFill(['primary_media_id' => $media->getKey()])->save();
+        /*
+         * Which photograph the design is drawn from is not a question for the customer.
+         *
+         * They were being shown "use this one" beside every photograph after the first, having
+         * just been told to take four. The system picks — widest shape, most of the room in it,
+         * most pixels — and only steps aside for somebody who says otherwise.
+         */
+        if (($validated['set_primary'] ?? null) === true) {
+            $this->primaries->chosenByCustomer($room, $media);
+        } else {
+            $this->primaries->choose($room->fresh() ?? $room);
         }
 
         /*
@@ -236,7 +241,8 @@ final class RoomMediaController
                 'Yalnızca bir fotoğraf tasarımın çalışacağı görsel olarak seçilebilir.',
             );
 
-            $room->forceFill(['primary_media_id' => $medium->getKey()])->save();
+            // Said to be theirs, so the next upload does not quietly overrule them.
+            $this->primaries->chosenByCustomer($room, $medium);
         }
 
         return response()->json(['data' => $this->summary($medium->fresh(), $room->fresh())]);

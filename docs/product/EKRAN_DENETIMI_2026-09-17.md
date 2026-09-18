@@ -158,7 +158,13 @@ düzeltme sonrası koşudan.
 
 ## Açık kalan
 
-- **Seyrek bir sıçrama.** Yoğun bir test koşusunda, oda adımında sabit öğe formu doldurulurken
-  ekran kendiliğinden 4. adıma (İstekler) geçebiliyor. Tek başına art arda üç koşuda
-  üretilemedi; düzeltmelerden önce de aynı biçimde görülmüştü, yani bu denetimin getirdiği bir
-  gerileme değil. Yürüyüş ve yolculuk testleri onu yakalıyor; ayrı ele alınacak.
+- **Sıçramanın sebebi bulundu: geliştirme sunucusu.** Oda adımında form doldurulurken ekranın
+  4. adıma atlaması, Playwright kaydında aynı adrese "gezinme" satırıyla birlikte geliyor —
+  yani sayfa tam olarak yeniden yükleniyor. Uygulamada sayfayı yeniden yükleyen bir kod yok;
+  bunu Vite yapıyor, bağımlılıkları yeniden derlediğinde. Ürün tarafında düzeltilecek olan
+  düzeltildi: adım artık adreste tutuluyor, dolayısıyla yenileme sonrası müşteri aynı adımda
+  kalıyor. Kalan kırılganlık testin yarım kalmış bir formu yenilemeden sonra bulamamasından
+  ibaret.
+- **Kalıcı çözüm:** uçtan uca testler geliştirme sunucusu yerine derlenmiş bir önizleme
+  sunucusuna koşulmalı. O zaman bu sınıf kırılganlık tamamen kalkar. Ayrı bir iş olarak
+  duruyor.

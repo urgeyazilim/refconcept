@@ -34,6 +34,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $length_mm
  * @property int|null $height_mm
  * @property string|null $primary_media_id
+ * @property bool $primary_is_manual
  * @property string|null $notes
  * @property int $position
  * @property Carbon|null $created_at
@@ -63,6 +64,7 @@ class Room extends Model
         'length_mm',
         'height_mm',
         'primary_media_id',
+        'primary_is_manual',
         'notes',
         'position',
     ];

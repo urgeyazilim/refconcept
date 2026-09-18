@@ -298,6 +298,45 @@ const chosenStep = ref<StudioStep | null>(null)
 const activeStep = computed<StudioStep>(() => chosenStep.value ?? autoStep.value)
 
 /**
+ * The four steps this screen owns, by the anchor the strip links each of them to.
+ *
+ * Kept in the address so that the step survives a reload: somebody who refreshes, or comes
+ * back to a tab, lands where they were rather than wherever the guide would start them. The
+ * design screen and the plan already work this way; this one did not, and a page that reloads
+ * itself for any reason threw the customer back to the beginning mid-sentence.
+ */
+const STEP_HASH: Partial<Record<StudioStep, string>> = {
+  photo: '#fotograf',
+  plate: '#esyalar',
+  recognise: '#oda',
+  propose: '#istekler',
+}
+
+function stepFromHash(hash: string): StudioStep | null {
+  const found = (Object.keys(STEP_HASH) as StudioStep[]).find(key => STEP_HASH[key] === hash)
+
+  return found ?? null
+}
+
+onMounted(() => {
+  const asked = stepFromHash(window.location.hash)
+
+  if (asked !== null) chosenStep.value = asked
+
+  window.addEventListener('hashchange', onHashChange)
+})
+
+onBeforeUnmount(() => {
+  if (import.meta.client) window.removeEventListener('hashchange', onHashChange)
+})
+
+function onHashChange() {
+  const asked = stepFromHash(window.location.hash)
+
+  if (asked !== null) chosenStep.value = asked
+}
+
+/**
  * Opens a step, and stays on it.
  *
  * It used to forget the choice whenever it happened to match the step the guide would have
@@ -311,6 +350,13 @@ const activeStep = computed<StudioStep>(() => chosenStep.value ?? autoStep.value
 function goTo(step: StudioStep) {
   chosenStep.value = step
   editingSize.value = false
+
+  const at = STEP_HASH[step]
+
+  if (import.meta.client && at !== undefined && window.location.hash !== at) {
+    history.replaceState(history.state, '', `${window.location.pathname}${window.location.search}${at}`)
+  }
+
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
@@ -765,10 +811,18 @@ const guide = computed<GuideState>(() => {
           icon: 'camera',
           say: 'Hadi odanın fotoğrafını çekelim.',
           detail: 'Tek yön bana odanı anlatmaz. Kapıdan içeri bir kare, sonra sol köşe, sağ köşe ve karşı duvar — dördünü birden okuyup odanı tanıyacağım.',
+          /*
+           * Sideways, first.
+           *
+           * A render is a wide picture of a room, so a tall narrow photograph hands the model
+           * a strip of one: ceiling and floor, with the walls the furniture goes against cut
+           * off at both sides. It was the product owner who worked out why some rooms came
+           * back worse than others, which means the screen was not saying it.
+           */
           tips: [
+            { icon: 'camera', label: 'Telefonu yan çevir', hint: 'Yatay kare, oda tamamen girsin' },
             { icon: 'door', label: 'Kapıdan içeri', hint: 'Odanın tamamı görünsün' },
-            { icon: 'camera', label: 'Sol köşeden', hint: 'Pencereyi de al' },
-            { icon: 'camera', label: 'Sağ köşeden', hint: 'Kapı görünsün' },
+            { icon: 'camera', label: 'Sol ve sağ köşeden', hint: 'Pencere ve kapı görünsün' },
             { icon: 'light', label: 'Gündüz ışığında', hint: 'Renkleri doğru okurum' },
           ],
         })
@@ -1177,7 +1231,7 @@ function guideSecondary() {
                       variant="secondary"
                       @click="addingConstraint = true"
                     >
-                      Ekle
+                      Sabit ekle
                     </RcButton>
                   </div>
 

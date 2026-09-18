@@ -39,6 +39,7 @@ final class RoomAnalyser
     public function __construct(
         private readonly AiJobDispatcher $dispatcher,
         private readonly RoomGeometryProposer $proposer,
+        private readonly PrimaryPhotoChooser $primaries,
     ) {}
 
     /**
@@ -218,6 +219,14 @@ final class RoomAnalyser
              */
             $analysis->setRelation('room', $room);
             $this->proposer->propose($analysis);
+
+            /*
+             * Now that the room has been read, the best photograph to draw it from can be
+             * chosen properly: the reading says which corner caught the window, the door and
+             * the radiator, and that is the corner that shows the room. Skipped for a customer
+             * who has already chosen one themselves.
+             */
+            $this->primaries->choose($room);
 
             return $analysis;
         });
