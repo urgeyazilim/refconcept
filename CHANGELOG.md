@@ -5,6 +5,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — A test run reached a customer's room
+
+- **The suite repoints the whole platform at the simulator for the length of a run.** That is
+  a switch with no fence around it: anybody using the site while the suite runs gets a fake
+  answer. The product owner did. Six photographs of their living room came back in zero
+  seconds as the simulator's canned living room, and they asked, reasonably, why it was taking
+  so long. The real reading that followed took sixty-six seconds end to end — twenty of them
+  the deliberate wait for the uploads to settle, forty the model — which is what the guide
+  promises.
+- **The platform can now answer one account with the simulator without moving anything
+  global.** A job belonging to an address on a configured e-mail domain is routed to the
+  simulator; the route on disk is untouched, so the next person through gets the real model.
+  Off unless the domain is set, which it is not in production. This is a second layer, not yet
+  a replacement: the pipeline's own jobs carry no user, so the global switch still does the
+  real work until the owner is stamped on them.
+- **Embeddings were never simulated.** `text_embedding` was missing from the list of tasks a
+  run points at the simulator, so every suite made real vector calls to Google — a few
+  thousandths of a dollar each, dozens a run, invisible because there is no rate on file for
+  them and the console showed the cost as zero. A walk-through now makes no paid call at all.
+
 ### Fixed — We asked for a compass bearing and never said where north was
 
 - **The wall names had no meaning.** The reading was told "the wall names, seen from inside the

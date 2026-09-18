@@ -24,6 +24,23 @@ return [
     | forbidden for financial values (06_SECURITY_PAYMENT_FINANCE_RULES.md).
     */
 
+    /*
+     * Whose work is answered by the simulator instead of by a real provider.
+     *
+     * The end-to-end suite used to point the whole platform's AI routes at the simulator for
+     * the length of a run and put them back afterwards. That is a switch with no fence around
+     * it: anybody using the site during a run got a fake answer, and the product owner did —
+     * six photographs of their living room came back as the simulator's canned living room in
+     * zero seconds. It is also how a run once billed real providers, when the restore ran
+     * before the last queued job.
+     *
+     * So the choice is made per person rather than per platform. A job belonging to an account
+     * on this e-mail domain is answered by the simulator; everybody else is unaffected, and the
+     * routes nobody is testing stay exactly where the operator put them. Empty in production,
+     * which turns the whole thing off.
+     */
+    'simulated_email_domain' => env('REFCONCEPT_SIMULATED_EMAIL_DOMAIN', ''),
+
     'money' => [
         'default_currency' => env('REFCONCEPT_DEFAULT_CURRENCY', 'TRY'),
         'supported_currencies' => ['TRY'],

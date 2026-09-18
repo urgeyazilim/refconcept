@@ -455,3 +455,57 @@ it('never lets the simulator answer for a real model that failed', function (): 
     expect($models)->toHaveCount(1)
         ->and($models[0]->getKey())->toBe($real->getKey());
 });
+
+describe('an account that is being tested with', function (): void {
+    /*
+     * The suite used to point the whole platform's routes at the simulator for the length of a
+     * run and put them back afterwards. Anybody using the site during a run got a fake answer,
+     * and the product owner did: six photographs of their living room came back as the
+     * simulator's canned living room in zero seconds. It is also how a run once billed real
+     * providers, when the restore ran before the last queued job finished.
+     */
+    beforeEach(function (): void {
+        config()->set('refconcept.simulated_email_domain', 'e2e.refconcept.local');
+    });
+
+    it('is answered by the simulator without anything global moving', function (): void {
+        [$route, $model] = makeAiRoute(AiTask::SupportAssist);
+
+        $tester = User::factory()->create(['email' => 'walkthrough-1@e2e.refconcept.local']);
+        $resolved = $this->gateway->resolveRoute(makeAiJob(AiTask::SupportAssist, [], $tester));
+
+        expect($resolved?->primaryModel?->provider?->driver)->toBe('fake')
+            // The row on disk is untouched: the next person through gets the real model.
+            ->and($route->fresh()->primary_model_id)->toBe($model->getKey());
+    });
+
+    it('leaves everybody else on the model the operator chose', function (): void {
+        [, $model] = makeAiRoute(AiTask::SupportAssist);
+
+        $customer = User::factory()->create(['email' => 'musteri@example.com']);
+        $resolved = $this->gateway->resolveRoute(makeAiJob(AiTask::SupportAssist, [], $customer));
+
+        expect($resolved?->primaryModel?->getKey())->toBe($model->getKey());
+    });
+
+    it('leaves a job with nobody behind it alone', function (): void {
+        [, $model] = makeAiRoute(AiTask::SupportAssist);
+
+        // A catalogue job, a backfill, anything the platform runs for itself.
+        $resolved = $this->gateway->resolveRoute(makeAiJob(AiTask::SupportAssist));
+
+        expect($resolved?->primaryModel?->getKey())->toBe($model->getKey());
+    });
+
+    it('does nothing at all when no domain is configured', function (): void {
+        config()->set('refconcept.simulated_email_domain', '');
+
+        [, $model] = makeAiRoute(AiTask::SupportAssist);
+
+        $tester = User::factory()->create(['email' => 'walkthrough-2@e2e.refconcept.local']);
+        $resolved = $this->gateway->resolveRoute(makeAiJob(AiTask::SupportAssist, [], $tester));
+
+        // Which is production: the switch is off unless somebody turns it on.
+        expect($resolved?->primaryModel?->getKey())->toBe($model->getKey());
+    });
+});

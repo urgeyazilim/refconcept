@@ -26,10 +26,14 @@ const API = process.env.E2E_API_URL ?? 'http://localhost:58000'
  * until the whole list was named here — a few kuruş to a few lira per run, unnoticed because
  * every test passed.
  */
-export const BACKGROUND_TASKS = ['room_analysis', 'room_clear', 'design_plan', 'product_match_rerank', 'render_check', 'image_render_draft', 'image_render_premium'] as const
+export const BACKGROUND_TASKS = ['room_analysis', 'room_clear', 'design_plan', 'product_match_rerank', 'render_check', 'image_render_draft', 'image_render_premium', 'text_embedding'] as const
 
 /** Which simulator model answers each task; anything not named here is text. */
 const SIMULATOR_MODEL: Partial<Record<(typeof BACKGROUND_TASKS)[number], string>> = {
+  // Embeddings were missing from this list for months, so every run made real vector calls
+  // to Google: a few thousandths of a dollar each, dozens a run, and invisible because the
+  // rate table has no line for them and the console showed the cost as zero.
+  text_embedding: 'fake-embedding-1',
   room_analysis: 'fake-vision-1',
   render_check: 'fake-vision-1',
   room_clear: 'fake-image-1',

@@ -59,6 +59,15 @@ final class AdminAiConfigController
 
         return response()->json([
             'data' => [
+                /*
+                 * Whose work this environment answers with the simulator.
+                 *
+                 * Empty in production. An operator looking at this screen on a staging box
+                 * should be able to see at a glance that some accounts are not talking to the
+                 * real providers, and the end-to-end suite reads it to check it is safe to run
+                 * before it uploads a single photograph.
+                 */
+                'simulated_email_domain' => (string) config('refconcept.simulated_email_domain', ''),
                 'providers' => $providers->map(fn (AiProvider $provider): array => $this->providerPayload($provider))->all(),
 
                 /*

@@ -389,15 +389,22 @@ it('records nothing spent when fal refuses, and tries again once it would not', 
         ->and((int) AiJob::query()->where('task', 'product_model')->sum('total_cost_micros'))->toBe(300_000);
 });
 
-it('waits on the AI worker, which lets a generation take the minute it takes', function (): void {
+it('waits on its own worker, which lets a generation take the minutes it takes', function (): void {
     $job = new GenerateProductModel((string) $this->product->getKey());
 
     /*
+     * Two queues, for two reasons.
+     *
      * On the default queue the worker killed anything past sixty seconds. Tripo takes about a
      * minute, so two of the first three real generations were killed after fal had made and
      * billed them, and before anything here recorded that they existed.
+     *
+     * And then a queue of its own, away from the AI worker: a mesh takes three to four minutes
+     * and the AI worker runs one job at a time, so a catalogue of them held up the reading of a
+     * customer's room. Nobody is looking at a screen waiting for a mesh; somebody is always
+     * looking at a screen waiting for their room.
      */
-    expect($job->queue)->toBe('ai')
+    expect($job->queue)->toBe('models')
         ->and($job->timeout)->toBeGreaterThan(180);
 });
 

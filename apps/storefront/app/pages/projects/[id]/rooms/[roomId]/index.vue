@@ -810,7 +810,16 @@ const guide = computed<GuideState>(() => {
         return quiet({
           icon: 'camera',
           say: 'Hadi odanın fotoğrafını çekelim.',
-          detail: 'Tek yön bana odanı anlatmaz. Kapıdan içeri bir kare, sonra sol köşe, sağ köşe ve karşı duvar — dördünü birden okuyup odanı tanıyacağım.',
+          /*
+           * Six, not four.
+           *
+           * Four is below where any of this works. The published practical floor for reading a
+           * room from ordinary photographs is six to eight, and the classical protocol is a
+           * frame from each corner plus the middle of each long wall, each one facing the
+           * middle of the room. Asking for two more is the cheapest accuracy there is: it
+           * costs nothing and buys more than changing the model would.
+           */
+          detail: 'Tek yön bana odanı anlatmaz. Dört köşeden birer kare, sonra uzun duvarların ortasından ikişer kare daha — altı fotoğrafla odanı doğru tanırım.',
           /*
            * Sideways, first.
            *
@@ -822,7 +831,8 @@ const guide = computed<GuideState>(() => {
           tips: [
             { icon: 'camera', label: 'Telefonu yan çevir', hint: 'Yatay kare, oda tamamen girsin' },
             { icon: 'door', label: 'Kapıdan içeri', hint: 'Odanın tamamı görünsün' },
-            { icon: 'camera', label: 'Sol ve sağ köşeden', hint: 'Pencere ve kapı görünsün' },
+            { icon: 'camera', label: 'Dört köşeden', hint: 'Her seferinde odanın ortasına bak' },
+            { icon: 'camera', label: 'Uzun duvarların ortasından', hint: 'İki kare daha; altı olsun' },
             { icon: 'light', label: 'Gündüz ışığında', hint: 'Renkleri doğru okurum' },
           ],
         })

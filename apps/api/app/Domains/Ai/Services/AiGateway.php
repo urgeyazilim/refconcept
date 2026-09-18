@@ -239,11 +239,68 @@ final class AiGateway
 
     public function resolveRoute(AiJob $job): ?AiTaskRoute
     {
-        return AiTaskRoute::query()
+        $route = AiTaskRoute::query()
             ->with(['primaryModel.provider.credentials', 'fallbackModel.provider.credentials', 'promptVersion'])
             ->where('task', $job->task->value)
             ->active()
             ->first();
+
+        return $route === null ? null : $this->simulatedFor($job, $route);
+    }
+
+    /**
+     * The same route, answered by the simulator, for an account that is being tested with.
+     *
+     * The end-to-end suite used to point the platform's routes at the simulator for the length
+     * of a run and put them back afterwards, which is a switch with no fence around it: anybody
+     * using the site during a run got a fake answer, and the product owner did — six
+     * photographs of their living room came back as the simulator's canned living room in zero
+     * seconds. It is also how a run once billed real providers, when the restore ran before the
+     * last queued job finished.
+     *
+     * The decision is per person now. Nothing global moves, so a run cannot reach anybody
+     * else's work, and a run that dies halfway leaves no routes to put back.
+     *
+     * Off unless an e-mail domain is configured, which it is not in production. The job's own
+     * user is the only thing consulted; a job with nobody behind it is never simulated.
+     */
+    private function simulatedFor(AiJob $job, AiTaskRoute $route): AiTaskRoute
+    {
+        $domain = mb_strtolower(trim((string) config('refconcept.simulated_email_domain', '')));
+
+        if ($domain === '' || $job->user_id === null) {
+            return $route;
+        }
+
+        $email = mb_strtolower((string) ($job->user->email ?? ''));
+
+        if ($email === '' || ! str_ends_with($email, '@'.$domain)) {
+            return $route;
+        }
+
+        $standIn = AiModel::query()
+            ->with('provider.credentials')
+            ->whereHas('provider', static fn ($query) => $query->where('driver', 'fake'))
+            ->where('modality', $route->primaryModel?->modality?->value)
+            ->where('is_active', true)
+            ->first();
+
+        if ($standIn === null) {
+            return $route;
+        }
+
+        /*
+         * A copy, not the row. Saving this would be the global switch again, by accident, and
+         * the next person through would get the simulator with nobody having asked for it.
+         */
+        $simulated = $route->replicate();
+        $simulated->setRelation('primaryModel', $standIn);
+        $simulated->setRelation('fallbackModel', null);
+        $simulated->setRelation('promptVersion', $route->promptVersion);
+        $simulated->exists = true;
+        $simulated->id = $route->id;
+
+        return $simulated;
     }
 
     // --- internals -----------------------------------------------------------
