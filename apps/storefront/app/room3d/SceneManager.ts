@@ -11,12 +11,15 @@ import {
   LineBasicMaterial,
   PCFSoftShadowMap,
   PMREMGenerator,
+  Points,
+  PointsMaterial,
   Scene,
   SRGBColorSpace,
   Vector3,
   WebGLRenderer,
 } from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 import { CameraManager } from './CameraManager'
 import type { CollisionState } from './CollisionEngine'
@@ -70,6 +73,9 @@ export class SceneManager {
   private readonly guideMaterial = new LineBasicMaterial({ color: 0xb08f52, transparent: true, opacity: 0.8 })
 
   private room: Group | null = null
+
+  /** The room as the photographs measured it, when somebody has asked to see it. */
+  private scan: Points | null = null
 
   /** Kept so occlusion can be recomputed without asking the room its size every frame. */
   private geometry: RoomGeometry | null = null
@@ -154,6 +160,81 @@ export class SceneManager {
     this.scene.add(this.room)
 
     this.cameras.frame(geometry)
+    this.invalidate()
+  }
+
+  /**
+   * Shows the room as the reconstruction measured it, instead of as we drew it.
+   *
+   * Six photographs handed to a reconstruction come back as a quarter of a million points in
+   * three dimensions. It is not a tidy room — it is a cloud, with the far side of the sofa
+   * missing and daylight smeared through the window — but it is *measured*, and the drawn room
+   * beside it is a guess. Seeing the two is the whole point: the reading said this room was
+   * 3.8 by 4.5 metres one time and 4.5 by 5.0 the next, and the cloud settles it.
+   *
+   * Drawn as points rather than as the mesh the file technically contains: it has no faces
+   * worth shading, and a point cloud lit like furniture looks like a bug.
+   */
+  async showScan(url: string): Promise<void> {
+    if (this.scan !== null) {
+      this.hideScan()
+    }
+
+    const gltf = await new GLTFLoader().loadAsync(url)
+
+    let geometry: BufferGeometry | null = null
+
+    gltf.scene.traverse((node) => {
+      if (geometry === null && node instanceof Mesh) geometry = node.geometry as BufferGeometry
+    })
+
+    if (geometry === null) {
+      return
+    }
+
+    const cloud = geometry as BufferGeometry
+
+    cloud.computeBoundingSphere()
+
+    const radius = cloud.boundingSphere?.radius ?? 1
+
+    /*
+     * Scaled to the size of a room rather than to its own arbitrary units.
+     *
+     * The reconstruction has no idea how big anything is — it is faithful about shape and
+     * silent about scale — so the cloud arrives about two units across. Fitting it to the room
+     * we have makes the two comparable by eye, which is what this view is for.
+     */
+    const metres = this.geometry === null ? 5 : Math.max(this.geometry.width_mm, this.geometry.length_mm) / 1000
+    const points = new Points(cloud, new PointsMaterial({ size: 0.012, vertexColors: cloud.getAttribute('color') !== undefined, color: 0x8a7f72 }))
+
+    points.scale.setScalar(metres / (radius * 2))
+    points.name = 'scan'
+
+    this.scan = points
+    this.scene.add(points)
+
+    if (this.room !== null) this.room.visible = false
+
+    this.layout.visible = false
+    this.cameras.frameObject(points)
+    this.invalidate()
+  }
+
+  /** Back to the room we drew. */
+  hideScan(): void {
+    if (this.scan !== null) {
+      this.scene.remove(this.scan)
+      this.scan.geometry.dispose()
+      this.scan = null
+    }
+
+    if (this.room !== null) this.room.visible = true
+
+    this.layout.visible = true
+
+    if (this.geometry !== null) this.cameras.frame(this.geometry)
+
     this.invalidate()
   }
 

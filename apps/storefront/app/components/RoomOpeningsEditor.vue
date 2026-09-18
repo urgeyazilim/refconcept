@@ -19,6 +19,8 @@ const props = defineProps<{
   canEdit: boolean
   /** False while the size is still the fallback box rather than the customer's own. */
   measured?: boolean
+  /** The room as its photographs measured it, when one has been made. */
+  scanUrl?: string | null
 }>()
 
 const emit = defineEmits<{ (event: 'changed'): void }>()
@@ -158,6 +160,7 @@ const cm = (mm: number | null): string => (mm === null ? '' : String(Math.round(
       workspace
       openings-only
       :measured="measured !== false"
+      :scan-url="scanUrl ?? null"
       class="min-h-0 flex-1 lg:min-h-[420px]"
       :geometry="{ id: 'room', width_mm: geometry.width_mm, length_mm: geometry.length_mm, height_mm: geometry.height_mm }"
       :openings="openings"

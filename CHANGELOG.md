@@ -5,6 +5,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added — The room as its photographs measured it
+
+- **A reconstruction, behind one button.** Six photographs of the product owner's room, handed
+  to fal's VGGT, come back as a quarter of a million points in three dimensions. Fitting a
+  rectangle to the floor gives 1 : 1.43, which at a normal ceiling is 3.9 × 5.6 m. The reading
+  had guessed 3.8 × 4.5 m one time and 4.5 × 5.0 m the next, and neither caught the shape: this
+  is a long room and the guesses were nearly square.
+- **"Tarama" on the room step** shows it instead of the room we drew, so the two can be
+  compared by eye. It is not a tidy room — the far side of the sofa is missing and daylight is
+  smeared through the window — but it is measured, and the drawn room beside it is a guess.
+- **Kept under the photographs' own rules.** Private disk, signed short-lived link, no URL in
+  any response, out of the photo grid. A point cloud of somebody's living room is their home as
+  surely as a picture of it is.
+- **Scale still rests on an assumption.** The reconstruction is faithful about shape and silent
+  about size, so the metres come from taking the ceiling as 2.70 m. The shape is measured; the
+  scale is not, and the studio still asks.
+
 ### Fixed — A test run reached a customer's room
 
 - **The suite repoints the whole platform at the simulator for the length of a run.** That is

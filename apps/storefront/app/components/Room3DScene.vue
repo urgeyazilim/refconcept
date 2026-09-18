@@ -47,12 +47,20 @@ const props = withDefaults(defineProps<{
    * it were a measurement.
    */
   measured?: boolean
+  /**
+   * A link to the room measured from its photographs, when one has been made.
+   *
+   * Shown instead of the room we drew, on request. The drawn room is a guess at a shape; this
+   * is the shape, and putting them behind one button is how somebody can tell.
+   */
+  scanUrl?: string | null
 }>(), {
   items: () => [],
   editable: false,
   workspace: false,
   openingsOnly: false,
   measured: true,
+  scanUrl: null,
 })
 
 /**
@@ -90,6 +98,33 @@ const view = ref<ViewMode>('perspective')
  * two gaps that measure the same look the same, and labels that are text rather than pixels.
  */
 const display = ref<DisplayMode>('3d')
+
+/** Whether the reconstruction is on screen instead of the room we drew. */
+const showingScan = ref(false)
+const scanFailed = ref(false)
+
+async function toggleScan() {
+  if (props.scanUrl === null || props.scanUrl === undefined) {
+    return
+  }
+
+  if (showingScan.value) {
+    editor.value?.hideScan()
+    showingScan.value = false
+
+    return
+  }
+
+  scanFailed.value = false
+
+  try {
+    await editor.value?.showScan(props.scanUrl)
+    showingScan.value = true
+  }
+  catch {
+    scanFailed.value = true
+  }
+}
 
 /**
  * Whether the distances are drawn over the scene.
@@ -451,6 +486,21 @@ defineExpose({
           @click="display = display === 'plan' ? '3d' : 'plan'"
         >
           Plan
+        </button>
+
+        <!--
+          The room as the photographs measured it, beside the room we drew from a guess. The
+          reading said this room was 3.8 by 4.5 metres one time and 4.5 by 5.0 the next; the
+          reconstruction settles it, and seeing the two is how anybody would know.
+        -->
+        <button
+          v-if="scanUrl"
+          type="button"
+          class="rounded-pill px-3 py-1.5 text-xs transition-colors"
+          :class="showingScan ? 'bg-charcoal text-white' : 'text-ink-secondary hover:bg-bg-muted'"
+          @click="toggleScan"
+        >
+          {{ scanFailed ? 'Tarama açılmadı' : 'Tarama' }}
         </button>
 
         <!--

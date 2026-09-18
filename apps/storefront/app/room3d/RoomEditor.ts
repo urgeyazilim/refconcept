@@ -219,6 +219,15 @@ export class RoomEditor {
 
   // --- the room --------------------------------------------------------------
 
+  /** The room as the photographs measured it, instead of as we drew it. */
+  showScan(url: string): Promise<void> {
+    return this.scene.showScan(url)
+  }
+
+  hideScan(): void {
+    this.scene.hideScan()
+  }
+
   setRoom(geometry: RoomGeometry, openings: RoomOpening[]): void {
     this.geometry = geometry
     this.openings = openings

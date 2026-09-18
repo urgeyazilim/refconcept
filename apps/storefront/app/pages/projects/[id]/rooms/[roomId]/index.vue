@@ -558,6 +558,29 @@ const plateLinks = ref<{ before: string, after: string } | null>(null)
  */
 const photoLink = ref<string | null>(null)
 
+/**
+ * A link to the room as its photographs measured it, when one has been made.
+ *
+ * Signed and short-lived like every other room file: a point cloud of somebody's living room
+ * is their home as surely as a picture of it is.
+ */
+const scanLink = ref<string | null>(null)
+
+watch(() => media.value.find(item => item.type === 'scan')?.id ?? null, async (id) => {
+  if (id === null) {
+    scanLink.value = null
+
+    return
+  }
+
+  try {
+    scanLink.value = (await api.get<{ data: { url: string } }>(`${base}/media/${id}/link`)).data.url
+  }
+  catch {
+    scanLink.value = null
+  }
+}, { immediate: true })
+
 watch([activeStep, () => primaryPlate.value?.id ?? null, () => primaryPhoto.value?.id ?? null], async ([step, plateId, photoId]) => {
   if (step !== 'plate' || photoId === null || typeof photoId !== 'string') {
     plateLinks.value = null
@@ -1227,6 +1250,7 @@ function guideSecondary() {
                 :constraints="room.constraints"
                 :can-edit="canEdit"
                 :measured="measured || proposedSize !== null"
+                :scan-url="scanLink"
                 @changed="onOpeningsChanged"
               >
 

@@ -671,8 +671,11 @@ export interface RoomAnalysisSummary {
  */
 export interface RoomMediaItem {
   id: string
-  /** `plate` is a photograph with its furniture taken out; `source_media_id` says which. */
-  type: 'photo' | 'floor_plan' | 'inspiration' | 'document' | 'plate'
+  /**
+   * `plate` is a photograph with its furniture taken out; `source_media_id` says which.
+   * `scan` is the room's own shape, measured from several photographs at once.
+   */
+  type: 'photo' | 'floor_plan' | 'inspiration' | 'document' | 'plate' | 'scan'
   source_media_id: string | null
   original_name: string
   mime_type: string

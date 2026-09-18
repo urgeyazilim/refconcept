@@ -129,6 +129,7 @@ const typeLabels: Record<string, string> = {
   inspiration: 'İlham görseli',
   document: 'Belge',
   plate: 'Boş oda',
+  scan: 'Oda taraması',
 }
 
 // --- the plate: the photograph with its furniture taken out --------------------------
@@ -138,7 +139,11 @@ const typeLabels: Record<string, string> = {
  * under it as before/after — the whole point of one is that everything but the furniture
  * is the same picture.
  */
-const tiles = computed(() => props.media.filter(item => item.type !== 'plate'))
+/*
+ * Nor is the scan. It is the room's measured shape, not a picture of it, and there is nothing
+ * to show in a thumbnail; it belongs behind the "Tarama" button on the room itself.
+ */
+const tiles = computed(() => props.media.filter(item => item.type !== 'plate' && item.type !== 'scan'))
 
 const plateOf = (photo: RoomMediaItem): RoomMediaItem | undefined =>
   props.media.find(item => item.type === 'plate' && item.source_media_id === photo.id)

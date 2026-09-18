@@ -1,4 +1,5 @@
-import { OrthographicCamera, PerspectiveCamera, Vector3 } from 'three'
+import type { Object3D } from 'three'
+import { Box3, OrthographicCamera, PerspectiveCamera, Vector3 } from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
 import { type RoomGeometry, type ViewMode, toUnits } from './types'
@@ -357,6 +358,26 @@ export class CameraManager {
     this.perspective.position.copy(before)
     this.controls.target.copy(beforeTarget)
     this.flyTo(destination, destinationTarget)
+  }
+
+  /**
+   * Puts the camera round whatever this is, rather than round a room.
+   *
+   * The reconstruction is a cloud with no walls and no floor to stand on, so the room's own
+   * framing has nothing to work from. Its bounding sphere does.
+   */
+  frameObject(object: Object3D): void {
+    const box = new Box3().setFromObject(object)
+    const centre = box.getCenter(new Vector3())
+    const size = box.getSize(new Vector3())
+    const reach = Math.max(size.x, size.y, size.z) * 1.4
+
+    this.target.copy(centre)
+    this.perspective.position.set(centre.x + reach, centre.y + reach * 0.6, centre.z + reach)
+    this.perspective.lookAt(centre)
+
+    this.controls.target.copy(this.target)
+    this.controls.update()
   }
 
   frame(geometry: RoomGeometry): void {
