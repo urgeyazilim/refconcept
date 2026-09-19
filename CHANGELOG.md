@@ -23,9 +23,13 @@ route at all from a wrong window to a right one except dragging it by hand.
   which is the case the old rule was written for.
 - **Correcting an opening makes it yours.** The moment somebody drags the window the
   photograph found, it stops being the photograph's answer.
-- **"Fotoğraflardan yeniden oku", on the plan, with its price beside it.** One credit. It
-  replaces what the reading put on the walls and says so, and it is offered only while nothing
-  on the walls is the customer's — otherwise it would be a button that does nothing.
+- **Wall by wall, not all or nothing.** The product owner had corrected the door on their
+  north wall and left the window on the west as the reading found it. A rule that refused
+  whenever anything was theirs would have locked the wall they still wanted read, so the north
+  wall is theirs and the west is still the reading's to answer again — and a newly read
+  opening never lands on a wall somebody has already answered for.
+- **"Fotoğraflardan yeniden oku", on the plan, with its price beside it.** One credit. It says
+  what it replaces and names the walls it will not touch.
 - Openings written before this column existed count as the customer's unless they carry the
   proposer's own note, because the safe mistake is to protect a row somebody typed rather than
   to overwrite one.

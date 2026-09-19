@@ -216,8 +216,10 @@ const openingBusy = ref(false)
  */
 const rereading = ref(false)
 
-/** An opening the customer has corrected is theirs, and a reading will not touch it. */
-const corrected = computed(() => openings.value.some(opening => opening.source === 'user'))
+/** The walls the customer has answered for themselves. A reading is not offered a say in them. */
+const ownWalls = computed(() => [...new Set(
+  openings.value.filter(opening => opening.source === 'user' && opening.wall !== null).map(opening => opening.wall!),
+)])
 
 async function reread(): Promise<void> {
   rereading.value = true
@@ -1459,18 +1461,16 @@ onMounted(async () => {
               <button
                 type="button"
                 class="rounded-pill border border-line px-3 py-1.5 text-xs text-ink-secondary transition-colors hover:bg-bg-muted disabled:opacity-50"
-                :disabled="rereading || corrected"
+                :disabled="rereading"
                 @click="reread"
               >
                 {{ rereading ? 'Fotoğrafları okuyorum…' : 'Fotoğraflardan yeniden oku' }}
               </button>
 
               <p class="mt-1.5 text-[11px] text-muted">
-                <template v-if="corrected">
-                  Kendi düzelttiğin kapı/pencere var; onları değiştirmem. Yeniden okumak için önce onları kaldır.
-                </template>
-                <template v-else>
-                  1 kredi. Okumanın bulduklarının yerine yenisini koyar; senin eklediklerine dokunmaz.
+                1 kredi. Okumanın bulduklarının yerine yenisini koyar.
+                <template v-if="ownWalls.length > 0">
+                  {{ ownWalls.map(wall => WALL_LABELS[wall]).join(' ve ') }} duvarını sen düzelttin; oraya dokunmam.
                 </template>
               </p>
             </div>

@@ -491,7 +491,7 @@ it('yeniden oku: replaces what the last reading put on the walls', function (): 
         ->and($openings->first()->source)->toBe('ai');
 });
 
-it('yeniden oku: will not touch an opening the customer wrote', function (): void {
+it('yeniden oku: leaves the walls the customer answered for alone', function (): void {
     RoomConstraint::query()->create([
         'room_id' => $this->room->getKey(),
         'type' => 'window',
@@ -509,11 +509,37 @@ it('yeniden oku: will not touch an opening the customer wrote', function (): voi
     $openings = $this->room->constraints()->get();
 
     /*
-     * The customer's word stands, and the photograph does not get to rewrite the room around
-     * it either: a second window appearing beside the one somebody wrote down, at slightly
-     * different coordinates, helps nobody and cannot be told apart afterwards.
+     * Wall by wall. The south wall is the customer's and stays exactly as they left it; the
+     * north wall is nobody's yet, so the reading is allowed its answer there.
+     *
+     * The product owner's own room is why it is not all or nothing: they had corrected the
+     * door on one wall and left the window on another as the reading found it, and a rule
+     * that refused whenever anything was theirs would have locked the wall they still wanted
+     * read.
      */
-    expect($openings)->toHaveCount(1)
-        ->and($openings->first()->wall)->toBe('south')
-        ->and($openings->first()->source)->toBe('user');
+    expect($openings)->toHaveCount(2)
+        ->and($openings->firstWhere('wall', 'south')->offset_mm)->toBe(1_000)
+        ->and($openings->firstWhere('wall', 'south')->source)->toBe('user')
+        ->and($openings->firstWhere('wall', 'north')->source)->toBe('ai');
+});
+
+it('yeniden oku: will not put a second door beside the one the customer corrected', function (): void {
+    RoomConstraint::query()->create([
+        'room_id' => $this->room->getKey(),
+        'type' => 'door',
+        'wall' => 'north',
+        'offset_mm' => 1_000,
+        'width_mm' => 900,
+        'height_mm' => 2_100,
+    ]);
+
+    $this->proposer->propose(analysed([
+        'estimated_dimensions' => ['width_mm' => 4_000, 'length_mm' => 5_500, 'height_mm' => 2_600],
+        'openings' => [['type' => 'door', 'wall' => 'north', 'starts_at' => 0.5, 'ends_at' => 0.7]],
+    ]));
+
+    // They looked at the same photograph and at their own room. A second door beside theirs
+    // is not a second opinion, it is a door that does not exist.
+    expect($this->room->constraints()->count())->toBe(1)
+        ->and($this->room->constraints()->firstOrFail()->offset_mm)->toBe(1_000);
 });

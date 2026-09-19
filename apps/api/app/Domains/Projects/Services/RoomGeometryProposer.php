@@ -184,15 +184,23 @@ final class RoomGeometryProposer
          * theirs and is left alone — and if the room holds even one of those, the photograph
          * does not get to rewrite the room around it.
          */
-        $own = RoomConstraint::query()
+        /*
+         * The walls the customer has already answered for.
+         *
+         * Wall by wall rather than all or nothing. The product owner had corrected the door
+         * on their north wall and left the window on the west as the reading found it; under
+         * a rule that refused whenever anything was theirs, the one correction they made
+         * would have locked the wall they still wanted read. So the north wall is theirs and
+         * the reading is not offered a say in it, and the west wall is still the reading's to
+         * answer again.
+         */
+        $theirs = RoomConstraint::query()
             ->where('room_id', $room->getKey())
             ->whereIn('type', $kinds)
             ->where('source', '!=', 'ai')
-            ->exists();
-
-        if ($own) {
-            return 0;
-        }
+            ->pluck('wall')
+            ->filter()
+            ->all();
 
         // What the last reading put there, replaced rather than added to: it is the same
         // machine answering the same question, and two answers on one wall is not an answer.
@@ -212,6 +220,13 @@ final class RoomGeometryProposer
             $type = ConstraintType::tryFrom((string) ($opening['type'] ?? ''));
 
             if ($type === null) {
+                continue;
+            }
+
+            // Not onto a wall somebody has already corrected. They looked at the same
+            // photograph and at their own room, and a second door beside theirs is not a
+            // second opinion — it is a door that does not exist.
+            if (in_array($opening['wall'] ?? null, $theirs, true)) {
                 continue;
             }
 
