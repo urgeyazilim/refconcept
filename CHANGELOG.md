@@ -5,6 +5,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed — The reading is asked where along the wall, not how many millimetres
+
+The product owner said the system cannot work out the doors and windows from their
+photographs. It had found both — a door on the north wall, a window on the west — and every
+number attached to them was a guess: 4000 by 5500 by 2600, window at 1500 offset and 2500
+wide, door at 2800 offset and 900 wide, sill at 850, at a stated confidence of 0.7. Nine
+round numbers. They are not measurements, and the reason is the question: `offset_mm` asks a
+pair of eyes for a tape measure, and a model asked for millimetres does not refuse — it
+answers with something plausible.
+
+- **Prompt v11 asks for proportions.** `starts_at` and `ends_at`, 0 to 1 along the wall;
+  `sill_ratio` and `head_ratio`, 0 to 1 up the wall. "This window starts about a third of the
+  way along and ends about four fifths" is a judgement about a picture, which is what a vision
+  model is for. The millimetres are then worked out from a wall whose length is already known.
+- **The millimetre fields are no longer required.** A model told a field is required produces
+  one whatever else it is offered, and the number it produces looks exactly like a measurement
+  to everything downstream.
+- **An opening can no longer overrun its own wall.** A proportion of a wall is on that wall by
+  construction, and a wrong room size no longer puts the window in the wrong place as well:
+  it stays a third of the way along whatever the wall turns out to be.
+- **A reading that answers in millimetres is still honoured**, so rooms read before today keep
+  working and a model that leaves the proportions out is not thrown away. Half an answer is
+  not salvaged into a whole one: a start with no end is dropped rather than completed.
+
+
 ### Changed — The seating is a group in the middle of the room, not a row against the walls
 
 The product owner put their design next to the room it had been rebuilt in and asked whether

@@ -282,7 +282,7 @@ final class FakeAiProvider implements AiProvider
                 ],
                 // A kind and a colour, the way the real reading answers since v9.
                 'openings' => [
-                    ['type' => 'window', 'wall' => 'north', 'offset_mm' => 900, 'width_mm' => 1_400, 'height_mm' => 1_400, 'sill_height_mm' => 900, 'variant' => 'double'],
+                    ['type' => 'window', 'wall' => 'north', 'starts_at' => 0.225, 'ends_at' => 0.575, 'sill_ratio' => 0.36, 'head_ratio' => 0.92, 'variant' => 'double'],
                 ],
                 'surfaces' => [
                     'floor' => ['material' => 'wood', 'color_hex' => '#b9936c', 'change_allowed' => false],

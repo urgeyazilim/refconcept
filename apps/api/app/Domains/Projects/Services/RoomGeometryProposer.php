@@ -76,7 +76,7 @@ final class RoomGeometryProposer
              * the door would otherwise be left with a sealed box and a door in a photograph.
              * Only into a room that has none of its own, as always.
              */
-            $this->adopt($room, $this->openings($analysis, $width, $length));
+            $this->adopt($room, $this->openings($analysis, $width, $length, $height));
 
             return null;
         }
@@ -92,7 +92,7 @@ final class RoomGeometryProposer
             return $existing;
         }
 
-        $openings = $this->openings($analysis, $width, $length);
+        $openings = $this->openings($analysis, $width, $length, $height);
 
         /*
          * Put on the walls now, not when the size is agreed to.
@@ -231,7 +231,7 @@ final class RoomGeometryProposer
      *
      * @return list<array<string, mixed>>
      */
-    private function openings(RoomAnalysis $analysis, int $roomWidthMm, int $roomLengthMm): array
+    private function openings(RoomAnalysis $analysis, int $roomWidthMm, int $roomLengthMm, int $roomHeightMm): array
     {
         $reported = $analysis->payload['openings'] ?? null;
 
@@ -247,14 +247,28 @@ final class RoomGeometryProposer
             }
 
             $wall = is_string($opening['wall'] ?? null) ? $opening['wall'] : null;
-            $offset = is_int($opening['offset_mm'] ?? null) ? $opening['offset_mm'] : null;
-            $width = is_int($opening['width_mm'] ?? null) ? $opening['width_mm'] : null;
 
-            if ($wall === null || $offset === null || $width === null) {
+            if ($wall === null || ! in_array($wall, ['north', 'south', 'east', 'west'], true)) {
                 continue;
             }
 
-            if (! in_array($wall, ['north', 'south', 'east', 'west'], true)) {
+            $wallMm = $wall === 'north' || $wall === 'south' ? $roomWidthMm : $roomLengthMm;
+
+            /*
+             * Where along the wall, as the reading gave it.
+             *
+             * A proportion first, because that is the question a model looking at a wall can
+             * actually answer — "this window starts about a third of the way along" — and the
+             * millimetres follow from a wall whose length we already know. A reading from
+             * before the prompt asked that way still answers in millimetres, and those are
+             * still honoured.
+             */
+            $span = $this->along($opening, $wallMm);
+
+            $offset = $span['offset'] ?? (is_int($opening['offset_mm'] ?? null) ? $opening['offset_mm'] : null);
+            $width = $span['width'] ?? (is_int($opening['width_mm'] ?? null) ? $opening['width_mm'] : null);
+
+            if ($offset === null || $width === null) {
                 continue;
             }
 
@@ -272,8 +286,6 @@ final class RoomGeometryProposer
              * wrong somewhere; keeping it would put a hole in a wall of somebody's room that
              * does not have one.
              */
-            $wallMm = $wall === 'north' || $wall === 'south' ? $roomWidthMm : $roomLengthMm;
-
             if ($width > $wallMm) {
                 continue;
             }
@@ -294,12 +306,99 @@ final class RoomGeometryProposer
                 'wall' => $wall,
                 'offset_mm' => $offset,
                 'width_mm' => $width,
-                'height_mm' => is_int($opening['height_mm'] ?? null) ? $opening['height_mm'] : null,
-                'sill_height_mm' => is_int($opening['sill_height_mm'] ?? null) ? $opening['sill_height_mm'] : null,
+                'height_mm' => $this->height($opening, $roomHeightMm)
+                    ?? (is_int($opening['height_mm'] ?? null) ? $opening['height_mm'] : null),
+                'sill_height_mm' => $this->sill($opening, $roomHeightMm)
+                    ?? (is_int($opening['sill_height_mm'] ?? null) ? $opening['sill_height_mm'] : null),
             ];
         }
 
         return $kept;
+    }
+
+    /**
+     * Where an opening sits along its wall, from the proportions the reading gave.
+     *
+     * Empty when it gave none, or gave a pair that is not a stretch of wall — the ends the
+     * wrong way round, or the same point twice. Nothing is salvaged from half an answer: a
+     * start with no end is not a window, and inventing the missing half is the habit this
+     * whole change exists to stop.
+     *
+     * @param  array<string, mixed>  $opening
+     * @return array{offset?: int, width?: int}
+     */
+    private function along(array $opening, int $wallMm): array
+    {
+        $from = $this->ratio($opening['starts_at'] ?? null);
+        $to = $this->ratio($opening['ends_at'] ?? null);
+
+        if ($from === null || $to === null || $to <= $from) {
+            return [];
+        }
+
+        $offset = (int) round($from * $wallMm);
+        $width = (int) round(($to - $from) * $wallMm);
+
+        // An opening that came out as nothing is not an opening. The rest of the checks —
+        // too narrow, too wide, past the end of the wall — are the caller's, unchanged.
+        return $width < 1 ? [] : ['offset' => $offset, 'width' => $width];
+    }
+
+    /**
+     * How tall an opening is, from the proportions the reading gave.
+     *
+     * @param  array<string, mixed>  $opening
+     */
+    private function height(array $opening, int $roomHeightMm): ?int
+    {
+        $sill = $this->ratio($opening['sill_ratio'] ?? null);
+        $head = $this->ratio($opening['head_ratio'] ?? null);
+
+        if ($sill === null || $head === null || $head <= $sill) {
+            return null;
+        }
+
+        $height = (int) round(($head - $sill) * $roomHeightMm);
+
+        return $height < 1 ? null : $height;
+    }
+
+    /**
+     * How far off the floor an opening starts, from the proportion the reading gave.
+     *
+     * Only alongside a head: a sill on its own gives a window with a bottom and no top, and
+     * the height would fall back to a millimetre guess the sill no longer agrees with.
+     *
+     * @param  array<string, mixed>  $opening
+     */
+    private function sill(array $opening, int $roomHeightMm): ?int
+    {
+        $sill = $this->ratio($opening['sill_ratio'] ?? null);
+
+        if ($sill === null || $this->height($opening, $roomHeightMm) === null) {
+            return null;
+        }
+
+        return (int) round($sill * $roomHeightMm);
+    }
+
+    /**
+     * A proportion of a wall: a number from 0 to 1, or null for anything else.
+     *
+     * Integers are accepted because 0 and 1 are proportions and JSON does not know they were
+     * meant as floats. Anything outside the range is a reading that misunderstood the
+     * question, and a misunderstood proportion is worse than none: it would be multiplied by
+     * a wall.
+     */
+    private function ratio(mixed $value): ?float
+    {
+        if (! is_float($value) && ! is_int($value)) {
+            return null;
+        }
+
+        $ratio = (float) $value;
+
+        return $ratio < 0.0 || $ratio > 1.0 ? null : $ratio;
     }
 
     /**

@@ -339,3 +339,113 @@ it('puts the door a later reading found into a room whose size was already agree
     expect($proposal)->toBeNull()
         ->and(RoomConstraint::query()->where('room_id', $this->room->getKey())->count())->toBe(2);
 });
+
+/*
+ * --- where along the wall -------------------------------------------------
+ *
+ * The reading used to be asked for millimetres. Nobody can measure a millimetre from a
+ * photograph, and the model does not refuse: the product owner's room came back with nine
+ * round numbers at a stated confidence of 0.7, and they could see what they were. Since
+ * prompt v11 it is asked what proportion of the wall the opening covers — a judgement about
+ * a picture — and the millimetres are worked out from the wall.
+ */
+
+it('oran: works the opening out from the wall it is on', function (): void {
+    $version = $this->proposer->propose(analysed([
+        'estimated_dimensions' => ['width_mm' => 4_000, 'length_mm' => 5_500, 'height_mm' => 2_600],
+        'openings' => [[
+            'type' => 'window',
+            'wall' => 'west',
+            'starts_at' => 0.3,
+            'ends_at' => 0.8,
+            'sill_ratio' => 0.25,
+            'head_ratio' => 0.85,
+        ]],
+    ]));
+
+    $window = $this->room->constraints()->firstOrFail();
+
+    // The west wall is the room's length: 5500. Three tenths along is 1650, half its length
+    // is 2750 wide. The height is the room's: a quarter up is 650, to 0.85 is 2210.
+    expect($version)->not->toBeNull()
+        ->and($window->offset_mm)->toBe(1_650)
+        ->and($window->width_mm)->toBe(2_750)
+        ->and($window->sill_height_mm)->toBe(650)
+        ->and($window->height_mm)->toBe(1_560);
+});
+
+it('oran: an opening cannot overrun the end of its own wall', function (): void {
+    $this->proposer->propose(analysed([
+        'estimated_dimensions' => ['width_mm' => 4_000, 'length_mm' => 5_500, 'height_mm' => 2_600],
+        'openings' => [[
+            'type' => 'door',
+            'wall' => 'north',
+            'starts_at' => 0.8,
+            'ends_at' => 1.0,
+        ]],
+    ]));
+
+    $door = $this->room->constraints()->firstOrFail();
+
+    // A proportion of a wall is on that wall by construction. The clamp that used to slide a
+    // millimetre estimate back from over the corner has nothing left to do.
+    expect($door->offset_mm + $door->width_mm)->toBe(4_000);
+});
+
+it('oran: still honours a reading that answers in millimetres', function (): void {
+    $this->proposer->propose(analysed([
+        'estimated_dimensions' => ['width_mm' => 4_000, 'length_mm' => 5_500, 'height_mm' => 2_600],
+        'openings' => [[
+            'type' => 'window',
+            'wall' => 'north',
+            'offset_mm' => 900,
+            'width_mm' => 1_400,
+            'height_mm' => 1_400,
+            'sill_height_mm' => 900,
+        ]],
+    ]));
+
+    $window = $this->room->constraints()->firstOrFail();
+
+    // Rooms read before the prompt changed are still rooms, and so is a reading that leaves
+    // the proportions out.
+    expect($window->offset_mm)->toBe(900)
+        ->and($window->width_mm)->toBe(1_400)
+        ->and($window->sill_height_mm)->toBe(900);
+});
+
+it('oran: ignores a pair of proportions that is not a stretch of wall', function (): void {
+    $this->proposer->propose(analysed([
+        'estimated_dimensions' => ['width_mm' => 4_000, 'length_mm' => 5_500, 'height_mm' => 2_600],
+        'openings' => [[
+            'type' => 'window',
+            'wall' => 'north',
+            // The ends the wrong way round, and millimetres beside them.
+            'starts_at' => 0.9,
+            'ends_at' => 0.2,
+            'offset_mm' => 900,
+            'width_mm' => 1_400,
+        ]],
+    ]));
+
+    $window = $this->room->constraints()->firstOrFail();
+
+    // Half an answer is not salvaged into a whole one. The millimetres are what is left.
+    expect($window->offset_mm)->toBe(900)
+        ->and($window->width_mm)->toBe(1_400);
+});
+
+it('oran: drops an opening that answers neither way', function (): void {
+    $this->proposer->propose(analysed([
+        'estimated_dimensions' => ['width_mm' => 4_000, 'length_mm' => 5_500, 'height_mm' => 2_600],
+        'openings' => [[
+            'type' => 'window',
+            'wall' => 'north',
+            'starts_at' => 0.3,
+        ]],
+    ]));
+
+    // A start with no end is not a window, and a window with no position is a hole of
+    // invented size in somebody's wall.
+    expect($this->room->constraints()->count())->toBe(0);
+});
