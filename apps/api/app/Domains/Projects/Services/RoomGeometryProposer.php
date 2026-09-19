@@ -167,14 +167,40 @@ final class RoomGeometryProposer
             return 0;
         }
 
-        $has = RoomConstraint::query()
+        $kinds = [ConstraintType::Door->value, ConstraintType::Window->value, ConstraintType::BalconyDoor->value];
+
+        /*
+         * The customer's word stands. A reading may only replace a reading.
+         *
+         * This used to refuse whenever the room had any opening at all, which was right for
+         * the reason it gave — a second window appearing beside the one somebody wrote down,
+         * at slightly different coordinates, helps nobody — and wrong in what it checked. The
+         * first reading puts a door and a window on the walls, and from that moment the room
+         * *has* openings, so every later reading of the same photographs was discarded
+         * whatever it found. The product owner asked for the room to be done again and it
+         * came back identical, because nothing they could press would ever move a wall.
+         *
+         * Ownership, not existence. Anything the customer wrote, dragged or retyped is
+         * theirs and is left alone — and if the room holds even one of those, the photograph
+         * does not get to rewrite the room around it.
+         */
+        $own = RoomConstraint::query()
             ->where('room_id', $room->getKey())
-            ->whereIn('type', [ConstraintType::Door->value, ConstraintType::Window->value, ConstraintType::BalconyDoor->value])
+            ->whereIn('type', $kinds)
+            ->where('source', '!=', 'ai')
             ->exists();
 
-        if ($has) {
+        if ($own) {
             return 0;
         }
+
+        // What the last reading put there, replaced rather than added to: it is the same
+        // machine answering the same question, and two answers on one wall is not an answer.
+        RoomConstraint::query()
+            ->where('room_id', $room->getKey())
+            ->whereIn('type', $kinds)
+            ->where('source', 'ai')
+            ->delete();
 
         $added = 0;
 
@@ -212,7 +238,7 @@ final class RoomGeometryProposer
                 // Said plainly, because the customer did not write this down and should be
                 // able to see at a glance which entries they did.
                 'notes' => 'Fotoğraftan tespit edildi.',
-            ]);
+            ])->forceFill(['source' => 'ai'])->save();
 
             $added++;
         }

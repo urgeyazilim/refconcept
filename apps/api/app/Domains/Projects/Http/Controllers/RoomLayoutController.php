@@ -900,6 +900,10 @@ final class RoomLayoutController
             'width_mm' => $constraint->width_mm,
             'height_mm' => $constraint->height_mm,
             'sill_height_mm' => $constraint->sill_height_mm,
+            // Who put it there: 'ai' for the reading's own answer, 'user' for anything the
+            // customer wrote or corrected. The screen offers to read the photographs again
+            // only while nothing on the walls is theirs.
+            'source' => $constraint->source,
         ];
     }
 

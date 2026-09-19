@@ -5,6 +5,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — The first reading of a room was the last one
+
+The product owner pressed "Tasarıma göre yeniden diz", got the same room back, and said the
+detection was broken. It was, one step further back than the button they were pressing.
+
+Openings were written into a room only when it had none. The reason given was right — "a
+customer who has already written down their window is not helped by a second one appearing
+beside it at slightly different coordinates" — and what it checked was wrong. The first
+reading puts a door and a window on the walls, and from that moment the room *has* openings,
+so every later reading of the same photographs was discarded whatever it found. There was no
+route at all from a wrong window to a right one except dragging it by hand.
+
+- **The rule is ownership, not existence.** Every opening now records who put it there. A
+  reading may replace what a reading put there; nothing replaces what the customer wrote,
+  dragged or retyped. A room holding even one of the customer's own is left alone entirely,
+  which is the case the old rule was written for.
+- **Correcting an opening makes it yours.** The moment somebody drags the window the
+  photograph found, it stops being the photograph's answer.
+- **"Fotoğraflardan yeniden oku", on the plan, with its price beside it.** One credit. It
+  replaces what the reading put on the walls and says so, and it is offered only while nothing
+  on the walls is the customer's — otherwise it would be a button that does nothing.
+- Openings written before this column existed count as the customer's unless they carry the
+  proposer's own note, because the safe mistake is to protect a row somebody typed rather than
+  to overwrite one.
+
+
 ### Changed — The reading is asked where along the wall, not how many millimetres
 
 The product owner said the system cannot work out the doors and windows from their

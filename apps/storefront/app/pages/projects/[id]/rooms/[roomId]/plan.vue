@@ -203,6 +203,59 @@ const composeNotice = ref<string | null>(null)
 const openingNotice = ref<string | null>(null)
 const openingBusy = ref(false)
 
+/**
+ * Reading the photographs again, because the first answer was wrong.
+ *
+ * Until now there was no way from a wrong window to a right one except dragging it: arranging
+ * re-runs the furniture and not the walls, and a second reading of the same photographs was
+ * discarded because the room already had openings. The product owner pressed "yeniden diz",
+ * got the same room, and said the detection was broken. It was, one step further back.
+ *
+ * It costs a credit and it replaces what the last reading put on the walls, so it is a button
+ * with its price beside it and never something that happens on its own.
+ */
+const rereading = ref(false)
+
+/** An opening the customer has corrected is theirs, and a reading will not touch it. */
+const corrected = computed(() => openings.value.some(opening => opening.source === 'user'))
+
+async function reread(): Promise<void> {
+  rereading.value = true
+  openingNotice.value = null
+
+  try {
+    await api.post(`${base}/analyse`, { force: true })
+
+    /*
+     * The reading runs on a queue and takes half a minute or so. Polled rather than waited
+     * on: the customer keeps the room in front of them and the walls change under it when
+     * the answer lands.
+     */
+    const started = Date.now()
+
+    while (Date.now() - started < 120_000) {
+      await new Promise(resolve => setTimeout(resolve, 3_000))
+
+      const fresh = await api.get<{ data: { openings: RoomOpening[] } }>(`${base}/layout`)
+
+      if (JSON.stringify(fresh.data.openings) !== JSON.stringify(openings.value)) {
+        openings.value = fresh.data.openings
+        openingNotice.value = `Fotoğrafları yeniden okudum: ${fresh.data.openings.length} kapı/pencere buldum.`
+
+        return
+      }
+    }
+
+    openingNotice.value = 'Yeniden okudum, aynı sonucu buldum. Yanlışsa tutup elle düzeltebilirsin.'
+  }
+  catch (error) {
+    openingNotice.value = error instanceof Error ? error.message : 'Fotoğraflar yeniden okunamadı.'
+  }
+  finally {
+    rereading.value = false
+  }
+}
+
 const WALL_LABELS: Record<string, string> = { north: 'kuzey', east: 'doğu', south: 'güney', west: 'batı' }
 
 function asOpening(raw: Record<string, unknown>): RoomOpening {
@@ -1393,6 +1446,34 @@ onMounted(async () => {
             <p v-else class="mt-3 text-xs text-muted">Bu odada kayıtlı kapı ya da pencere yok.</p>
     
             <p class="mt-3 text-xs text-muted">Yenisini eklemek için sahnenin solundaki simgeleri kullan; sonra tutup duvara sürükle.</p>
+
+            <!--
+              The way back to the photographs.
+
+              The reading is a guess from a picture and is sometimes wrong about which wall or
+              where along it. Correcting by hand is one drag and is usually the faster answer;
+              this is for when the whole reading is off. It spends a credit, so it says so
+              beside itself and never runs on its own.
+            -->
+            <div class="mt-3 border-t border-line pt-3">
+              <button
+                type="button"
+                class="rounded-pill border border-line px-3 py-1.5 text-xs text-ink-secondary transition-colors hover:bg-bg-muted disabled:opacity-50"
+                :disabled="rereading || corrected"
+                @click="reread"
+              >
+                {{ rereading ? 'Fotoğrafları okuyorum…' : 'Fotoğraflardan yeniden oku' }}
+              </button>
+
+              <p class="mt-1.5 text-[11px] text-muted">
+                <template v-if="corrected">
+                  Kendi düzelttiğin kapı/pencere var; onları değiştirmem. Yeniden okumak için önce onları kaldır.
+                </template>
+                <template v-else>
+                  1 kredi. Okumanın bulduklarının yerine yenisini koyar; senin eklediklerine dokunmaz.
+                </template>
+              </p>
+            </div>
           </section>
     
           <!--

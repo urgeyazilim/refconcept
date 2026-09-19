@@ -267,9 +267,14 @@ it('says where an opening it read came from', function (): void {
     // Said plainly, so the customer can see at a glance which entries are their own.
     expect($constraint->wall)->toBe('east')
         ->and($constraint->notes)->toBe('Fotoğraftan tespit edildi.')
-        // Asking again changes nothing: the door is already on that wall, and a second one
-        // beside it is the mess this guard exists to prevent.
-        ->and($this->proposer->adoptOpenings($version))->toBe(0);
+        ->and($constraint->source)->toBe('ai');
+
+    $this->proposer->adoptOpenings($version);
+
+    // Asking again leaves one door on that wall, not two. A reading replaces what a reading
+    // put there — which is how a customer whose window was read wrong can have it read again
+    // — and two doors beside each other is the mess that rule has to avoid while it does.
+    expect(RoomConstraint::query()->where('room_id', $this->room->getKey())->count())->toBe(1);
 });
 
 it('says which kind an adopted opening most likely is, from its width', function (): void {
@@ -448,4 +453,67 @@ it('oran: drops an opening that answers neither way', function (): void {
     // A start with no end is not a window, and a window with no position is a hole of
     // invented size in somebody's wall.
     expect($this->room->constraints()->count())->toBe(0);
+});
+
+/*
+ * --- reading the photographs again ----------------------------------------
+ *
+ * Openings used to be written into a room only when it had none, which meant the first
+ * reading was the last: from the moment it put a door and a window on the walls, the room
+ * *had* openings and every later reading of the same photographs was discarded. The product
+ * owner asked for the room again and got the same room, because nothing they could press
+ * would ever move a wall.
+ */
+
+it('yeniden oku: replaces what the last reading put on the walls', function (): void {
+    $this->proposer->propose(analysed([
+        'estimated_dimensions' => ['width_mm' => 4_000, 'length_mm' => 5_500, 'height_mm' => 2_600],
+        'openings' => [['type' => 'window', 'wall' => 'north', 'starts_at' => 0.1, 'ends_at' => 0.4]],
+    ]));
+
+    expect($this->room->constraints()->firstOrFail()->offset_mm)->toBe(400);
+
+    // A room has one current reading, so the old one steps aside the way the analyser does
+    // it when the photographs are read again.
+    RoomAnalysis::query()->where('room_id', $this->room->getKey())->update(['is_current' => false]);
+
+    $this->proposer->propose(analysed([
+        'estimated_dimensions' => ['width_mm' => 4_000, 'length_mm' => 5_500, 'height_mm' => 2_600],
+        'openings' => [['type' => 'window', 'wall' => 'north', 'starts_at' => 0.5, 'ends_at' => 0.9]],
+    ]));
+
+    $openings = $this->room->constraints()->get();
+
+    // One window, where the newer reading put it. Two windows on one wall is not a second
+    // opinion, it is a room with a window that does not exist.
+    expect($openings)->toHaveCount(1)
+        ->and($openings->first()->offset_mm)->toBe(2_000)
+        ->and($openings->first()->source)->toBe('ai');
+});
+
+it('yeniden oku: will not touch an opening the customer wrote', function (): void {
+    RoomConstraint::query()->create([
+        'room_id' => $this->room->getKey(),
+        'type' => 'window',
+        'wall' => 'south',
+        'offset_mm' => 1_000,
+        'width_mm' => 1_200,
+        'height_mm' => 1_400,
+    ]);
+
+    $this->proposer->propose(analysed([
+        'estimated_dimensions' => ['width_mm' => 4_000, 'length_mm' => 5_500, 'height_mm' => 2_600],
+        'openings' => [['type' => 'window', 'wall' => 'north', 'starts_at' => 0.5, 'ends_at' => 0.9]],
+    ]));
+
+    $openings = $this->room->constraints()->get();
+
+    /*
+     * The customer's word stands, and the photograph does not get to rewrite the room around
+     * it either: a second window appearing beside the one somebody wrote down, at slightly
+     * different coordinates, helps nobody and cannot be told apart afterwards.
+     */
+    expect($openings)->toHaveCount(1)
+        ->and($openings->first()->wall)->toBe('south')
+        ->and($openings->first()->source)->toBe('user');
 });

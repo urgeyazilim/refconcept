@@ -217,7 +217,17 @@ final class RoomController
         // confirmable as existing.
         abort_unless($constraint->room_id === $room->getKey(), 404);
 
-        $constraint->fill($this->validateConstraint($request, current: $constraint))->save();
+        /*
+         * Dragging the window the photograph found makes it yours.
+         *
+         * A later reading replaces what a reading put there and never touches what the
+         * customer did, so the moment somebody corrects an opening it stops being the
+         * photograph's answer and starts being theirs.
+         */
+        $constraint
+            ->fill($this->validateConstraint($request, current: $constraint))
+            ->forceFill(['source' => 'user'])
+            ->save();
 
         return response()->json(['data' => $this->constraint($constraint->fresh())]);
     }

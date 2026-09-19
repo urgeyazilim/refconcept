@@ -22,6 +22,7 @@ use Illuminate\Support\Carbon;
  * @property string $id
  * @property string $room_id
  * @property ConstraintType $type
+ * @property string $source who put it there: 'ai' for the reading, 'user' for the customer
  * @property OpeningVariant|null $variant which kind of door or window; null for anything read before it was asked
  * @property DoorSwing|null $swing which jamb a door hangs on and which way it opens; null means the start jamb, into the room
  * @property string|null $label

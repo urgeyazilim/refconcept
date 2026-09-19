@@ -78,6 +78,13 @@ export interface RoomOpening {
   height_mm: number | null
   /** Height of the sill above the floor. Zero for a door, roughly 900 for a window. */
   sill_height_mm: number | null
+  /**
+   * Who put it there.
+   *
+   * 'ai' is the reading's own answer and a later reading may replace it; 'user' is anything
+   * the customer wrote, dragged or retyped, and nothing replaces that.
+   */
+  source?: 'ai' | 'user'
 }
 
 /** One product standing somewhere in the room. */
