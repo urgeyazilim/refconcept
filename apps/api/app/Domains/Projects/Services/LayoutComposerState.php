@@ -438,6 +438,37 @@ final class LayoutComposerState
     }
 
     /**
+     * Whether a piece would stand clear of everything already standing on the floor.
+     *
+     * The wall rules keep pieces apart along a wall, which was enough while everything stood
+     * against one. The seating group stands in the middle of the room, where there are no
+     * runs to reserve, so its pieces are checked against each other as rectangles.
+     *
+     * Rugs and anything off the floor are not in the way: a chair stands on a rug and a
+     * picture hangs over a sideboard.
+     *
+     * @param  array<string, mixed>  $item
+     */
+    public function standsClear(array $item): bool
+    {
+        [$x0, $x1, $z0, $z1] = $this->boxOf($item);
+
+        foreach ($this->placed as $other) {
+            if ((int) ($other['position_y_mm'] ?? 0) > 0 || in_array((string) ($other['category'] ?? ''), self::UNDERFOOT, true)) {
+                continue;
+            }
+
+            [$ox0, $ox1, $oz0, $oz1] = $this->boxOf($other);
+
+            if ($x0 < $ox1 && $x1 > $ox0 && $z0 < $oz1 && $z1 > $oz0) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * Records a piece, so nothing else is put on top of it.
      *
      * @param  array<string, mixed>  $item

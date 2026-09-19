@@ -5,6 +5,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed — The seating is a group in the middle of the room, not a row against the walls
+
+The product owner put their design next to the room it had been rebuilt in and asked whether
+the layout matched. It did not, and the plan said so better than the room did. The design
+plan for that room reads, in as many words: "oturma grubu, duvarlara yapıştırılmak yerine
+odanın merkezinde bir 'ada' olarak tasarlanmıştır", and of the armchair: "oturma grubunun
+kuzey kanadında, kanepeye dik, diğer koltuğa bakacak şekilde." The composer read the word
+"north" beside the armchair and put it against the north wall of the room, two and a half
+metres from the sofa it was meant to be talking to.
+
+- **A wall name on a secondary seat is a wing of the group, not a wall of the room.** A seat
+  narrower than the main one now joins it: level with where the coffee table goes, just
+  outside it, turned a quarter so the two wings look across the group at each other. A seat as
+  wide as the main one is a second group rather than a wing of this one and still takes a
+  wall, and so does a wing the room has no space for — then the wall name means what it says
+  again.
+- **The plan's quantity is honoured.** "İki berjer" is one placement with a quantity of two
+  and it arrived at the room as one armchair: the number was read when the plan was written
+  and never again. It is capped at four, because the number comes out of a language model and
+  each one becomes furniture standing in somebody's room.
+- **Pieces in the middle of the room are checked against each other.** The wall rules kept
+  pieces apart along a wall, which was enough while everything stood against one. Rugs and
+  anything hanging are not in the way — a chair stands on a rug.
+- The owner's own room now comes back as the design drew it: the sofa under the window facing
+  the television, two armchairs facing each other across the coffee table, the rug under all
+  four.
+
+
 ### Added — The design is on the screen that rearranges it
 
 The plan screen asks somebody to move a design's furniture about and showed them an empty

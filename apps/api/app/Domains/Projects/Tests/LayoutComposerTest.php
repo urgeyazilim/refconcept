@@ -450,3 +450,80 @@ it('grup: the rug and the table belong to the sofa, not to the last chair placed
         ->and($table['position_x_mm'])->toBe($sofa['position_x_mm'])
         ->and($rug['position_x_mm'])->toBe($sofa['position_x_mm']);
 });
+
+/*
+ * --- the seating group ----------------------------------------------------
+ *
+ * Everything here comes from one real plan. It said, in as many words, "oturma grubu,
+ * duvarlara yapıştırılmak yerine odanın merkezinde bir 'ada' olarak tasarlanmıştır", and of
+ * the armchair: "oturma grubunun kuzey kanadında, kanepeye dik, diğer koltuğa bakacak
+ * şekilde". The composer read the word "north" beside it and put the chair against the north
+ * wall of the room, two and a half metres from the sofa it was meant to be talking to.
+ */
+
+it('oturma grubu: the armchairs take a wing each and look across the table at each other', function (): void {
+    $result = $this->composer->compose($this->geometry, [], [
+        piece('kanepe', 2_200, 900, 'north', 780),
+        piece('koltuk', 780, 820, 'north', 820),
+        piece('koltuk', 780, 820, 'north', 820),
+        piece('sehpa', 900, 900),
+    ]);
+
+    $sofa = find($result['items'], 'kanepe');
+    $table = find($result['items'], 'sehpa');
+
+    $chairs = array_values(array_filter(
+        $result['items'],
+        static fn (array $item): bool => $item['category'] === 'koltuk',
+    ));
+
+    usort($chairs, static fn (array $a, array $b): int => $a['position_x_mm'] <=> $b['position_x_mm']);
+
+    expect($chairs)->toHaveCount(2)
+        // Level with the table, not against the wall the plan named: a wall on a secondary
+        // seat is a wing of the group and not a wall of the room.
+        ->and($chairs[0]['position_z_mm'])->toBe($table['position_z_mm'])
+        ->and($chairs[1]['position_z_mm'])->toBe($table['position_z_mm'])
+        // One each side of the table, which is itself in front of the sofa.
+        ->and($chairs[0]['position_x_mm'])->toBeLessThan($table['position_x_mm'])
+        ->and($chairs[1]['position_x_mm'])->toBeGreaterThan($table['position_x_mm'])
+        // Turned a quarter from the sofa, facing each other across the group.
+        ->and($chairs[0]['rotation_y_deg'])->toBe(270)
+        ->and($chairs[1]['rotation_y_deg'])->toBe(90)
+        // And well clear of the sofa, which is still against its own wall.
+        ->and($chairs[0]['position_z_mm'])->toBeGreaterThan($sofa['position_z_mm']);
+});
+
+it('oturma grubu: a second sofa is a second group, so it goes to a wall', function (): void {
+    $result = $this->composer->compose($this->geometry, [], [
+        piece('kanepe', 2_200, 900, 'north', 780),
+        piece('kanepe', 2_200, 900, 'south', 780),
+    ]);
+
+    $sofas = array_values(array_filter(
+        $result['items'],
+        static fn (array $item): bool => $item['category'] === 'kanepe',
+    ));
+
+    // Two sofas facing each other across a room is an arrangement somebody chose. Hanging the
+    // second one off the side of the first is not.
+    expect($sofas)->toHaveCount(2)
+        ->and($sofas[0]['rotation_y_deg'])->not->toBe($sofas[1]['rotation_y_deg']);
+});
+
+it('oturma grubu: falls back to a wall when the group has no room for a wing', function (): void {
+    $narrow = new RoomGeometryVersion;
+    $narrow->forceFill(['width_mm' => 2_600, 'length_mm' => 4_000, 'height_mm' => 2_600]);
+
+    $result = $this->composer->compose($narrow, [], [
+        piece('kanepe', 1_700, 900, 'north', 780),
+        piece('koltuk', 780, 820, 'east', 820),
+    ]);
+
+    $chair = find($result['items'], 'koltuk');
+
+    // 2.6 m of room cannot hold a sofa, a table and a chair beside it. The chair takes the
+    // wall the plan named rather than standing half outside the room.
+    expect($chair)->not->toBeNull()
+        ->and($chair['rotation_y_deg'])->toBe(90);
+});

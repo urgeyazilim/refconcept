@@ -79,20 +79,63 @@ final class ComposableProducts
 
             $placement = $placements[$match->placement_index] ?? null;
 
-            $pieces[] = [
-                'product_id' => (string) $match->product_id,
-                'sku_id' => (string) $match->sku_id,
-                // The placement's category rather than the product's, because the placement is
-                // what the room was planned around: a bench bought as seating is seating here.
-                'category' => $match->placement_category,
-                'width_mm' => $width,
-                'depth_mm' => $depth,
-                'height_mm' => (int) ($dimensions->height_mm ?? 0) ?: null,
-                'wall' => $this->wall(is_array($placement) ? ($placement['wall'] ?? null) : null),
-            ];
+            /*
+             * As many as the plan asked for, of the one product chosen for the placement.
+             *
+             * "İki berjer" is one placement with a quantity of two, and it arrived here as one
+             * armchair: the number was read when the placement was written and never again.
+             * The design the product owner was looking at had two chairs either side of the
+             * coffee table and the room they were given had one, against a wall.
+             *
+             * One product rather than two different ones, because that is what a pair is —
+             * and the basket already turns two rows of the same variant into a quantity of
+             * two rather than two lines.
+             */
+            $wanted = $this->quantity($placement);
+
+            for ($copy = 0; $copy < $wanted; $copy++) {
+                $pieces[] = [
+                    'product_id' => (string) $match->product_id,
+                    'sku_id' => (string) $match->sku_id,
+                    // The placement's category rather than the product's, because the placement
+                    // is what the room was planned around: a bench bought as seating is seating.
+                    'category' => $match->placement_category,
+                    'width_mm' => $width,
+                    'depth_mm' => $depth,
+                    'height_mm' => (int) ($dimensions->height_mm ?? 0) ?: null,
+                    'wall' => $this->wall(is_array($placement) ? ($placement['wall'] ?? null) : null),
+                ];
+            }
         }
 
         return ['pieces' => $pieces, 'unmeasured' => $unmeasured];
+    }
+
+    /**
+     * How many of a placement the plan asked for.
+     *
+     * Capped, because this number comes out of a language model and the composer turns each
+     * one into a piece of furniture standing in somebody's room. Four is more chairs than any
+     * plan has ever asked for and fewer than a runaway number would put on the floor; the
+     * composer's own floor-share rule stops the rest.
+     */
+    private function quantity(mixed $placement): int
+    {
+        if (! is_array($placement)) {
+            return 1;
+        }
+
+        $quantity = $placement['quantity'] ?? 1;
+
+        if (is_string($quantity) && ctype_digit($quantity)) {
+            $quantity = (int) $quantity;
+        }
+
+        if (! is_int($quantity)) {
+            return 1;
+        }
+
+        return max(1, min(4, $quantity));
     }
 
     /**

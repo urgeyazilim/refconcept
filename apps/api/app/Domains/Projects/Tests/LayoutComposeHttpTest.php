@@ -330,3 +330,31 @@ it('falls back to the newest when the version asked for is not this room', funct
     // A query string is a hint, not a claim. It names this room's own design or nothing.
     $response->assertOk()->assertJsonPath('data.design.version_id', $this->version->getKey());
 });
+
+it('puts as many of a piece in the room as the plan asked for', function (): void {
+    planned([
+        ['category' => 'kanepe', 'wall' => 'batı duvarı', 'quantity' => 1],
+        ['category' => 'koltuk', 'wall' => 'kuzey', 'quantity' => 2],
+    ]);
+
+    matched('İkili kanepe', 'kanepe', 2_200, 950, 0);
+    matched('Keten berjer', 'koltuk', 780, 820, 1);
+
+    $items = $this->actingAs($this->owner)
+        ->postJson("{$this->url}/layout/compose")
+        ->assertOk()
+        ->json('data.items');
+
+    $chairs = collect($items)->where('category', 'koltuk');
+
+    /*
+     * "İki berjer" is one placement with a quantity of two, and it used to arrive as one
+     * armchair: the number was read when the plan was written and never again. The design the
+     * customer was shown had two chairs either side of the coffee table.
+     *
+     * The same product twice, because that is what a pair is — and the basket already turns
+     * two rows of one variant into a quantity of two rather than two lines.
+     */
+    expect($chairs)->toHaveCount(2)
+        ->and($chairs->pluck('sku_id')->unique())->toHaveCount(1);
+});

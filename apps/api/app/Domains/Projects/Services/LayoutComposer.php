@@ -70,6 +70,17 @@ final class LayoutComposer
     /** Air between a piece and the one it stands beside. */
     private const BESIDE_GAP_MM = 80;
 
+    /**
+     * Oturma grubu: half a coffee table, for working out where the group closes.
+     *
+     * Seating is placed before tables — the table goes in front of the seat, so the seat has
+     * to exist first — which means the wings of the group are positioned before anybody knows
+     * how big the table will be. A nominal half-table is close enough: it decides where the
+     * armchairs sit relative to the sofa, and a coffee table is 80 to 110 cm across in every
+     * catalogue anybody sells from.
+     */
+    private const GROUP_TABLE_HALF_MM = 450;
+
     /** Ölçek: the share of the floor standing furniture may cover, in basis points. */
     private const FLOOR_SHARE_BPS = 4_000;
 
@@ -340,6 +351,26 @@ final class LayoutComposer
      */
     private function placeSeating(array $piece, LayoutComposerState $state): ?array
     {
+        /*
+         * Oturma grubu: the second seat joins the first rather than taking a wall of its own.
+         *
+         * The plan for the product owner's living room said it in as many words — "oturma
+         * grubu, duvarlara yapıştırılmak yerine odanın merkezinde bir 'ada' olarak
+         * tasarlanmıştır", and the armchair "oturma grubunun kuzey kanadında, kanepeye dik,
+         * diğer koltuğa bakacak şekilde". The composer read only the wall name beside it,
+         * "north", and put the armchair against the north wall of the room, two and a half
+         * metres from the sofa it was meant to be talking to.
+         *
+         * So a wall name on a secondary seat is a wing of the group, not a wall of the room,
+         * and it is ignored here. If the group has no space for the chair, the wall rules
+         * below take over and the wall name means what it says again.
+         */
+        $grouped = $this->placeInGroup($piece, $state);
+
+        if ($grouped !== null) {
+            return $grouped;
+        }
+
         $wall = $this->askedWall($piece) ?? LayoutComposerState::opposite($state->focalWall());
 
         $width = (int) $piece['width_mm'];
@@ -381,6 +412,97 @@ final class LayoutComposer
         }
 
         return $this->onWall($piece, $state, $wall, $along, $offset);
+    }
+
+    /**
+     * Oturma grubu: a second seat as a wing of the first, not a piece against a wall.
+     *
+     * The wings stand level with where the coffee table goes and just outside it, turned a
+     * quarter so they look across the group at each other — which is what "kanepeye dik,
+     * diğer koltuğa bakacak" describes, and what a room of people sitting together looks
+     * like. Only a seat narrower than the main one joins: a second sofa the size of the first
+     * is a second group, and that is a decision, not an arrangement.
+     *
+     * Null when there is no group to join or no room for a wing, and then the caller puts the
+     * seat against a wall as before.
+     *
+     * @param  array<string, mixed>  $piece
+     * @return array<string, mixed>|null
+     */
+    private function placeInGroup(array $piece, LayoutComposerState $state): ?array
+    {
+        $seat = $state->mainSeating();
+
+        if ($seat === null || (int) $piece['width_mm'] >= (int) $seat['width_mm']) {
+            return null;
+        }
+
+        $rotation = $this->normalised((int) $seat['rotation_y_deg']);
+
+        [$fx, $fz] = $this->forward($rotation);
+        [$sx, $sz] = $this->sideways($rotation);
+
+        // Forward to the table's line, so the group closes round the table rather than
+        // trailing off behind the sofa.
+        $reach = intdiv((int) $seat['depth_mm'], 2) + self::TABLE_GAP_MM + self::GROUP_TABLE_HALF_MM;
+
+        // Sideways to just clear the table. The wing is turned a quarter, so what runs along
+        // the group's width is its depth.
+        $side = self::GROUP_TABLE_HALF_MM + self::BESIDE_GAP_MM + intdiv((int) $piece['depth_mm'], 2);
+
+        $x = (int) $seat['position_x_mm'] + $fx * $reach;
+        $z = (int) $seat['position_z_mm'] + $fz * $reach;
+
+        foreach ($this->wings($state, $seat, $sx) as $sign) {
+            $placed = $this->onFloor(
+                $piece,
+                $state,
+                $x + $sx * $side * $sign,
+                $z + $sz * $side * $sign,
+                // Looking back across the group, which is where the other wing is.
+                $this->facing(-$sx * $sign, -$sz * $sign),
+            );
+
+            if ($placed !== null && $this->insideRoom($placed, $state) && $state->standsClear($placed)) {
+                return $placed;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Which wing of the group to try first: the one with more room behind it.
+     *
+     * A group that sits off-centre has a roomy side and a tight one. Filling the roomy side
+     * first means one chair is comfortable and only the second has to squeeze, rather than
+     * both being squeezed because the first took the wrong half.
+     *
+     * The second seat finds the first one standing there and takes the other wing, because a
+     * wing already occupied fails the collision check.
+     *
+     * @param  array<string, mixed>  $seat
+     * @return list<int>
+     */
+    private function wings(LayoutComposerState $state, array $seat, int $sx): array
+    {
+        $centre = $sx !== 0 ? (int) $seat['position_x_mm'] : (int) $seat['position_z_mm'];
+        $extent = $sx !== 0 ? $state->width() : $state->length();
+
+        return $centre * 2 > $extent ? [-1, 1] : [1, -1];
+    }
+
+    /**
+     * The rotation that looks in a given direction — the inverse of {@see forward()}.
+     */
+    private function facing(int $dx, int $dz): int
+    {
+        return match (true) {
+            $dz > 0 => 0,
+            $dz < 0 => 180,
+            $dx < 0 => 90,
+            default => 270,
+        };
     }
 
     /**
