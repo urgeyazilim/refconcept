@@ -546,30 +546,46 @@ async function saveCorrection(): Promise<void> {
  */
 let snapshotTimer: ReturnType<typeof setTimeout> | null = null
 
+/**
+ * Draws the room as it stands and sends it.
+ *
+ * Deliberately silent on failure: the layout itself is saved, and telling somebody their
+ * furniture might not have saved, when it has, would be worse than a missing reference.
+ */
+async function sendSnapshot(): Promise<void> {
+  if (snapshotTimer !== null) {
+    clearTimeout(snapshotTimer)
+    snapshotTimer = null
+  }
+
+  // After the scene has drawn whatever changed, or the picture is of the room as it was.
+  await nextTick()
+
+  const image = scene.value?.snapshot()
+
+  if (typeof image !== 'string' || image === '') {
+    return
+  }
+
+  try {
+    await api.post(`${base}/layout/snapshot`, { image })
+  }
+  catch {
+    // See above.
+  }
+}
+
+/**
+ * The same, but not on every frame of a drag: sixty saves is sixty pictures of a few hundred
+ * kilobytes each, and the renderer only ever reads the most recent one.
+ */
 function scheduleSnapshot(): void {
   if (snapshotTimer !== null) {
     clearTimeout(snapshotTimer)
   }
 
-  snapshotTimer = setTimeout(async () => {
-    const image = scene.value?.snapshot()
-
-    if (typeof image !== 'string' || image === '') {
-      return
-    }
-
-    try {
-      await api.post(`${base}/layout/snapshot`, { image })
-    }
-    catch {
-      /*
-       * Deliberately silent.
-       *
-       * The layout itself is saved, and the snapshot is an optimisation for a render that
-       * has not been asked for yet. Telling somebody their furniture might not have saved,
-       * when it has, would be worse than the missing reference.
-       */
-    }
+  snapshotTimer = setTimeout(() => {
+    void sendSnapshot()
   }, 4_000)
 }
 
@@ -636,6 +652,17 @@ async function composeLayout(replace = false): Promise<void> {
 
     items.value = response.data.items
     overwrite.value = false
+
+    /*
+     * The arrangement is a change to the room, so the renderer's reference changes with it.
+     *
+     * This was missing, and it is the reason a design and the room it was rebuilt in
+     * disagreed about where the window was. Arranging wrote seven pieces of furniture and
+     * sent no picture, so "Render al" either found nothing to follow or found a picture of
+     * an older arrangement — and a renderer with no structure to obey invents one: it moved
+     * the window, dropped the door and hung the picture over the sofa.
+     */
+    scheduleSnapshot()
 
     // Arranging a room nobody had confirmed takes the reading's proposal as agreed; the
     // page learns that here rather than on the next visit.
@@ -918,6 +945,15 @@ async function renderFinal(): Promise<void> {
   }
 
   rendering.value = true
+
+  /*
+   * The picture of the room goes first, and this waits for it.
+   *
+   * The throttle exists for dragging, not for pressing a button: somebody who arranges the
+   * room and presses "Render al" within four seconds would otherwise pay for a render of a
+   * room the server has never seen.
+   */
+  await sendSnapshot()
   saveError.value = null
 
   try {

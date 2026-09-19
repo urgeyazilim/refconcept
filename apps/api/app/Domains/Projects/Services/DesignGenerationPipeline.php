@@ -1016,6 +1016,22 @@ final class DesignGenerationPipeline
             return null;
         }
 
+        /*
+         * Only while it is still a picture of this arrangement.
+         *
+         * The snapshot is drawn by the browser and posted a moment later, so a room arranged
+         * and re-arranged can have a picture of the arrangement before last. Handing the
+         * renderer an out-of-date plan is worse than handing it none: none leaves the model
+         * to invent a room and be caught by the check, while a stale one is structure it will
+         * follow faithfully into the wrong answer.
+         */
+        $taken = $layout?->snapshot_taken_at;
+        $changed = $layout?->items()->max('updated_at');
+
+        if ($taken === null || (is_string($changed) && $taken->lt($changed))) {
+            return null;
+        }
+
         return ['disk' => $disk, 'path' => $path];
     }
 
