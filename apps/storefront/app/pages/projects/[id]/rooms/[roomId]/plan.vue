@@ -150,9 +150,40 @@ interface Detection {
 const detected = ref<Detection | null>(null)
 const photoUrl = ref<string | null>(null)
 
-/** The design a final image would be made from, when the room has one. */
-const design = ref<{ design_id: string, version_id: string, version_number: number } | null>(null)
+/**
+ * The design this screen is arranging: what a final image branches from, and the picture of
+ * it, which is the whole reason somebody is standing here moving furniture about.
+ */
+const design = ref<{ design_id: string, version_id: string, version_number: number, image_url: string | null } | null>(null)
 const rendering = ref(false)
+
+/**
+ * The design, full screen.
+ *
+ * The reference in the side column is 300 pixels wide, which is enough to remember a layout
+ * by and not enough to check a colour against. One click gives the picture the whole window.
+ */
+const zoomed = ref(false)
+const zoomDialog = ref<HTMLElement | null>(null)
+
+watch(zoomed, async (open) => {
+  if (import.meta.server) {
+    return
+  }
+
+  document.body.style.overflow = open ? 'hidden' : ''
+
+  if (open) {
+    await nextTick()
+    zoomDialog.value?.focus()
+  }
+})
+
+onBeforeUnmount(() => {
+  if (import.meta.client) {
+    document.body.style.overflow = ''
+  }
+})
 
 const composing = ref(false)
 const composeNotice = ref<string | null>(null)
@@ -380,10 +411,14 @@ async function load(): Promise<void> {
         layout: LayoutPayload | null
         room_type: string | null
         room: { width_mm: number | null, length_mm: number | null, height_mm: number | null, photo_count: number }
-        design: { design_id: string, version_id: string, version_number: number } | null
+        design: { design_id: string, version_id: string, version_number: number, image_url: string | null } | null
         detected: Detection | null
       }
-    }>(`${base}/layout`)
+    }>(
+      // The design they pressed "yerleşimi değiştir" on, so the picture beside the room is
+      // the one they were looking at rather than whichever version happens to be newest.
+      `${base}/layout${fromDesign.value === '' ? '' : `?design_version_id=${fromDesign.value}`}`,
+    )
 
     confirmed.value = response.data.geometry
     pending.value = response.data.pending_geometry
@@ -1186,6 +1221,40 @@ onMounted(async () => {
         </template>
 
         <template #side-start>
+          <!--
+            The design, beside the room it is being rebuilt in.
+
+            This screen asks somebody to move a design's furniture about and showed them an
+            empty grey room to do it in: the product owner's words were "burada bana vermiş
+            olduğum tasarımı göremiyorum." A plan is a copy of a picture, and the picture has
+            to be on the screen. It is the reference, not the subject, so it stays quiet and
+            small — the room is the thing being worked on — and a click gives it the window.
+          -->
+          <figure v-if="design?.image_url" class="overflow-hidden rounded-md border border-line bg-surface">
+            <button
+              type="button"
+              class="block w-full"
+              aria-label="Tasarımı büyüt"
+              @click="zoomed = true"
+            >
+              <img
+                :src="design.image_url"
+                alt="Yerleşimi değiştirdiğin tasarım"
+                class="aspect-[4/3] w-full cursor-zoom-in object-cover transition-opacity hover:opacity-90"
+              >
+            </button>
+
+            <figcaption class="flex items-center justify-between gap-2 px-3 py-2 text-xs">
+              <span class="truncate text-ink-secondary">Tasarımın · v{{ design.version_number }}</span>
+              <NuxtLink
+                :to="`/projects/${projectId}/rooms/${roomId}/designs/${design.design_id}?version=${design.version_id}`"
+                class="shrink-0 text-muted hover:underline"
+              >
+                Tasarıma dön
+              </NuxtLink>
+            </figcaption>
+          </figure>
+
           <p v-if="cartNotice" class="rounded-sm bg-bg-muted p-3 text-sm text-ink-secondary">
             {{ cartNotice }}
             <NuxtLink to="/cart" class="ml-1 underline">
@@ -1387,5 +1456,45 @@ onMounted(async () => {
         </template>
       </Room3DScene>
     </template>
+
+    <!--
+      The design, given the whole window.
+
+      Opaque and above the site header, the same as the design screen's own: a translucent
+      backdrop lets the navigation read straight through the picture, and this exists so
+      somebody can look at one picture properly.
+    -->
+    <div
+      v-if="zoomed && design?.image_url"
+      ref="zoomDialog"
+      class="fixed inset-0 z-[70] flex flex-col bg-black p-4 sm:p-8"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Tasarım"
+      tabindex="-1"
+      @click.self="zoomed = false"
+      @keydown.esc="zoomed = false"
+    >
+      <div class="flex items-center justify-between gap-4 pb-4 text-white">
+        <p class="text-sm">
+          Tasarımın · v{{ design.version_number }}
+        </p>
+
+        <button
+          type="button"
+          class="rounded-pill border border-white/40 px-4 py-1.5 text-sm hover:bg-white/10"
+          @click="zoomed = false"
+        >
+          Kapat
+        </button>
+      </div>
+
+      <img
+        :src="design.image_url"
+        alt="Yerleşimi değiştirdiğin tasarım"
+        class="min-h-0 flex-1 cursor-zoom-out object-contain"
+        @click="zoomed = false"
+      >
+    </div>
   </div>
 </template>

@@ -23,10 +23,12 @@ use App\Domains\Projects\Services\LayoutComposer;
 use App\Domains\Projects\Services\LayoutWriter;
 use App\Domains\Projects\Services\RoomGeometryProposer;
 use App\Domains\Projects\Services\RoomPhotoStorage;
+use App\Support\Storage\PrivateLinkSigner;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use RuntimeException;
 
 /**
  * The room as a plan: measurements somebody agreed to, and furniture standing in it.
@@ -50,6 +52,7 @@ final class RoomLayoutController
         private readonly RoomPhotoStorage $photos,
         private readonly CartService $carts,
         private readonly LayoutAutoComposer $autoComposer,
+        private readonly PrivateLinkSigner $links,
     ) {}
 
     /**
@@ -107,7 +110,7 @@ final class RoomLayoutController
                  * second request — and can say nothing at all when there is no design to
                  * branch from, rather than offering a button that answers with an error.
                  */
-                'design' => $this->designSummary($room),
+                'design' => $this->designSummary($room, (string) $request->query('design_version_id', '')),
                 /*
                  * What the analysis says it saw, and where in the photograph it saw it.
                  *
@@ -706,13 +709,22 @@ final class RoomLayoutController
     }
 
     /**
-     * The newest finished design in this room, for the screen to branch a final image from.
+     * The design this screen is arranging, with the picture of it.
+     *
+     * The picture matters as much as the id. A customer arrives here from a design they liked
+     * and is asked to move its furniture about in an empty grey room; without the design on
+     * screen they are arranging from memory. The product owner said so in one line: "burada
+     * bana vermiş olduğum tasarımı göremiyorum."
+     *
+     * Which design: the one they pressed "yerleşimi değiştir" on, when the screen says so, and
+     * the newest finished one otherwise. A version that is not this room's, or not finished,
+     * falls back rather than erroring — the id is a hint from a query string, not a claim.
      *
      * @return array<string, mixed>|null
      */
-    private function designSummary(Room $room): ?array
+    private function designSummary(Room $room, string $wanted = ''): ?array
     {
-        $version = $this->latestVersion($room, '');
+        $version = $this->latestVersion($room, $wanted) ?? $this->latestVersion($room, '');
 
         if ($version === null) {
             return null;
@@ -722,7 +734,30 @@ final class RoomLayoutController
             'design_id' => $version->design_id,
             'version_id' => $version->id,
             'version_number' => $version->version_number,
+            'image_url' => $this->renderUrl($version),
         ];
+    }
+
+    /**
+     * A signed link to a version's render, or null.
+     *
+     * It is a picture of the inside of somebody's home, so it lives on the private disk and
+     * gets the same treatment as their photographs: a link that expires, never a path.
+     */
+    private function renderUrl(DesignVersion $version): ?string
+    {
+        $asset = $version->render();
+
+        if ($asset === null) {
+            return null;
+        }
+
+        try {
+            return $this->links->url($asset->disk, $asset->storage_path, now()->addMinutes(30));
+        } catch (RuntimeException) {
+            // A disk that cannot sign is a local development setup, not a customer problem.
+            return null;
+        }
     }
 
     private function currentGeometry(Room $room): ?RoomGeometryVersion

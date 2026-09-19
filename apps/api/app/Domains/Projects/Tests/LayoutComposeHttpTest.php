@@ -8,6 +8,7 @@ use App\Domains\Matching\Enums\MatchStatus;
 use App\Domains\Matching\Models\DesignMatch;
 use App\Domains\Products\Models\ProductDimension;
 use App\Domains\Projects\Enums\DesignVersionStatus;
+use App\Domains\Projects\Models\DesignAsset;
 use App\Domains\Projects\Models\DesignPlan;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\RoomConstraint;
@@ -260,4 +261,72 @@ it('will not arrange a room nobody has read or measured', function (): void {
     matched('Üçlü kanepe', 'kanepe', 2_200, 900, 0);
 
     $this->actingAs($this->owner)->postJson("{$this->url}/layout/compose")->assertStatus(422);
+});
+
+/*
+ * --- the design, on the screen that rearranges it -------------------------
+ *
+ * The plan asks somebody to move a design's furniture about. It used to show them an empty
+ * grey room to do it in and never the design: "burada bana vermiş olduğum tasarımı
+ * göremiyorum."
+ */
+
+it('hands the plan screen the design it is rearranging, with a link to the picture', function (): void {
+    DesignAsset::query()->create([
+        'design_version_id' => $this->version->getKey(),
+        'type' => 'render',
+        'disk' => 'local',
+        'storage_path' => 'design-assets/'.$this->version->getKey().'/render.png',
+        'mime_type' => 'image/png',
+        'size_bytes' => 120_000,
+        'width' => 1_536,
+        'height' => 1_024,
+        'checksum_sha256' => hash('sha256', 'render'),
+    ]);
+
+    $response = $this->actingAs($this->owner)->getJson($this->url.'/layout');
+
+    $response->assertOk()
+        ->assertJsonPath('data.design.version_id', $this->version->getKey())
+        ->assertJsonPath('data.design.version_number', 1);
+
+    // A link rather than a path, made the same way the design screen's own picture is: it is
+    // a photograph of the inside of somebody's home and it expires.
+    expect($response->json('data.design.image_url'))->toBeString()->not->toBeEmpty();
+});
+
+it('shows the version the customer came from rather than the newest', function (): void {
+    $newer = $this->design->versions()->create([
+        'version_number' => 2,
+        'created_by' => $this->owner->getKey(),
+    ]);
+
+    $newer->forceFill(['status' => DesignVersionStatus::Ready, 'completed_at' => now()])->save();
+
+    $response = $this->actingAs($this->owner)
+        ->getJson($this->url.'/layout?design_version_id='.$this->version->getKey());
+
+    // They pressed "yerleşimi değiştir" on version 1. Showing them version 2 beside the room
+    // would be showing them a picture of a layout they are not rebuilding.
+    $response->assertOk()->assertJsonPath('data.design.version_number', 1);
+});
+
+it('falls back to the newest when the version asked for is not this room', function (): void {
+    $stranger = Project::factory()->ownedBy($this->owner)->withRoom()->create();
+
+    $elsewhere = $stranger->rooms()->firstOrFail()->designs()->create([
+        'name' => 'Başka oda',
+        'created_by' => $this->owner->getKey(),
+    ])->versions()->create([
+        'version_number' => 1,
+        'created_by' => $this->owner->getKey(),
+    ]);
+
+    $elsewhere->forceFill(['status' => DesignVersionStatus::Ready, 'completed_at' => now()])->save();
+
+    $response = $this->actingAs($this->owner)
+        ->getJson($this->url.'/layout?design_version_id='.$elsewhere->getKey());
+
+    // A query string is a hint, not a claim. It names this room's own design or nothing.
+    $response->assertOk()->assertJsonPath('data.design.version_id', $this->version->getKey());
 });

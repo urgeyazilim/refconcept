@@ -5,6 +5,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added — The design is on the screen that rearranges it
+
+The plan screen asks somebody to move a design's furniture about and showed them an empty
+grey room to do it in. The product owner arrived from a design they liked and said it in one
+line: "burada bana vermiş olduğum tasarımı göremiyorum." A plan is a copy of a picture, and
+the picture has to be on the screen.
+
+- **The design stands beside the room**, at the top of the column, with its version number
+  and a way back to it. It is the reference rather than the subject, so it is small and quiet
+  — the room is the thing being worked on — and one click gives it the whole window.
+- **It is the design they came from.** `?compose=` already told the screen which version to
+  arrange; it now tells it which version to show, so somebody who pressed "yerleşimi değiştir"
+  on v1 does not get a picture of v2 beside the room they are rebuilding. A version that is
+  not this room's falls back to the newest rather than erroring — a query string is a hint.
+- The link is signed and expires in thirty minutes, made the same way the design screen's own
+  picture is: it is the inside of somebody's home and no response carries a path to it.
+
+
 ### Fixed — "Tasarıma Göre Diz" put the room round the armchair and left the sofa out
 
 The product owner arranged a real design and said the layout was not what they wanted. It was
