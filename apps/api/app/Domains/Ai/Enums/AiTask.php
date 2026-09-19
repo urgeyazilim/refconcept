@@ -68,6 +68,21 @@ enum AiTask: string
      */
     case ProductModel = 'product_model';
 
+    /**
+     * Measures a room's shape from several photographs of it at once.
+     *
+     * The reading estimates a room's size by looking at one picture and reasoning about door
+     * heights; this triangulates it from six. The two answer different questions and the
+     * second is the one that can tell a long room from a square one — the reading gave the
+     * product owner's living room as 3.8 by 4.5 metres one time and 4.5 by 5.0 the next, and
+     * it is neither.
+     *
+     * **Never automatic.** It costs money per room and it is not yet good enough to be worth
+     * spending without being asked: the first real attempt came back as a cloud with no walls
+     * in it. A button, and a customer who pressed it.
+     */
+    case RoomScan = 'room_scan';
+
     /** Find the individual pieces of furniture inside a render. */
     case ObjectExtraction = 'object_extraction';
 
@@ -110,6 +125,7 @@ enum AiTask: string
             self::RenderCheck => 'Render sadakat denetimi',
             self::VideoTour => 'Oda videosu',
             self::ProductModel => 'Ürün 3B modeli',
+            self::RoomScan => 'Oda taraması',
             self::ProductViewTagging => 'Ürün görsel yönü',
             self::ObjectExtraction => 'Nesne çıkarımı',
             self::ProductTagging => 'Ürün etiketleme',
@@ -130,7 +146,7 @@ enum AiTask: string
             self::TextEmbedding => AiModality::Embedding,
             self::ImageRenderDraft, self::ImageRenderPremium, self::ImageEdit, self::RoomClear => AiModality::Image,
             self::VideoTour => AiModality::Video,
-            self::ProductModel => AiModality::Model3d,
+            self::ProductModel, self::RoomScan => AiModality::Model3d,
             self::ProductViewTagging => AiModality::Vision,
             default => AiModality::Text,
         };

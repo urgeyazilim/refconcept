@@ -55,6 +55,11 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, EnsureEmailIsVerif
         Route::get('{project}/rooms/{room}', [RoomController::class, 'show'])->name('rooms.show');
         // Reads the room from every photograph it has, in the background; 202 while it runs.
         Route::post('{project}/rooms/{room}/analyse', [RoomController::class, 'analyse'])->name('rooms.analyse');
+
+        // Measuring the room from all of its photographs at once. Asked for, never automatic:
+        // it costs money per room and the route behind it is paused until it has earned its
+        // keep.
+        Route::post('{project}/rooms/{room}/scan', [RoomController::class, 'scan'])->name('rooms.scan');
         Route::patch('{project}/rooms/{room}', [RoomController::class, 'update'])->name('rooms.update');
         Route::delete('{project}/rooms/{room}', [RoomController::class, 'destroy'])->name('rooms.destroy');
         Route::get('{project}/rooms/{room}/programme', [RoomController::class, 'programme'])

@@ -566,6 +566,49 @@ const photoLink = ref<string | null>(null)
  */
 const scanLink = ref<string | null>(null)
 
+/**
+ * Measuring the room from every photograph at once, because somebody asked.
+ *
+ * Not part of the reading and not queued behind an upload: it costs money per room and the
+ * first real attempt came back as a cloud with no walls in it. So it is a button, pressed on
+ * purpose, and the route behind it is paused until it has earned its keep.
+ */
+const scanning = ref(false)
+const scanNotice = ref<string | null>(null)
+
+async function scanRoom() {
+  scanning.value = true
+  scanNotice.value = null
+
+  try {
+    await api.post(`${base}/scan`)
+    scanNotice.value = 'Odanı ölçüyorum; birkaç dakika sürer. Bitince sahnede "Tarama" düğmesi çıkar.'
+
+    // Slow work on its own worker: looked in on rather than waited for.
+    scanTimer = setInterval(() => { void load() }, 15_000)
+  }
+  catch (error) {
+    scanNotice.value = error instanceof ApiError ? error.message : 'Oda ölçülemedi.'
+  }
+  finally {
+    scanning.value = false
+  }
+}
+
+let scanTimer: ReturnType<typeof setInterval> | null = null
+
+watch(scanLink, (link) => {
+  if (link !== null && scanTimer !== null) {
+    clearInterval(scanTimer)
+    scanTimer = null
+    scanNotice.value = 'Odanın taraması hazır. Sahnedeki "Tarama" düğmesine bas.'
+  }
+})
+
+onBeforeUnmount(() => {
+  if (scanTimer !== null) clearInterval(scanTimer)
+})
+
 watch(() => media.value.find(item => item.type === 'scan')?.id ?? null, async (id) => {
   if (id === null) {
     scanLink.value = null
@@ -1202,8 +1245,15 @@ function guideSecondary() {
               :room-id="roomId"
               :media="media"
               :can-edit="canEdit"
+              :scanning="scanning"
+              @scan="scanRoom"
               @changed="onMediaChanged"
             />
+
+            <!-- What the measuring is doing, said where the button that started it is. -->
+            <p v-if="scanNotice" class="mt-3 rounded-sm bg-bg-muted p-3 text-sm text-ink-secondary">
+              {{ scanNotice }}
+            </p>
           </div>
 
           <!-- 3 · Oda: the size as read, and the doors and windows -->

@@ -107,6 +107,17 @@ final class FalAiProvider implements AiProvider
             );
         }
 
+        /*
+         * A reconstruction is not a generation, so it takes the other road entirely.
+         *
+         * Every photograph at once rather than four labelled sides; a point cloud back rather
+         * than a mesh; and no idea of a "front", because the thing being measured is a room
+         * and the camera was inside it.
+         */
+        if (str_contains($call->model->code, 'vggt')) {
+            return $this->reconstruct($call, $key);
+        }
+
         $image = $call->imageUrls[0] ?? null;
 
         if (! is_string($image) || $image === '') {
@@ -226,6 +237,108 @@ final class FalAiProvider implements AiProvider
             imageRefs: [$reference],
             imageCount: 1,
             httpStatus: $response->status(),
+        );
+    }
+
+    /**
+     * Measures a room's shape from every photograph of it at once.
+     *
+     * VGGT takes a handful of unposed pictures and returns where each camera stood and a
+     * coloured point cloud of what they all saw. It says nothing about how big any of it is —
+     * the shape is faithful and the scale is arbitrary — which is why what comes back is a
+     * shape to be scaled against something known rather than a measurement to be trusted.
+     *
+     * The photographs go up to fal's storage first, as bytes, exactly as the product path
+     * does: a signed link to a customer's room must not leave this system, and a link signed
+     * for the browser's host cannot be fetched from where the model runs anyway.
+     */
+    private function reconstruct(AiCall $call, string $key): AiResult
+    {
+        $photographs = array_values(array_filter(
+            $call->imageUrls,
+            static fn (mixed $url): bool => is_string($url) && $url !== '',
+        ));
+
+        if (count($photographs) < 2) {
+            return AiResult::failure(
+                AiFailureKind::NoRouteConfigured,
+                'Oda taraması için en az iki fotoğraf gerekir.',
+            );
+        }
+
+        try {
+            $hosted = array_map(fn (string $url): string => $this->hosted($url, $key, $call->options), $photographs);
+        } catch (Throwable $e) {
+            return AiResult::failure(
+                AiFailureKind::NetworkError,
+                'Oda fotoğrafları fal.ai deposuna yüklenemedi: '.$e->getMessage(),
+            );
+        }
+
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Key '.$key,
+                'Content-Type' => 'application/json',
+            ])
+                ->timeout(self::TIMEOUT_SECONDS)
+                ->post(rtrim($call->options['base_url'] ?? self::DEFAULT_BASE_URL, '/').'/'.$call->model->code, [
+                    'image_urls' => $hosted,
+                    // The cloud is the whole answer. Depth maps are one PNG per photograph and
+                    // nothing here reads them; the prediction data carries the camera poses.
+                    'export_depth_maps' => false,
+                    'export_point_cloud' => true,
+                    'export_prediction_data' => true,
+                ]);
+        } catch (ConnectionException $e) {
+            return AiResult::failure(AiFailureKind::NetworkError, $e->getMessage());
+        } catch (Throwable $e) {
+            return AiResult::failure(AiFailureKind::ProviderError, $e->getMessage());
+        }
+
+        if ($response->failed()) {
+            return AiResult::failure(
+                $this->kindFor($response->status()),
+                $this->messageFrom($response->json(), $response->status()),
+                $response->status(),
+            );
+        }
+
+        $url = $response->json('point_cloud.url');
+
+        if (! is_string($url) || $url === '') {
+            return AiResult::failure(
+                AiFailureKind::MalformedOutput,
+                'fal.ai bir nokta bulutu döndürmedi.',
+                $response->status(),
+            );
+        }
+
+        try {
+            $cloud = Http::timeout(self::TIMEOUT_SECONDS)->get($url);
+        } catch (Throwable $e) {
+            return AiResult::failure(AiFailureKind::NetworkError, $e->getMessage());
+        }
+
+        if ($cloud->failed()) {
+            return AiResult::failure(
+                AiFailureKind::NetworkError,
+                'Oda taraması indirilemedi.',
+                $response->status(),
+            );
+        }
+
+        return AiResult::success(
+            imageRefs: [$this->files->stash($cloud->body(), 'model/gltf-binary')],
+            imageCount: 1,
+            httpStatus: $response->status(),
+            // What the reconstruction believed about the cameras, kept for whoever wants to
+            // scale the cloud later: it is the only thing in the answer with units in it.
+            structured: [
+                'frames' => $response->json('num_frames'),
+                'depth_range' => $response->json('depth_range'),
+                'extrinsics' => $response->json('extrinsics'),
+                'intrinsics' => $response->json('intrinsics'),
+            ],
         );
     }
 

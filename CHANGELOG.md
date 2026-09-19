@@ -5,6 +5,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added — "Odayı ölç": the room measured from all of its photographs
+
+- **A task, a route and a job.** `room_scan` on fal's VGGT: every photograph of a room goes up
+  at once and a coloured point cloud comes back, with where each camera stood. The reading
+  estimates a room by reasoning about one picture; this triangulates from six, which is the
+  only way to tell a long room from a square one.
+- **Asked for, never automatic.** It costs money per room and the first real attempt came back
+  as a cloud with no walls in it, so nothing spends a customer's money on it unprompted. The
+  button appears once there are two photographs, six is where it starts being worth it, and
+  the job runs on the mesh worker so it cannot hold up anybody's reading.
+- **Under the photographs' own rules.** Bytes to the provider, never a link; private disk,
+  random key, signed short-lived link, no URL in any response, out of the photo grid. A point
+  cloud of somebody's living room is their home as surely as a picture of it is.
+- **It stores a shape, not a size.** The reconstruction is faithful about proportion and silent
+  about scale, so nothing derives measurements from it: a number taken off that cloud would
+  look precise and would not be. Proved end to end on the product owner's own room — 231
+  seconds, 3.8 MB, stored and shown.
+
 ### Added — The room as its photographs measured it
 
 - **A reconstruction, behind one button.** Six photographs of the product owner's room, handed

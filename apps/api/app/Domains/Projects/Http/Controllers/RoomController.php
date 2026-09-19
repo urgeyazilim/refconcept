@@ -13,6 +13,7 @@ use App\Domains\Projects\Enums\DoorSwing;
 use App\Domains\Projects\Enums\MeasurementQuality;
 use App\Domains\Projects\Enums\OpeningVariant;
 use App\Domains\Projects\Jobs\AnalyseRoom;
+use App\Domains\Projects\Jobs\ScanRoom;
 use App\Domains\Projects\Models\Project;
 use App\Domains\Projects\Models\Room;
 use App\Domains\Projects\Models\RoomAnalysis;
@@ -70,6 +71,32 @@ final class RoomController
         }
 
         AnalyseRoom::dispatch((string) $room->getKey(), $photoIds, $force);
+
+        return response()->json(['data' => ['status' => 'queued', 'photo_count' => count($photoIds)]], 202);
+    }
+
+    /**
+     * Measures the room from every photograph of it at once, because somebody asked.
+     *
+     * Not part of the reading and not queued behind an upload. It costs money per room and it
+     * is not yet good enough to spend somebody's money on unasked: the first real attempt came
+     * back as a cloud with no walls in it. So it is a button, and the route behind it is
+     * paused until it has earned otherwise.
+     */
+    public function scan(Request $request, Project $project, Room $room): JsonResponse
+    {
+        $this->authorizeProject($request, $project);
+        $this->assertBelongs($room, $project);
+
+        $photoIds = $this->analyser->photoIds($room);
+
+        if (count($photoIds) < 2) {
+            throw ValidationException::withMessages([
+                'photos' => ['Odayı ölçmek için en az iki fotoğraf gerekir; farklı köşelerden olursa daha iyi.'],
+            ]);
+        }
+
+        ScanRoom::dispatch((string) $room->getKey());
 
         return response()->json(['data' => ['status' => 'queued', 'photo_count' => count($photoIds)]], 202);
     }

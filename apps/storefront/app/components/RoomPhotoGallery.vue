@@ -17,10 +17,12 @@ const props = defineProps<{
   projectId: string
   roomId: string
   media: RoomMediaItem[]
+  /** True while the room is being measured, so the button can say so. */
+  scanning?: boolean
   canEdit: boolean
 }>()
 
-const emit = defineEmits<{ changed: [] }>()
+const emit = defineEmits<{ changed: [], scan: [] }>()
 
 const api = useApi()
 
@@ -230,7 +232,27 @@ onBeforeUnmount(() => {
         </p>
       </div>
 
-      <span class="text-xs text-muted">{{ media.length }} / 20</span>
+      <div class="flex items-center gap-3">
+        <!--
+          Measuring the room from every photograph at once.
+          
+          Offered rather than done: it costs money per room and it is not yet good enough to
+          spend somebody's money on unasked. Two photographs is the floor; six taken from
+          different corners is where it starts being worth the money.
+        -->
+        <RcButton
+          v-if="canEdit && media.filter(item => item.type === 'photo').length >= 2"
+          size="sm"
+          variant="secondary"
+          :loading="scanning"
+          :disabled="scanning"
+          @click="emit('scan')"
+        >
+          Odayı ölç
+        </RcButton>
+
+        <span class="text-xs text-muted">{{ media.length }} / 20</span>
+      </div>
     </header>
 
     <RcAlert v-if="error" tone="danger" class="mt-5">{{ error }}</RcAlert>
