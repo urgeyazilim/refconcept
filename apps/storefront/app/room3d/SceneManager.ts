@@ -452,6 +452,12 @@ export class SceneManager {
    * the camera is on the outside of a given wall; if it is, that wall is in the way.
    *
    * The ceiling comes back only from inside, where it is part of what the room feels like.
+   *
+   * A wall taken away leaves its bottom 40 cm behind. The product owner orbited their room,
+   * saw the television unit standing at the edge of a bare floor with nothing behind it, and
+   * said the arrangement was wrong — it was not, but what made it read as "against the wall"
+   * was the wall, and we had removed it. A knee-high remnant keeps the room a room from every
+   * angle and still lets the camera see in.
    */
   private updateOcclusion(): void {
     if (this.room === null || this.geometry === null) {
@@ -464,28 +470,31 @@ export class SceneManager {
     const width = toUnits(this.geometry.width_mm)
     const length = toUnits(this.geometry.length_mm)
 
+    // Whether the camera is on the room's side of each wall.
+    const behind: Record<string, boolean> = {
+      north: camera.z >= 0,
+      south: camera.z <= length,
+      west: camera.x >= 0,
+      east: camera.x <= width,
+    }
+
     for (const child of this.room.children) {
-      switch (child.name) {
-        case 'ceiling':
-          child.visible = inside
-          break
+      if (child.name === 'ceiling') {
+        child.visible = inside
 
-        case 'wall-north':
-          child.visible = inside || camera.z >= 0
-          break
-
-        case 'wall-south':
-          child.visible = inside || camera.z <= length
-          break
-
-        case 'wall-west':
-          child.visible = inside || camera.x >= 0
-          break
-
-        case 'wall-east':
-          child.visible = inside || camera.x <= width
-          break
+        continue
       }
+
+      const wall = child.name.replace(/^(wall|stub)-/, '')
+      const keeps = behind[wall]
+
+      if (keeps === undefined) {
+        continue
+      }
+
+      child.visible = child.name.startsWith('stub-')
+        ? !inside && !keeps
+        : inside || keeps
     }
   }
 

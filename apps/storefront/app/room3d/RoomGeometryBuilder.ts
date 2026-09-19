@@ -76,6 +76,20 @@ export class RoomGeometryBuilder {
   private static readonly DOOR_OPEN_DEG = 30
 
   /** The cornice, in millimetres: how far down the wall it comes and how far into the room. */
+  /**
+   * How much of a wall stays when the camera is standing outside it.
+   *
+   * A wall the customer is looking through is taken away entirely, which is the doll's-house
+   * view everybody means by a 3D room — and it costs something nobody noticed until the
+   * product owner orbited their own room and said the arrangement was wrong. A television
+   * unit against a wall that is not drawn is a television unit standing in the middle of an
+   * empty floor: the thing that made it read as "against the wall" was the wall.
+   *
+   * Knee height keeps the room a room. Low enough to see over from any angle above the
+   * floor, high enough that everything standing against it has something behind it.
+   */
+  private static readonly STUB_HEIGHT_MM = 400
+
   private static readonly CORNICE_HEIGHT_MM = 90
 
   private static readonly CORNICE_DEPTH_MM = 45
@@ -122,6 +136,8 @@ export class RoomGeometryBuilder {
 
     for (const wall of ['north', 'south', 'east', 'west'] as WallName[]) {
       room.add(this.wall(wall, geometry, openings.filter(opening => opening.wall === wall)))
+      // Its own remnant, hidden until the wall itself is the thing in the way.
+      room.add(this.stub(wall, geometry))
     }
 
     return room
@@ -253,6 +269,42 @@ export class RoomGeometryBuilder {
     for (const opening of openings) {
       mesh.add(...this.fixture(opening, spanMm, geometry.height_mm, inward, innerZ, thickness))
     }
+
+    this.placeWall(mesh, name, geometry, thickness)
+
+    return mesh
+  }
+
+  /**
+   * What is left of a wall the camera is outside: the bottom 40 cm of it.
+   *
+   * Built and placed exactly like the wall so it sits in the same plane, and without the
+   * openings cut out — a doorway is a hole in a wall, and 40 cm of wall under a doorway is
+   * the threshold, which is a real thing and reads as one.
+   */
+  private stub(name: WallName, geometry: RoomGeometry): Mesh {
+    const thickness = toUnits(RoomGeometryBuilder.WALL_THICKNESS_MM)
+    const height = toUnits(RoomGeometryBuilder.STUB_HEIGHT_MM)
+
+    const spanMm = name === 'north' || name === 'south' ? geometry.width_mm : geometry.length_mm
+    const span = toUnits(spanMm)
+
+    const outline = new Shape()
+    outline.moveTo(0, 0)
+    outline.lineTo(span, 0)
+    outline.lineTo(span, height)
+    outline.lineTo(0, height)
+    outline.closePath()
+
+    const mesh = new Mesh(
+      new ExtrudeGeometry(outline, { depth: thickness, bevelEnabled: false }),
+      this.wallMaterial,
+    )
+
+    mesh.name = `stub-${name}`
+    mesh.receiveShadow = true
+    // Shown by the scene only when the wall it belongs to is taken away.
+    mesh.visible = false
 
     this.placeWall(mesh, name, geometry, thickness)
 
