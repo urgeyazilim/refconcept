@@ -5,6 +5,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed — Four phases and a loop, instead of ten numbered boxes
+
+- **The wizard is gone.** The strip was ten numbered circles — "1 Fotoğraf — 2 Eşyalar — 3
+  Oda" across to "10 Satın al" — and the product owner's verdict was that a guided numbered
+  wizard is amateur and the whole thing is boring. Anthropic's own design guidance says the
+  same thing independently: numbered markers read as a generated page unless the content
+  really is a sequence. It is a rule in four parts now, with the name of the phase you are in
+  and the name of the one after it, quietly. Progress is felt along the rule rather than
+  counted in circles.
+- **Four phases, in the owner's own words:** Fotoğraf, Eşyalar, İstekler, Tasarım.
+- **3D is not a fifth step.** It is the door you open when you do not like your design: the
+  guide's own words are now "Beğendiysen ürünlere geçelim. Beğenmediysen yerleşimi kendin
+  değiştir, yeni tasarımı ona göre vereyim." The render, the tour and the basket stopped being
+  steps too — they are things you do with a design you already have.
+- **The measurements moved to that door.** A design is drawn on a photograph and does not need
+  metres; they start mattering when somebody puts a real sofa in a real room. So the size and
+  the openings are the threshold of the 3D door rather than a step on the way, and somebody
+  who likes their design never sees the question.
+- **The phase change is a phase change.** It was 160 ms with an eight-pixel hop, which is the
+  default web transition and reads as a page swapping a div. The outgoing panel now leaves
+  quickly and without moving, and the incoming one settles over 420 ms on the standard curve
+  with no overshoot — the timing the motion reference calls premium — and it waits for the
+  guide's new sentence first, which is the order somebody reads them in.
+
 ### Added — "Odayı ölç": the room measured from all of its photographs
 
 - **A task, a route and a job.** `room_scan` on fal's VGGT: every photograph of a room goes up

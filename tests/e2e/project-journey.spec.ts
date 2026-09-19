@@ -96,6 +96,15 @@ test.describe('project journey', () => {
 
     await expect(page.getByText('Hadi odanın fotoğrafını çekelim.')).toBeVisible()
 
+    /*
+     * The room's own address, taken once the room is on screen.
+     *
+     * Some panels are reached by an address rather than by a box on the strip: the
+     * measurements and the openings are the threshold of the 3D door now, not a step on the
+     * way to a design.
+     */
+    const roomUrl = page.url().split('#')[0]
+
     // --- the photograph ---------------------------------------------------------
     await page.locator('input[type="file"]').setInputFiles({
       name: 'salon.png',
@@ -123,7 +132,9 @@ test.describe('project journey', () => {
 
     // --- measurements ------------------------------------------------------------
     // The size lives on the Oda step; the strip opens it without waiting for the reading.
-    await page.getByRole('navigation', { name: 'Oda stüdyosu adımları' }).getByRole('button', { name: /Oda/ }).click()
+    // The size is not a step any more: it is the threshold of the 3D door, reached by its
+    // own address. Somebody who likes their design never sees it.
+    await gotoInteractive(page, `${roomUrl}#oda`)
     // The reading may have landed and proposed a size; open the form deliberately.
     const correct = page.getByRole('button', { name: 'Düzelt' }).first()
 
@@ -140,7 +151,9 @@ test.describe('project journey', () => {
 
     // --- something to design around ------------------------------------------------
     // Saving the size moved the guide on; the doors and windows are back on the Oda step.
-    await page.getByRole('navigation', { name: 'Oda stüdyosu adımları' }).getByRole('button', { name: /Oda/ }).click()
+    // The size is not a step any more: it is the threshold of the 3D door, reached by its
+    // own address. Somebody who likes their design never sees it.
+    await gotoInteractive(page, `${roomUrl}#oda`)
     // The step crossfades in; a button clicked while it is still moving is a click the page
     // never sees. The palette only exists on the Oda step, so it is the signal that we are on it.
     await expect(page.getByRole('toolbar', { name: 'Kapı ve pencere ekle' })).toBeVisible()
@@ -165,7 +178,7 @@ test.describe('project journey', () => {
      * is about a customer arriving with nothing.
      */
     // The questions open by themselves on the İstekler step; the strip takes us there.
-    await page.getByRole('navigation', { name: 'Oda stüdyosu adımları' }).getByRole('button', { name: /İstekler/ }).click()
+    await gotoInteractive(page, `${roomUrl}#istekler`)
     await completeBrief(page)
 
     await expect(page.getByText(/kredi gerektiriyor/)).toBeVisible()

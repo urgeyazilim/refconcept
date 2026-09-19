@@ -48,7 +48,7 @@ test.describe('the guide', () => {
     await waitForHydration(page)
 
     await expect(page.getByText('Hadi odanın fotoğrafını çekelim.')).toBeVisible()
-    await expect(page.getByText('Kapıdan içeri', { exact: true })).toBeVisible()
+    await expect(page.getByText('Telefonu yan çevir', { exact: true })).toBeVisible()
     await page.screenshot({ path: 'test-results/guide-4-room.png', fullPage: true })
   })
 })

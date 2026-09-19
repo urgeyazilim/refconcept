@@ -57,7 +57,7 @@ async function frame(page: Page, at: number, name: string): Promise<void> {
     const box = first?.getBoundingClientRect()
 
     // How wide the step strip gets: under about 1040 it gives up the ten step names.
-    const strip = document.querySelector('nav[aria-label="Oda stüdyosu adımları"]')
+    const strip = document.querySelector('nav[aria-label="Oda stüdyosu"]')
 
     return {
       left: box ? Math.round(box.left) : -1,
@@ -140,17 +140,17 @@ test.describe('studio walkthrough', () => {
     await page.getByRole('button', { name: 'Fotoğraf ekle' }).click()
     await (await chooser).setFiles({ name: 'salon.png', mimeType: 'image/png', buffer: pngBuffer(1280, 960) })
 
-    const strip = page.getByRole('navigation', { name: 'Oda stüdyosu adımları' })
+    const strip = page.getByRole('navigation', { name: 'Oda stüdyosu' })
 
-    await expect(strip.getByRole('button', { name: /✓\s*Fotoğraf/ })).toBeVisible({ timeout: 120_000 })
+    await expect(strip.getByText('Eşyalar', { exact: true })).toBeVisible({ timeout: 120_000 })
     await frame(page, 4, 'adim1-fotograf-yuklendi')
 
     // --- step 2: the furniture --------------------------------------------------------
-    await strip.getByRole('button', { name: /Eşyalar/ }).click()
+    await gotoInteractive(page, `${STOREFRONT}/projects/${projectId}/rooms/${roomId}#esyalar`)
     await frame(page, 5, 'adim2-esyalar')
 
     // --- step 3: the room -------------------------------------------------------------
-    await strip.getByRole('button', { name: /Oda/ }).click()
+    await gotoInteractive(page, `${STOREFRONT}/projects/${projectId}/rooms/${roomId}#oda`)
     await frame(page, 6, 'adim3-oda')
 
     const correct = page.getByRole('button', { name: 'Düzelt' }).first()
@@ -181,10 +181,10 @@ test.describe('studio walkthrough', () => {
       await page.getByRole('button', { name: 'Ölçüleri kaydet' }).click()
     }
 
-    await expect(strip.getByRole('button', { name: /✓\s*Oda/ })).toBeVisible({ timeout: 60_000 })
+    await expect(page.getByText('23.52 m²').first()).toBeVisible({ timeout: 60_000 })
 
     // --- step 4: the questions --------------------------------------------------------
-    await strip.getByRole('button', { name: /İstekler/ }).click()
+    await gotoInteractive(page, `${STOREFRONT}/projects/${projectId}/rooms/${roomId}#istekler`)
     await frame(page, 8, 'adim4-istekler')
 
     await completeBrief(page)

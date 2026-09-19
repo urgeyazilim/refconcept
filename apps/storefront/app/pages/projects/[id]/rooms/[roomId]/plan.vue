@@ -80,33 +80,14 @@ const roomFacts = ref<{ width_mm: number | null, length_mm: number | null, heigh
  * Where this screen sits in the studio's steps: confirming the room until the geometry is
  * confirmed, editing once it is.
  */
-/** Whether every move so far has been written; step 7 of the ten is "saved". */
+/** Whether every move so far has been written. The guide says so; it is not a step. */
 const saved = ref(true)
 
-/**
- * Which of the two steps this screen is showing.
- *
- * Six and seven are the same screen — arranging, and arranged — so the strip could not say
- * which one you had pressed: clicking "3B" on a room already saved answered "Kayıt". The
- * anchor the strip links to decides when there is one, and the state decides otherwise.
- */
-const askedStep = ref<'edit' | 'save' | null>(null)
-
-onMounted(() => {
-  if (window.location.hash === '#duzenle') askedStep.value = 'edit'
-  else if (window.location.hash === '#kayit') askedStep.value = 'save'
-})
-
-const studioCurrent = computed<'edit' | 'save'>(() => askedStep.value
-  ?? (liveItems.value.length > 0 && saved.value ? 'save' : 'edit'))
 const studioDone = computed(() => ({
   photo: (roomFacts.value?.photo_count ?? 0) > 0,
   plate: true,
-  recognise: confirmed.value !== null || (roomFacts.value?.width_mm ?? null) !== null,
-  propose: design.value !== null,
+  brief: design.value !== null,
   design: design.value !== null,
-  edit: liveItems.value.length > 0,
-  save: liveItems.value.length > 0 && saved.value,
 }))
 
 /** The 3D scene, for the picture the renderer works from and for adding products to. */
@@ -953,7 +934,7 @@ onMounted(async () => {
     catalogue one under the other, and the product owner's verdict was a screen full of empty
     space and a mouse wheel that never stopped. Nothing here needs the page to scroll.
   -->
-    <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-3">
       <!-- The same two lines as the room and the design: where you are, then the map. -->
       <div class="flex min-w-0 items-center gap-4">
         <h1 class="sr-only">Oda planı</h1>
@@ -973,7 +954,11 @@ onMounted(async () => {
         </NuxtLink>
       </div>
 
-      <StudioStepper :project-id="projectId" :room-id="roomId" :current="studioCurrent" :done="studioDone" :design-id="design?.design_id ?? null" class="w-full min-w-0" />
+      <!--
+        The plan is not a phase. It is the door you open from the design when you do not like
+        the layout, so the strip stays on "Tasarım" while you are behind it.
+      -->
+      <StudioStepper :project-id="projectId" :room-id="roomId" current="design" :done="studioDone" :design-id="design?.design_id ?? null" class="w-full min-w-0" />
     </div>
 
     <p v-if="loadError" class="rounded-sm bg-danger-subtle p-3 text-sm text-danger-strong">

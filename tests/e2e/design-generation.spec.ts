@@ -167,7 +167,7 @@ test.describe('design generation', () => {
       await gotoInteractive(page, `${STOREFRONT}/projects/${projectId}/rooms/${roomId}`)
 
       // The questions open by themselves on the İstekler step; the strip takes us there.
-      await page.getByRole('navigation', { name: 'Oda stüdyosu adımları' }).getByRole('button', { name: /İstekler/ }).click()
+      await gotoInteractive(page, `${STOREFRONT}/projects/${projectId}/rooms/${roomId}#istekler`)
       await completeBrief(page)
 
       await expect(page.getByRole('heading', { level: 1, name: /Salon tasarımı/ })).toBeVisible()

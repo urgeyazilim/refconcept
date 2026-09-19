@@ -6,6 +6,7 @@ import type {
   RoomDetail,
   RoomMediaItem,
 } from '@refconcept/ui/types'
+import type { StudioStep } from '~/components/StudioStepper.vue'
 
 /**
  * One room: its photographs, its measurements, what furniture has to work around, and
@@ -219,16 +220,22 @@ const primaryPlate = computed(() => primaryPhoto.value === null ? null : (media.
 const anyPlate = computed(() => media.value.some(item => item.type === 'plate'))
 const latestDesign = computed(() => designs.value[0] ?? null)
 
-type StudioStep = 'photo' | 'plate' | 'recognise' | 'propose' | 'design' | 'edit' | 'save' | 'render' | 'video' | 'buy'
-
 /**
- * The ten steps in the product owner's order: photographs, the furniture out, the room
- * understood, what you want, the design, the 3D arrangement, saved, the render, the 360
- * tour, the purchase. The first four are this screen's; the plan and the design screens
- * carry the rest, and the guide links across.
+ * What this screen can show, which is not the same as where the customer is.
+ *
+ * Three of these are phases the customer walks through. The fourth — the room's size and its
+ * doors and windows — is not a phase any more: a design is drawn on a photograph and does not
+ * need metres, and the measurements only start mattering when somebody puts a real sofa in a
+ * real room. So it is the threshold of the 3D door rather than a step on the way, and
+ * somebody who likes their design never sees it.
  */
-const STEP_ORDER: StudioStep[] = ['photo', 'plate', 'recognise', 'propose', 'design', 'edit', 'save', 'render', 'video', 'buy']
-const ON_ROOM: StudioStep[] = ['photo', 'plate', 'recognise', 'propose']
+type RoomPanel = 'photo' | 'plate' | 'brief' | 'recognise'
+
+/** The walk: photographs, the furniture out, what you want. Then the design screen takes over. */
+const PANEL_ORDER: RoomPanel[] = ['photo', 'plate', 'brief']
+
+/** The phases this screen answers for itself when one is pressed on the strip. */
+const ON_ROOM: StudioStep[] = ['photo', 'plate', 'brief']
 
 /** "Hayır, kalsın": the customer wants the room as it is; the plate step is behind them. */
 const plateSkipped = ref(false)
@@ -267,14 +274,21 @@ const studioDone = computed<Partial<Record<StudioStep, boolean>>>(() => ({
   // Done when the room is emptied, when there was nothing to empty, or when the customer
   // said to leave it as it is.
   plate: anyPlate.value || plateSkipped.value || (recognised.value && (room.value?.analysis?.movable_objects.length ?? 0) === 0),
-  // The room is understood once its size is agreed — the reading proposes, the customer says yes.
-  recognise: confirmedGeometry.value !== null || measured.value,
-  propose: designs.value.length > 0,
+  brief: designs.value.length > 0,
   design: designs.value.some(design => design.status === 'ready'),
-  edit: placedCount.value > 0,
-  save: placedCount.value > 0,
-  // The steps after the arrangement are the design screen's to tick; from here they are ahead.
 }))
+
+/**
+ * Which of the four phases a panel belongs to.
+ *
+ * The measurements panel has no phase of its own — it is the threshold of the 3D door — so it
+ * shows as whatever the customer was doing when they opened it.
+ */
+function phaseOf(panel: RoomPanel): StudioStep {
+  if (panel !== 'recognise') return panel
+
+  return designs.value.length > 0 ? 'design' : 'brief'
+}
 
 /**
  * The first step not done, in the guide's order — where the customer is going.
@@ -283,19 +297,23 @@ const studioDone = computed<Partial<Record<StudioStep, boolean>>>(() => ({
  * stays with them (and may add a corner), and when the reading lands the guide asks about
  * the furniture. The steps after this screen's four are reached through the guide's link.
  */
-const autoStep = computed<StudioStep>(() => {
-  const first = STEP_ORDER.find(step => studioDone.value[step] !== true) ?? 'buy'
+const autoStep = computed<RoomPanel>(() => {
+  const first = PANEL_ORDER.find(panel => studioDone.value[phaseOf(panel)] !== true) ?? 'brief'
 
-  if (!recognised.value && (first === 'plate' || first === 'recognise')) {
+  /*
+   * The reading has no screen of its own. While the photographs are being read the customer
+   * stays with them and may add a corner; when it lands the guide asks about the furniture.
+   */
+  if (!recognised.value && first === 'plate') {
     return 'photo'
   }
 
   return first
 })
 
-/** A step the customer opened from the strip, to look back or ahead. */
-const chosenStep = ref<StudioStep | null>(null)
-const activeStep = computed<StudioStep>(() => chosenStep.value ?? autoStep.value)
+/** A panel the customer opened: to look back, or to measure before arranging. */
+const chosenStep = ref<RoomPanel | null>(null)
+const activeStep = computed<RoomPanel>(() => chosenStep.value ?? autoStep.value)
 
 /**
  * The four steps this screen owns, by the anchor the strip links each of them to.
@@ -305,15 +323,15 @@ const activeStep = computed<StudioStep>(() => chosenStep.value ?? autoStep.value
  * design screen and the plan already work this way; this one did not, and a page that reloads
  * itself for any reason threw the customer back to the beginning mid-sentence.
  */
-const STEP_HASH: Partial<Record<StudioStep, string>> = {
+const STEP_HASH: Partial<Record<RoomPanel, string>> = {
   photo: '#fotograf',
   plate: '#esyalar',
   recognise: '#oda',
-  propose: '#istekler',
+  brief: '#istekler',
 }
 
-function stepFromHash(hash: string): StudioStep | null {
-  const found = (Object.keys(STEP_HASH) as StudioStep[]).find(key => STEP_HASH[key] === hash)
+function stepFromHash(hash: string): RoomPanel | null {
+  const found = (Object.keys(STEP_HASH) as RoomPanel[]).find(key => STEP_HASH[key] === hash)
 
   return found ?? null
 }
@@ -347,7 +365,7 @@ function onHashChange() {
  *
  * The guide moves the screen by calling this itself, so nothing is lost by remembering.
  */
-function goTo(step: StudioStep) {
+function goTo(step: RoomPanel) {
   chosenStep.value = step
   editingSize.value = false
 
@@ -367,9 +385,9 @@ function goTo(step: StudioStep) {
  * yes to the size makes step 3 done, which moves the automatic step to 4 — and advancing
  * from *that* landed on 5, skipping the questions. Found by walking the steps.
  */
-function advance(from: StudioStep = activeStep.value) {
-  const at = STEP_ORDER.indexOf(from)
-  const next = STEP_ORDER[at + 1]
+function advance(from: RoomPanel = activeStep.value) {
+  const at = PANEL_ORDER.indexOf(from)
+  const next = PANEL_ORDER[at + 1]
 
   if (next !== undefined) goTo(next)
 }
@@ -380,7 +398,7 @@ function advance(from: StudioStep = activeStep.value) {
  * not a button in front of it.
  */
 watch(activeStep, (step) => {
-  if (step === 'propose' && designs.value.length === 0) {
+  if (step === 'brief' && designs.value.length === 0) {
     creatingDesign.value = true
   }
 }, { immediate: true })
@@ -863,7 +881,6 @@ const quiet = (state: Partial<GuideState> & Pick<GuideState, 'icon' | 'say'>): G
 const guide = computed<GuideState>(() => {
   const current = room.value
   const analysis = current?.analysis ?? null
-  const plan = `/projects/${projectId}/rooms/${roomId}/plan`
   const design = latestDesign.value
 
   if (current === null) {
@@ -896,8 +913,7 @@ const guide = computed<GuideState>(() => {
            */
           tips: [
             { icon: 'camera', label: 'Telefonu yan çevir', hint: 'Yatay kare, oda tamamen girsin' },
-            { icon: 'door', label: 'Kapıdan içeri', hint: 'Odanın tamamı görünsün' },
-            { icon: 'camera', label: 'Dört köşeden', hint: 'Her seferinde odanın ortasına bak' },
+            { icon: 'door', label: 'Dört köşeden', hint: 'Her seferinde odanın ortasına bak' },
             { icon: 'camera', label: 'Uzun duvarların ortasından', hint: 'İki kare daha; altı olsun' },
             { icon: 'light', label: 'Gündüz ışığında', hint: 'Renkleri doğru okurum' },
           ],
@@ -1045,7 +1061,7 @@ const guide = computed<GuideState>(() => {
         secondary: { label: 'Boş hâlini hazırla' },
       })
 
-    case 'propose':
+    case 'brief':
       if (design === null || creatingDesign.value) {
         const colours = (analysis?.dominant_colors ?? []).map(colour => colourWords[colour] ?? colour).slice(0, 3).join(', ')
 
@@ -1075,16 +1091,6 @@ const guide = computed<GuideState>(() => {
         secondary: { label: 'Yeni bir tasarım iste' },
       })
 
-    case 'edit':
-    case 'save':
-      return quiet({
-        icon: 'pencil',
-        say: placedCount.value > 0 ? 'Ürünlerin 3B odanda.' : 'Şimdi odanı 3B görelim.',
-        detail: placedCount.value > 0
-          ? 'Tasarımdaki gibi yerleştirdim; beğenmediğini tut, taşı. Her hareketi kaydederim.'
-          : 'Tasarımdaki ürünleri odana ben yerleştiririm; sen istersen taşırsın.',
-        action: { label: 'Odayı aç', to: plan },
-      })
 
     default:
       // Design, render, 360 and purchase live on the design screen; from here, the way there.
@@ -1130,13 +1136,13 @@ function guideAct() {
       else void acceptProposal()
 
       return
-    case 'propose':
+    case 'brief':
       creatingDesign.value = true
       nextTick(() => document.getElementById('tasarim-olustur')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
 
       return
     default:
-      goTo('propose')
+      goTo('brief')
   }
 }
 
@@ -1167,7 +1173,7 @@ function guideSecondary() {
       }
 
       return
-    case 'propose':
+    case 'brief':
       creatingDesign.value = true
   }
 }
@@ -1185,7 +1191,7 @@ function guideSecondary() {
     <RcAlert v-if="loadError" tone="danger">{{ loadError }}</RcAlert>
 
     <template v-else-if="room && project">
-      <div class="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+      <div class="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3">
         <div class="flex min-w-0 items-center gap-2 text-sm">
           <NuxtLink :to="`/projects/${projectId}`" class="shrink-0 text-ink-secondary hover:text-ink">
             ← {{ project.name }}
@@ -1205,12 +1211,12 @@ function guideSecondary() {
           class="w-full min-w-0"
           :project-id="projectId"
           :room-id="roomId"
-          :current="activeStep"
+          :current="phaseOf(activeStep)"
           :done="studioDone"
           :design-id="latestDesign?.id ?? null"
           :own="ON_ROOM"
           selectable
-          @select="goTo"
+          @select="goTo($event as RoomPanel)"
         />
       </div>
 
@@ -1421,7 +1427,7 @@ function guideSecondary() {
           </section>
 
           <!-- 4 · İstekler -->
-          <div v-else-if="activeStep === 'propose'" id="istekler" class="space-y-6">
+          <div v-else-if="activeStep === 'brief'" id="istekler" class="space-y-6">
             <DesignBriefWizard
               v-if="creatingDesign && !briefUnavailable"
               id="tasarim-olustur"
@@ -1500,18 +1506,47 @@ function guideSecondary() {
 </template>
 
 <style scoped>
-.step-enter-active,
+/*
+ * One phase giving way to the next.
+ *
+ * It was 160ms with an eight-pixel hop, which is the default web transition and reads as a
+ * page swapping a div. A phase change is a bigger event than that: the guide has just said
+ * something new and the screen is about to be about something else.
+ *
+ * So the outgoing panel leaves quickly and without moving, and the incoming one takes its
+ * time and settles rather than arrives — 420ms on the standard material curve, no overshoot,
+ * which is the timing the motion reference calls "premium". The travel is four pixels rather
+ * than eight: enough to read as motion, not enough to look like a slide deck.
+ *
+ * The transition is out-in, so the guide's new sentence is on screen before the panel under
+ * it changes. That is the order somebody reads them in.
+ */
+.step-enter-active {
+  transition: opacity 420ms cubic-bezier(0.4, 0, 0.2, 1), transform 420ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 .step-leave-active {
-  transition: opacity 160ms ease, transform 160ms ease;
+  transition: opacity 160ms cubic-bezier(0.4, 0, 1, 1);
 }
 
 .step-enter-from {
   opacity: 0;
-  transform: translateY(8px);
+  transform: translateY(4px);
 }
 
 .step-leave-to {
   opacity: 0;
-  transform: translateY(-4px);
+}
+
+/* Somebody who asked for less motion gets the change without the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .step-enter-active,
+  .step-leave-active {
+    transition: opacity 120ms linear;
+  }
+
+  .step-enter-from {
+    transform: none;
+  }
 }
 </style>

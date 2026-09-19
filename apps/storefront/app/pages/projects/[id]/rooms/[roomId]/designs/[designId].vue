@@ -40,30 +40,32 @@ const working = ref(false)
  */
 type DesignStage = 'design' | 'render' | 'video' | 'buy'
 
-const ON_DESIGN: DesignStage[] = ['design', 'render', 'video', 'buy']
-
-/** A render made from the customer's own arrangement, rather than the first proposal. */
+/** A render made from the customer's own arrangement, rather than from the first proposal. */
 const renderedFromPlan = computed(() => (shownVersion.value?.user_prompt ?? '').includes('Oda planındaki yerleşimi'))
 
+
+/*
+ * The strip carries four phases and this screen is the last of them. The render, the tour and
+ * the basket are not steps on a road — they are things you do with a design you already have,
+ * and the guide offers them one at a time.
+ */
 const studioDone = computed(() => ({
   photo: true,
-  // A design exists, so the furniture question was answered — emptied, or kept as it is.
   plate: true,
-  recognise: true,
-  propose: true,
+  brief: true,
   design: shownVersion.value?.status === 'ready',
-  edit: renderedFromPlan.value,
-  save: renderedFromPlan.value,
-  render: renderedFromPlan.value && shownVersion.value?.status === 'ready',
-  video: video.value?.status === 'ready',
-  buy: false,
 }))
 
-/** The first of this screen's steps not done — where the guide takes the customer. */
+/**
+ * Which of this screen's four faces to show.
+ *
+ * Not a walk any more. The design is what a customer came for; the render made from their own
+ * arrangement, the tour and the basket are things they may want afterwards, in that order, and
+ * the guide offers whichever is the next one they have not got.
+ */
 const autoStage = computed<DesignStage>(() => {
-  if (studioDone.value.design !== true) return 'design'
-  if (studioDone.value.render !== true) return 'design'
-  if (studioDone.value.video !== true) return 'render'
+  if (renderedFromPlan.value !== true) return 'design'
+  if (video.value?.status !== 'ready') return 'render'
 
   return 'video'
 })
@@ -150,14 +152,23 @@ const designGuide = computed(() => {
 
   switch (stage.value) {
     case 'design':
+      /*
+       * The loop, in the product owner's own words: "beğenmezsem yerleşimi değiştir çıksın".
+       *
+       * Liking it is the ordinary answer and it needs no button — the shopping list is a
+       * click away and the guide offers the tour. Not liking it is the one that needs a door,
+       * so that is what the primary action is, and it says what it does rather than naming a
+       * screen. It stays offered after a render too: the second arrangement is as likely to
+       * be the one somebody wants as the first.
+       */
       return {
         icon: 'check' as const,
-        say: renderedFromPlan.value ? 'Render hazır.' : 'Tasarımın hazır.',
+        say: renderedFromPlan.value ? 'Yeni yerleşimin hazır.' : 'Tasarımın hazır.',
         detail: renderedFromPlan.value
-          ? 'Yerleştirdiğin gibi, gerçek ürünlerle çizdim. İstersen 360 tura geçelim.'
-          : 'Yerlerini değiştirmek ister misin? Ürünleri 3B odana tasarımdaki gibi koyarım; tutar, taşırsın.',
-        action: canEdit.value && !renderedFromPlan.value ? { label: '3B odayı aç', to: plan } : null,
-        secondary: renderedFromPlan.value ? { label: '360 tura geç' } : { label: 'Hayır, böyle iyi' },
+          ? 'Senin dizdiğin gibi, gerçek ürünlerle. Beğenmediysen yerleşimi yine değiştirebilirsin.'
+          : 'Beğendiysen ürünlere geçelim. Beğenmediysen yerleşimi kendin değiştir, yeni tasarımı ona göre vereyim.',
+        action: canEdit.value ? { label: 'Yerleşimi değiştir', to: plan } : null,
+        secondary: { label: 'Beğendim, ürünlere geç' },
         busy: false,
       }
     case 'render':
@@ -202,7 +213,9 @@ function designGuideAct(): void {
 }
 
 function designGuideSecondary(): void {
-  if (stage.value === 'design') openStage('render')
+  // "Beğendim" means the shopping list, not the next panel along: somebody who likes their
+  // design wants to buy what is in it, and the tour is offered from there.
+  if (stage.value === 'design') openStage('buy')
   else if (stage.value === 'render') openStage(video.value?.status === 'ready' ? 'video' : 'buy')
 }
 
@@ -855,7 +868,7 @@ const statusTone: Record<string, string> = {
     <RcAlert v-if="loadError" tone="danger">{{ loadError }}</RcAlert>
 
     <template v-else-if="design">
-      <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-3">
         <div class="flex min-w-0 items-center gap-2 text-sm">
           <NuxtLink :to="`/projects/${projectId}/rooms/${roomId}`" class="shrink-0 text-ink-secondary hover:text-ink">
             ← Odaya dön
@@ -890,12 +903,9 @@ const statusTone: Record<string, string> = {
           class="w-full min-w-0"
           :project-id="projectId"
           :room-id="roomId"
-          :current="stage"
+          current="design"
           :done="studioDone"
           :design-id="designId"
-          :own="ON_DESIGN"
-          selectable
-          @select="openStage($event as DesignStage)"
         />
       </div>
 
