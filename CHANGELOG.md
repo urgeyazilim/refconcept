@@ -5,6 +5,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — "Tasarıma Göre Diz" put the room round the armchair and left the sofa out
+
+The product owner arranged a real design and said the layout was not what they wanted. It was
+not: the composer was handed six pieces and placed five, and the five it placed were grouped
+round the wrong one.
+
+- **A window was blocking its wall the way a doorway does.** The room is 4 x 5.5 m with a
+  2.5 m window in the middle of the west wall. That left two 1.2 m ends, so the 2.2 m sofa the
+  design had chosen was refused with "no room" — in a twenty-two square metre living room. A
+  window is only a block for what would cover it: the free runs along a wall are now worked
+  out per piece, and anything shorter than the sill passes under the glass. The sofa is 78 cm
+  and the sill is 85, so it stands under the window, which is where sofas go. Nothing changed
+  for doorways, and a piece nobody measured still counts as tall, because an unmeasured piece
+  might be a wardrobe.
+- **The coffee table and the rug were following the armchair.** Seating is placed widest
+  first, so "the last seat placed" — which is what the table and the rug arranged themselves
+  around — was always the smallest one in the room. The result was a 90 cm table and a 2.4 m
+  rug huddled against the far wall with a single chair, and bare floor between the sofa and
+  the television. They belong to the widest seat standing, and now they go to it.
+- The owner's own room recomposes to six of six placed: the sofa under the window facing the
+  television across the room, the table in front of it, the rug under them both.
+
+
 ### Changed — Four phases and a loop, instead of ten numbered boxes
 
 - **The wizard is gone.** The strip was ten numbered circles — "1 Fotoğraf — 2 Eşyalar — 3

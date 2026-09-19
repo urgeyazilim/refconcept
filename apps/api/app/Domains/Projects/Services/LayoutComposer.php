@@ -265,7 +265,7 @@ final class LayoutComposer
         }
 
         if (in_array($category, self::BESIDE_SEATING, true)) {
-            return $this->placeBeside($piece, $state, $state->lastSeating()) ?? $this->placeAgainstWall($piece, $state);
+            return $this->placeBeside($piece, $state, $state->mainSeating()) ?? $this->placeAgainstWall($piece, $state);
         }
 
         if (in_array($category, self::TABLES, true)) {
@@ -303,7 +303,7 @@ final class LayoutComposer
      */
     private function placeUnderfoot(array $piece, LayoutComposerState $state): array
     {
-        $seat = $state->lastSeating();
+        $seat = $state->mainSeating();
 
         if ($seat === null) {
             return $this->at($piece, $state->centreX(), $state->centreZ(), 0);
@@ -371,10 +371,10 @@ final class LayoutComposer
 
         if ($television !== null && $state->wallOf($television) === LayoutComposerState::opposite($wall)) {
             $line = $state->alongOf($wall, $television);
-            $along = $state->fitsAlong($wall, $line, $width) ? $line : null;
+            $along = $state->fitsAlong($wall, $line, $width, $this->heightOf($piece)) ? $line : null;
         }
 
-        $along ??= $state->runAlong($wall, $width, centred: true);
+        $along ??= $state->runAlong($wall, $width, centred: true, heightMm: $this->heightOf($piece));
 
         if ($along === null) {
             return null;
@@ -391,7 +391,7 @@ final class LayoutComposer
      */
     private function placeTable(array $piece, LayoutComposerState $state): ?array
     {
-        $seat = $state->lastSeating();
+        $seat = $state->mainSeating();
 
         if ($seat === null) {
             return null;
@@ -476,7 +476,7 @@ final class LayoutComposer
 
         $along = $beneath !== null
             ? $state->alongOf($wall, $beneath)
-            : $state->runAlong($wall, (int) $piece['width_mm'], centred: true);
+            : $state->runAlong($wall, (int) $piece['width_mm'], centred: true, heightMm: $this->heightOf($piece));
 
         if ($along === null) {
             return null;
@@ -543,7 +543,7 @@ final class LayoutComposer
         $centred = in_array((string) ($piece['category'] ?? ''), self::CENTRED_ON_WALL, true);
 
         foreach ($this->wallsToTry($piece, $state) as $wall) {
-            $along = $state->runAlong($wall, (int) $piece['width_mm'], centred: $centred);
+            $along = $state->runAlong($wall, (int) $piece['width_mm'], centred: $centred, heightMm: $this->heightOf($piece));
 
             if ($along === null) {
                 continue;
@@ -660,6 +660,22 @@ final class LayoutComposer
     private function sideways(int $rotation): array
     {
         return $rotation === 90 || $rotation === 270 ? [0, 1] : [1, 0];
+    }
+
+    /**
+     * How tall a piece is, when anybody measured it.
+     *
+     * Null rather than a guess: the wall runs treat an unknown height as tall, because a piece
+     * nobody measured might be a wardrobe, and a wardrobe across a window is worse than a sofa
+     * that did not fit.
+     *
+     * @param  array<string, mixed>  $piece
+     */
+    private function heightOf(array $piece): ?int
+    {
+        $height = $piece['height_mm'] ?? null;
+
+        return is_int($height) && $height > 0 ? $height : null;
     }
 
     /**

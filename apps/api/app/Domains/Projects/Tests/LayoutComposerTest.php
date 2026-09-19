@@ -43,9 +43,11 @@ function opening(string $type, string $wall, int $offset, int $width, array $att
 }
 
 /**
- * @return array{product_id: string, sku_id: string, category: string, width_mm: int, depth_mm: int, wall: string|null}
+ * A piece as the matcher hands it over. Height is optional there, so it is optional here.
+ *
+ * @return array{product_id: string, sku_id: string, category: string, width_mm: int, depth_mm: int, height_mm: int|null, wall: string|null}
  */
-function piece(string $category, int $width, int $depth, ?string $wall = null): array
+function piece(string $category, int $width, int $depth, ?string $wall = null, ?int $height = null): array
 {
     return [
         'product_id' => "p-{$category}",
@@ -53,6 +55,7 @@ function piece(string $category, int $width, int $depth, ?string $wall = null): 
         'category' => $category,
         'width_mm' => $width,
         'depth_mm' => $depth,
+        'height_mm' => $height,
         'wall' => $wall,
     ];
 }
@@ -371,4 +374,79 @@ it('tries another wall before giving up', function (): void {
      */
     expect($bookcase)->not->toBeNull()
         ->and($bookcase['rotation_y_deg'])->not->toBe(0);
+});
+
+/*
+ * --- windows -------------------------------------------------------------
+ *
+ * All three of these come from one real room: 4 x 5.5 m, a 2.5 m window with an 850 mm sill
+ * taking the middle of the west wall, and a design asking for a 2.2 m sofa against it. The
+ * composer refused the sofa with "no room" because the window blocked its wall the way a
+ * doorway does, and then hung the rug and the coffee table on the armchair.
+ */
+
+it('pencere: stands a sofa under the window instead of refusing the wall', function (): void {
+    $window = opening('window', 'west', 1_400, 2_500, ['height_mm' => 1_400, 'sill_height_mm' => 850]);
+
+    $result = $this->composer->compose($this->geometry, [$window], [
+        piece('kanepe', 2_200, 950, 'west', 780),
+    ]);
+
+    $sofa = find($result['items'], 'kanepe');
+
+    // 78 cm of sofa under an 85 cm sill covers no glass, so the whole wall is still a wall.
+    // The two 1.2 m ends the window used to leave fit nothing anybody sits on.
+    expect($result['unplaced'])->toBeEmpty()
+        ->and($sofa['position_z_mm'])->toBeGreaterThan(1_400)
+        ->and($sofa['position_z_mm'])->toBeLessThan(3_900);
+});
+
+it('pencere: will not stand a wardrobe across the glass', function (): void {
+    $window = opening('window', 'west', 1_400, 2_500, ['height_mm' => 1_400, 'sill_height_mm' => 850]);
+
+    $result = $this->composer->compose($this->geometry, [$window], [
+        piece('gardirop', 1_000, 600, 'west', 2_000),
+    ]);
+
+    $wardrobe = find($result['items'], 'gardirop');
+
+    // It still gets its wall — just the end of it, where there is no window to board up.
+    expect($wardrobe['position_z_mm'] + 500)->toBeLessThanOrEqual(1_400);
+});
+
+it('pencere: treats an unmeasured piece as tall', function (): void {
+    $window = opening('window', 'west', 1_400, 2_500, ['height_mm' => 1_400, 'sill_height_mm' => 850]);
+
+    $result = $this->composer->compose($this->geometry, [$window], [
+        piece('kitaplik', 1_000, 350, 'west'),
+    ]);
+
+    $bookcase = find($result['items'], 'kitaplik');
+
+    // Nobody measured it, so it might be two metres of shelving. A guess that boards up a
+    // window is worse than a guess that uses the end of the wall.
+    expect($bookcase['position_z_mm'] + 500)->toBeLessThanOrEqual(1_400);
+});
+
+it('grup: the rug and the table belong to the sofa, not to the last chair placed', function (): void {
+    $result = $this->composer->compose($this->geometry, [], [
+        piece('kanepe', 2_200, 900, 'north', 780),
+        piece('koltuk', 780, 820, 'east', 820),
+        piece('sehpa', 900, 900),
+        piece('hali', 2_400, 1_700),
+    ]);
+
+    $sofa = find($result['items'], 'kanepe');
+    $chair = find($result['items'], 'koltuk');
+    $table = find($result['items'], 'sehpa');
+    $rug = find($result['items'], 'hali');
+
+    /*
+     * Seating is placed widest first, so the armchair is the last seat standing and used to
+     * win. A 90 cm table in front of a 78 cm chair against the far wall, with a 2.4 m rug
+     * under it, is a corner of clutter and a bare floor in front of the sofa.
+     */
+    expect($chair['position_x_mm'])->not->toBe($sofa['position_x_mm'])
+        ->and($table['position_x_mm'])->toBe($sofa['position_x_mm'])
+        ->and($rug['position_x_mm'])->toBe($sofa['position_x_mm']);
 });

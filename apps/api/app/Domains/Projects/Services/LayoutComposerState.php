@@ -44,6 +44,18 @@ final class LayoutComposerState
     private array $taken = ['north' => [], 'south' => [], 'east' => [], 'west' => []];
 
     /**
+     * The glass, per wall: where it starts and ends along the wall, and how high its sill is.
+     *
+     * Kept apart from the hard blocks because a window does not block the same things a door
+     * does. Nothing may stand in a doorway at any height; a sofa may stand under a window and
+     * usually does. Which of the two a window is depends on the piece, so the answer cannot be
+     * baked into one list of taken spans.
+     *
+     * @var array<string, list<array{from: int, to: int, sill: int}>>
+     */
+    private array $glass = ['north' => [], 'south' => [], 'east' => [], 'west' => []];
+
+    /**
      * The floor in front of every door, as rectangles: x from/to, z from/to.
      *
      * @var list<array{x0: int, x1: int, z0: int, z1: int}>
@@ -76,13 +88,32 @@ final class LayoutComposerState
              * along. A sofa under a window is ordinary, so the window blocks only the glass.
              */
             $isDoor = in_array($opening->type, [ConstraintType::Door, ConstraintType::BalconyDoor], true);
-            $margin = $isDoor ? self::DOOR_MARGIN_MM : 0;
+
+            if (! $isDoor) {
+                /*
+                 * A window is a block only for what would cover it.
+                 *
+                 * This was a hard block like a doorway, and the product owner's own living
+                 * room showed what that costs: a 2.5 m window took the middle of the only free
+                 * wall, the two ends left were 1.3 m each, and the 2.2 m sofa the design had
+                 * chosen was refused with "no room" in a four-by-five-and-a-half metre room.
+                 * The sofa is 78 cm tall and the sill is 85. It goes under the window, which
+                 * is where sofas go.
+                 */
+                $this->glass[$wall][] = [
+                    'from' => $offset,
+                    'to' => $offset + $width,
+                    // No sill recorded means no promise it can be passed under.
+                    'sill' => $opening->sill_height_mm ?? 0,
+                ];
+
+                continue;
+            }
+
+            $margin = self::DOOR_MARGIN_MM;
 
             $this->taken[$wall][] = ['from' => $offset - $margin, 'to' => $offset + $width + $margin];
-
-            if ($isDoor) {
-                $this->reserveDoorway($wall, $offset - $margin, $offset + $width + $margin);
-            }
+            $this->reserveDoorway($wall, $offset - $margin, $offset + $width + $margin);
         }
     }
 
@@ -362,11 +393,11 @@ final class LayoutComposerState
      * what seating and pictures want. Everything else takes the first run it fits in, so a
      * wall fills up from one end instead of leaving unusable gaps between centred pieces.
      */
-    public function runAlong(string $wall, int $width, bool $centred): ?int
+    public function runAlong(string $wall, int $width, bool $centred, ?int $heightMm = null): ?int
     {
         $extent = in_array($wall, ['north', 'south'], true) ? $this->width() : $this->length();
 
-        $free = $this->freeRuns($wall, $extent);
+        $free = $this->freeRuns($wall, $extent, $heightMm);
 
         if ($free === []) {
             return null;
@@ -392,12 +423,12 @@ final class LayoutComposerState
     }
 
     /** Whether a piece this wide can stand centred at this point along a wall. */
-    public function fitsAlong(string $wall, int $along, int $width): bool
+    public function fitsAlong(string $wall, int $along, int $width, ?int $heightMm = null): bool
     {
         $from = $along - intdiv($width, 2);
         $to = $along + intdiv($width, 2);
 
-        foreach ($this->freeRuns($wall, $this->extentOf($wall)) as $run) {
+        foreach ($this->freeRuns($wall, $this->extentOf($wall), $heightMm) as $run) {
             if ($from >= $run['from'] && $to <= $run['to']) {
                 return true;
             }
@@ -428,21 +459,37 @@ final class LayoutComposerState
     }
 
     /**
-     * The most recently placed seat, which is what a coffee table arranges itself around.
+     * The seat a room is arranged around: the widest one standing, which is what a coffee
+     * table and a rug arrange themselves about.
+     *
+     * It used to be the last one placed, which in a room with a sofa and an armchair is the
+     * armchair — seating is placed widest first. So the coffee table went in front of the
+     * armchair and the rug went under it, and the product owner's living room came back with
+     * its sofa facing the television across four metres of bare floor while the rug, the table
+     * and the single chair huddled in the far corner. The group belongs to the sofa.
+     *
+     * Widest rather than "the one facing the focal wall", because an L-shaped arrangement has
+     * two seats facing it and only one of them is the one the table goes in front of.
      *
      * @return array<string, mixed>|null
      */
-    public function lastSeating(): ?array
+    public function mainSeating(): ?array
     {
-        $seating = ['kanepe', 'koltuk', 'berjer', 'kose-takimi', 'sedir'];
+        $seating = ['kanepe', 'koltuk', 'oturma-grubu', 'berjer', 'kose-takimi', 'sedir'];
 
-        for ($index = count($this->placed) - 1; $index >= 0; $index--) {
-            if (in_array((string) ($this->placed[$index]['category'] ?? ''), $seating, true)) {
-                return $this->placed[$index];
+        $best = null;
+
+        foreach ($this->placed as $item) {
+            if (! in_array((string) ($item['category'] ?? ''), $seating, true)) {
+                continue;
+            }
+
+            if ($best === null || (int) ($item['width_mm'] ?? 0) > (int) ($best['width_mm'] ?? 0)) {
+                $best = $item;
             }
         }
 
-        return null;
+        return $best;
     }
 
     /**
@@ -519,13 +566,22 @@ final class LayoutComposerState
     }
 
     /**
-     * The stretches of a wall nothing is standing in.
+     * The stretches of a wall nothing this piece cares about is standing in.
      *
+     * @param  int|null  $heightMm  how tall the piece is; null when unknown, and then the glass
+     *                              blocks, because an unmeasured piece might be a wardrobe
      * @return list<array{from: int, to: int}>
      */
-    private function freeRuns(string $wall, int $extent): array
+    private function freeRuns(string $wall, int $extent, ?int $heightMm = null): array
     {
         $blocked = $this->taken[$wall] ?? [];
+
+        foreach ($this->glass[$wall] ?? [] as $pane) {
+            // Under the sill it passes; level with it or above it, it covers the window.
+            if ($heightMm === null || $heightMm > $pane['sill']) {
+                $blocked[] = ['from' => $pane['from'], 'to' => $pane['to']];
+            }
+        }
 
         usort($blocked, static fn (array $a, array $b): int => $a['from'] <=> $b['from']);
 
