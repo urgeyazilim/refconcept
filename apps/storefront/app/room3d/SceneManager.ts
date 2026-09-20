@@ -7,7 +7,6 @@ import {
   DirectionalLight,
   Group,
   Mesh,
-  MeshDepthMaterial,
   NoToneMapping,
   Line,
   LineBasicMaterial,
@@ -16,6 +15,7 @@ import {
   Points,
   PointsMaterial,
   Scene,
+  ShaderMaterial,
   SRGBColorSpace,
   Vector3,
   WebGLRenderer,
@@ -77,10 +77,38 @@ export class SceneManager {
   /**
    * The material the whole scene wears while a depth map is drawn.
    *
-   * One, kept: swapping it over the scene is cheaper than a second renderer and guarantees
-   * the depth frame and the colour frame share a camera, an aspect and a pixel grid.
+   * Written rather than taken from the library, because three's own depth material writes
+   * the depth *buffer*, which is deliberately non-linear: almost all of its precision sits
+   * in the first few centimetres in front of the camera so that near surfaces sort
+   * correctly. Standing inside a five-metre room that produces an almost entirely black
+   * frame — everything from one metre out is crushed into the same value, and a renderer
+   * given it has nothing to follow. Measured in metres instead and spread evenly over the
+   * room, which is what a depth control model is trained on.
+   *
+   * Near is white and far is black, the same way round as every published depth map.
    */
-  private readonly depthMaterial = new MeshDepthMaterial()
+  private readonly depthMaterial = new ShaderMaterial({
+    uniforms: { near: { value: 0.2 }, far: { value: 10 } },
+    vertexShader: `
+      varying float vDistance;
+
+      void main() {
+        vec4 seen = modelViewMatrix * vec4(position, 1.0);
+        vDistance = -seen.z;
+        gl_Position = projectionMatrix * seen;
+      }
+    `,
+    fragmentShader: `
+      uniform float near;
+      uniform float far;
+      varying float vDistance;
+
+      void main() {
+        float shade = 1.0 - clamp((vDistance - near) / (far - near), 0.0, 1.0);
+        gl_FragColor = vec4(vec3(shade), 1.0);
+      }
+    `,
+  })
 
   private room: Group | null = null
 
@@ -536,7 +564,16 @@ export class SceneManager {
    * the customer's own room put them, because the geometry is an input and not a suggestion.
    *
    * Drawn by swapping one material over the whole scene rather than by keeping a second
-   * renderer: same camera, same aspect, same pixels, so the two frames line up exactly.
+   * renderer: same aspect, same pixels.
+   *
+   * **From inside the room, whatever the customer is looking at.** The first version used
+   * whichever camera was on screen, which is usually the doll's-house view — and a
+   * doll's-house depth map is a box floating in a void with the outside faces of two walls
+   * towards you. A renderer asked for "a photorealistic interior photograph" and handed that
+   * produced exactly what it describes: a cut-open box seen from the outside of a house,
+   * with the void filled in as another room. The control image has to be the kind of picture
+   * the answer is meant to be, so it is taken from inside, where the frame is all room and
+   * there is no void to interpret.
    *
    * Returns an empty string when the canvas has no size — the plan view is showing, and a
    * depth map of nothing is worse than no depth map.
@@ -545,6 +582,22 @@ export class SceneManager {
     if (this.canvas.clientWidth === 0 || this.canvas.clientHeight === 0) {
       return ''
     }
+
+    const shown = this.cameras.mode
+
+    if (shown !== 'inside') {
+      this.cameras.setMode('inside')
+    }
+
+    /*
+     * The walls back, before the frame is drawn.
+     *
+     * Occlusion is decided once per frame from where the camera is, and the loop has not
+     * run since the camera moved indoors — so the two walls hidden for the doll's-house
+     * view are still hidden, and a depth map of a room with two missing walls is half a
+     * frame of void. Standing inside, every wall and the ceiling are part of the room.
+     */
+    this.updateOcclusion()
 
     const camera = this.cameras.active
     const background = this.scene.background
@@ -559,13 +612,17 @@ export class SceneManager {
      * restored afterwards, the same five metres fill the range and the map has contrast a
      * control model can actually read.
      */
-    const near = camera.near
-    const far = camera.far
+    /*
+     * The range the shading spreads over: arm's length to the far corner.
+     *
+     * Not the camera's own near and far, which exist to make sorting work and to let
+     * somebody orbit; those are left alone. This is the range the *picture* uses, so the
+     * room fills it and the map has the contrast a control model needs.
+     */
     const reach = this.room === null ? 12 : this.roomReach()
 
-    camera.near = Math.max(0.05, camera.position.length() - reach)
-    camera.far = camera.position.length() + reach
-    camera.updateProjectionMatrix()
+    this.depthMaterial.uniforms.near!.value = 0.2
+    this.depthMaterial.uniforms.far!.value = reach
 
     this.scene.overrideMaterial = this.depthMaterial
     this.scene.background = null
@@ -580,12 +637,12 @@ export class SceneManager {
     this.scene.background = background
     this.renderer.toneMapping = tone
 
-    camera.near = near
-    camera.far = far
-    camera.updateProjectionMatrix()
+    if (shown !== 'inside') {
+      this.cameras.setMode(shown)
+    }
 
     // The colour frame back in the buffer, so a snapshot taken straight after this one is a
-    // picture of the room and not a grey one.
+    // picture of the room and not a grey one, and from the camera the customer had.
     this.render()
 
     return map

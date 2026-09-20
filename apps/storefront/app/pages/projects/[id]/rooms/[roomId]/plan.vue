@@ -497,6 +497,24 @@ async function load(): Promise<void> {
     if (items.value.length === 0 && design.value !== null && (confirmed.value !== null || pending.value.length > 0)) {
       await composeLayout()
     }
+    else if (items.value.length > 0) {
+      /*
+       * A room that was already arranged still owes the renderer its picture.
+       *
+       * Both snapshots were only ever sent after a move: arranging sends them, dragging
+       * sends them, and opening a room somebody arranged last week sent nothing. So a
+       * customer who liked their layout, changed nothing and pressed "Render al" paid for a
+       * render of a room the server had no current picture of — and once the depth map
+       * became the thing the renderer obeys, that gap stopped being an optimisation and
+       * started being the difference between a design that matches the room and one that
+       * does not.
+       *
+       * Longer than the throttle used for dragging: the scene has to load its product models
+       * before it can draw them, and a depth map missing half the furniture is worse than a
+       * late one.
+       */
+      scheduleSnapshot(9_000)
+    }
 
     /*
      * The photograph, only when there is something to draw on it and nothing agreed yet.
@@ -648,14 +666,14 @@ async function sendSnapshot(): Promise<void> {
  * The same, but not on every frame of a drag: sixty saves is sixty pictures of a few hundred
  * kilobytes each, and the renderer only ever reads the most recent one.
  */
-function scheduleSnapshot(): void {
+function scheduleSnapshot(after = 4_000): void {
   if (snapshotTimer !== null) {
     clearTimeout(snapshotTimer)
   }
 
   snapshotTimer = setTimeout(() => {
     void sendSnapshot()
-  }, 4_000)
+  }, after)
 }
 
 /**

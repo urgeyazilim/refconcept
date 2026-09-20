@@ -295,7 +295,19 @@ final class FalAiProvider implements AiProvider
      */
     private function controlled(AiCall $call, string $key): AiResult
     {
-        $depth = $call->options['depth_url'] ?? null;
+        /*
+         * The depth map arrives as bytes, the way every other image in this system does.
+         *
+         * Not as a data URI in the job's options: the input column is JSON somebody reads in
+         * a console, and half a megabyte of base64 in it makes the whole row unreadable. The
+         * gateway loads the file off the private disk and hands the bytes over, and only
+         * this adapter — which has no other way — turns them into a link.
+         */
+        $blob = $call->imageBlobs[0] ?? null;
+
+        $depth = is_array($blob)
+            ? 'data:'.$blob['mime'].';base64,'.$blob['data']
+            : ($call->options['depth_url'] ?? null);
 
         if (! is_string($depth) || $depth === '') {
             /*
@@ -338,7 +350,17 @@ final class FalAiProvider implements AiProvider
                      * those sizes. Everything a control image does not decide — the oak, the
                      * daylight, the wall colour — the prompt decides.
                      */
-                    'control_lora_strength' => (float) ($call->options['control_strength'] ?? 1.0),
+                    /*
+                     * Below full, because full is not what it sounds like.
+                     *
+                     * The published guidance for these control models is 0.3 to 0.8, and
+                     * the reason showed up the first time this ran against a real room: at
+                     * 1.0 the flat planes of a CAD depth map come through as flat planes of
+                     * colour and the answer is an illustration rather than a photograph.
+                     * The arrangement still holds at 0.7 — it is a strong constraint, not a
+                     * literal one.
+                     */
+                    'control_lora_strength' => (float) ($call->options['control_strength'] ?? 0.7),
                     'num_inference_steps' => (int) ($call->options['steps'] ?? 28),
                     'guidance_scale' => (float) ($call->options['guidance'] ?? 3.5),
                     'num_images' => 1,

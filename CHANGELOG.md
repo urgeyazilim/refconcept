@@ -5,6 +5,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed — The depth map is drawn from inside the room, and measured in metres
+
+Three paid renders against a real arrangement said what no amount of reasoning would have.
+
+- **From inside, not from the doll's-house view.** The first control image was the room seen
+  from outside with two walls missing, and a renderer asked for a photorealistic interior
+  photograph and handed that produced exactly what it was shown: a cut-open box floating in a
+  void, with the void filled in as another room. A control image has to be the kind of picture
+  the answer is meant to be.
+- **Metres, not the depth buffer.** three's own depth material writes the buffer, which puts
+  almost all of its precision in the first few centimetres so near surfaces sort correctly.
+  Standing inside a five-metre room that is an almost entirely black frame. A small shader
+  measures distance in metres and spreads it evenly over the room instead.
+- **The walls come back first.** Occlusion is decided once a frame from where the camera is,
+  and the loop had not run since the camera moved indoors — so the two walls hidden for the
+  doll's-house view were still hidden, and half the frame was void.
+- **Control at 0.7 rather than 1.0.** The published range for these models is 0.3 to 0.8, and
+  at full strength the flat planes of a CAD depth map come through as flat planes of colour.
+
+The path works and the geometry is obeyed — walls, corner, openings and the furniture blocks
+all come out where the plan put them. What it does not yet produce is a photograph: a
+depth-control model trained on maps estimated from real photographs, handed a CAD render with
+no colour anywhere in it, answers with an illustration. Paused again until that is settled.
+
+
 ### Added — A render the room controls, instead of one it only advises
 
 Every render so far has been a photorealistic model handed a screenshot of the plan and asked
