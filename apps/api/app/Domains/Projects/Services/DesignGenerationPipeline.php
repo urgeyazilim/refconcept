@@ -397,6 +397,21 @@ final class DesignGenerationPipeline
         }
 
         /*
+         * And the same view as a depth map, when there is one.
+         *
+         * gpt-image-2 has no control conditioning — nothing here can *force* it to follow a
+         * geometry — but a depth map beside the render is the least ambiguous statement of
+         * where the walls and the furniture are that can be made in pixels, and it costs
+         * nothing extra to send. A model that has both a picture of the room and a map of its
+         * distances has no excuse left for moving the window.
+         */
+        $depth = $this->depthReference($room);
+
+        if ($depth !== null) {
+            $images[] = $depth;
+        }
+
+        /*
          * Then the room's other photographs, as references.
          *
          * A customer who photographs the room from four corners expects the result to know
@@ -457,7 +472,7 @@ final class DesignGenerationPipeline
          * better answer than another minute and another charge.
          */
         foreach (range(1, self::RENDER_ATTEMPTS) as $attempt) {
-            [$ran, $asset] = $this->renderOnce($version, $room, $analysis, $plan, $matches, $quality, $purchasable, $images, $layout !== null, count($views), $baseIndex);
+            [$ran, $asset] = $this->renderOnce($version, $room, $analysis, $plan, $matches, $quality, $purchasable, $images, $layout !== null, $depth !== null, count($views), $baseIndex);
 
             $verdict = $this->check($version, $asset, $layout, $purchasable, $analysis, $baseIndex);
 
@@ -506,6 +521,7 @@ final class DesignGenerationPipeline
         array $purchasable,
         array $images,
         bool $hasLayout,
+        bool $hasDepth,
         int $views = 0,
         ?int $baseIndex = null,
     ): array {
@@ -555,7 +571,7 @@ final class DesignGenerationPipeline
                 'instruction' => $version->user_prompt,
                 // What each supplied image is. Unlabelled, a model has no way to tell the
                 // room it must preserve from the furniture it must place into it.
-                'image_roles' => $this->imageRoles($matches, $hasLayout, $views),
+                'image_roles' => $this->imageRoles($matches, $hasLayout, $views, $hasDepth),
                 'image_sources' => $images,
             ],
             subject: $version,
@@ -1009,8 +1025,20 @@ final class DesignGenerationPipeline
             ->latest('version')
             ->first();
 
-        $disk = $layout?->snapshot_disk;
-        $path = $layout?->snapshot_path;
+        /*
+         * The view from inside, not the doll's-house one, when the scene has drawn it.
+         *
+         * A renderer asked for "a photorealistic interior photograph" and handed a picture of
+         * a box with two walls missing, seen from outside, has been given a reference of the
+         * wrong kind — and it has produced exactly that: rooms seen from nowhere anybody
+         * stands. The inside frame is the same room from the height of somebody's eyes, which
+         * is what the answer is meant to look like.
+         *
+         * The doll's-house frame is still what the fidelity check compares against and what
+         * the plan screen shows, so it stays exactly where it is.
+         */
+        $disk = $layout === null ? null : ($layout->inside_disk ?? $layout->snapshot_disk);
+        $path = $layout === null ? null : ($layout->inside_path ?? $layout->snapshot_path);
 
         if ($disk === null || $path === null || ! $this->storage->exists($disk, $path)) {
             return null;
@@ -1036,6 +1064,48 @@ final class DesignGenerationPipeline
     }
 
     /**
+     * The arrangement as a depth map, when the scene has drawn one.
+     *
+     * @return array{disk: string, path: string}|null
+     */
+    private function depthReference(Room $room): ?array
+    {
+        $geometry = RoomGeometryVersion::query()
+            ->where('room_id', $room->getKey())
+            ->where('is_confirmed', true)
+            ->first();
+
+        if ($geometry === null) {
+            return null;
+        }
+
+        $layout = DesignLayout::query()
+            ->where('room_id', $room->getKey())
+            ->where('geometry_version_id', $geometry->getKey())
+            ->whereHas('items')
+            ->latest('version')
+            ->first();
+
+        $disk = $layout?->depth_disk;
+        $path = $layout?->depth_path;
+
+        if ($disk === null || $path === null || ! $this->storage->exists($disk, $path)) {
+            return null;
+        }
+
+        // The same staleness rule as the picture it belongs to: a depth map of an older
+        // arrangement is structure the renderer will follow faithfully into the wrong answer.
+        $taken = $layout?->snapshot_taken_at;
+        $changed = $layout?->items()->max('updated_at');
+
+        if ($taken === null || (is_string($changed) && $taken->lt($changed))) {
+            return null;
+        }
+
+        return ['disk' => $disk, 'path' => $path];
+    }
+
+    /**
      * What each image is, in the order they are sent.
      *
      * A model handed four pictures and no explanation has to guess which one is the room.
@@ -1045,7 +1115,7 @@ final class DesignGenerationPipeline
      * @param  Collection<int, DesignMatch>  $matches
      * @return list<string>
      */
-    private function imageRoles(Collection $matches, bool $hasLayout = false, int $views = 0): array
+    private function imageRoles(Collection $matches, bool $hasLayout = false, int $views = 0, bool $hasDepth = false): array
     {
         $roles = ['Müşterinin odasının fotoğrafı — düzenlenecek mekân budur.'];
 
@@ -1060,6 +1130,19 @@ final class DesignGenerationPipeline
             $roles[] = 'Müşterinin onayladığı 3B yerleşim şeması. Duvarlar, kapı ve pencereler '
                 .'bu şemadaki yerlerinde; şemadaki kutular ürünlerin gerçek ölçüleridir ve her '
                 .'ürün şemada durduğu yerde duracak. Şemayı çizme, yalnızca yerleşim için kullan.';
+        }
+
+        /*
+         * The depth map, named as a measurement rather than as a picture.
+         *
+         * A model told nothing about it treats a grey gradient as a photograph of a grey
+         * room and paints one. Told what it is, it has the least ambiguous statement of
+         * where every surface stands that can be made in pixels — açık = yakın, koyu = uzak.
+         */
+        if ($hasDepth) {
+            $roles[] = 'Aynı sahnenin derinlik haritası: açık olan yakın, koyu olan uzaktır. '
+                .'Duvarların, köşenin, kapı ve pencerenin ve her ürünün tam olarak nerede durduğunu '
+                .'buradan oku. Bu bir oda fotoğrafı değildir ve çizilmeyecek.';
         }
 
         // The other photographs of the same room: references, and said to be references,

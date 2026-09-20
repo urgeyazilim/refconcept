@@ -5,6 +5,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed — The renderer is shown the room from inside, with a map of its distances
+
+Four paid renders through a control-conditioned model settled what it could and could not do.
+
+**What it can do:** obey. Walls, corner, openings and every piece of furniture came out
+exactly where the plan put them, which was impossible before.
+
+**What it cannot do:** make a photograph out of a CAD render. A depth-control model is trained
+on maps estimated from real photographs — texture, fabric folds, fine relief — and ours is
+perfect flat planes with no colour in it. Given only that it answers with an illustration;
+given the 3D colour render to start from as well, it copies the render back. That family of
+model is the wrong tool for CAD-to-photoreal, and the route is paused with the reason on it.
+
+What the four renders did produce is the input the renderer we already pay for never had.
+
+- **The render's structural reference is the view from inside**, not the doll's-house frame.
+  A model asked for a photorealistic interior photograph and handed a picture of a box with
+  two walls missing, seen from outside, was given a reference of the wrong kind. The inside
+  frame is the same room from the height of somebody's eyes. The doll's-house frame stays
+  exactly where it is — it is what the fidelity check compares against and what the plan
+  screen shows.
+- **And the depth map goes with it**, named in the prompt as a measurement rather than as a
+  picture: açık yakın, koyu uzak. gpt-image-2 has no control conditioning and nothing can
+  *force* it to follow a geometry, but a depth map beside the render is the least ambiguous
+  statement of where every surface stands that can be made in pixels, and it costs nothing
+  extra to send.
+- Both are held to the same staleness rule as the picture they belong to: a map of an older
+  arrangement is structure a renderer will follow faithfully into the wrong answer.
+
+
 ### Changed — The depth map is drawn from inside the room, and measured in metres
 
 Three paid renders against a real arrangement said what no amount of reasoning would have.

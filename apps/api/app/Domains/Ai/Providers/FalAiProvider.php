@@ -323,12 +323,41 @@ final class FalAiProvider implements AiProvider
             );
         }
 
+        /*
+         * The same view in colour, when the scene drew one.
+         *
+         * A depth map alone is a grey gradient, and a model trained on maps estimated from
+         * photographs answers a CAD gradient with an illustration — three real renders said
+         * so. This is the material it starts from: our own render of the confirmed geometry,
+         * wearing generic product models. Still nothing photographed.
+         */
+        $second = $call->imageBlobs[1] ?? null;
+
+        $inside = is_array($second)
+            ? 'data:'.$second['mime'].';base64,'.$second['data']
+            : null;
+
+        if ($inside === null && str_contains($call->model->code, 'image-to-image')) {
+            /*
+             * This endpoint starts from a picture and there is not one.
+             *
+             * A configuration failure rather than a provider one: the scene did not draw
+             * the colour frame, which is something about this room rather than about fal.
+             * Running it anyway would be a 422 and a bill for nothing.
+             */
+            return AiResult::failure(
+                AiFailureKind::NoRouteConfigured,
+                'Odaya bağlı render için odanın 3B karesi gerekiyor.',
+            );
+        }
+
         try {
             $controlUrl = $this->hosted($depth, $key, $call->options);
+            $insideUrl = $inside === null ? null : $this->hosted($inside, $key, $call->options);
         } catch (Throwable $e) {
             return AiResult::failure(
                 AiFailureKind::NetworkError,
-                'Derinlik haritası fal.ai deposuna yüklenemedi: '.$e->getMessage(),
+                'Oda çizimleri fal.ai deposuna yüklenemedi: '.$e->getMessage(),
             );
         }
 
@@ -341,6 +370,17 @@ final class FalAiProvider implements AiProvider
                 ->post(rtrim($call->options['base_url'] ?? self::DEFAULT_BASE_URL, '/').'/'.$call->model->code, [
                     'prompt' => $call->prompt,
                     'control_lora_image_url' => $controlUrl,
+                    ...($insideUrl === null ? [] : [
+                        'image_url' => $insideUrl,
+                        /*
+                         * How far the picture may travel from the render it starts from.
+                         *
+                         * High, because the render is grey plaster and untextured boxes and
+                         * the point is to make it a photograph; not so high that the model
+                         * stops using it, which is the whole reason it is there.
+                         */
+                        'strength' => (float) ($call->options['strength'] ?? 0.82),
+                    ]),
                     'image_size' => 'landscape_4_3',
                     /*
                      * How hard the depth map holds the picture.

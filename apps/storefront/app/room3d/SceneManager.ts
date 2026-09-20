@@ -578,9 +578,9 @@ export class SceneManager {
    * Returns an empty string when the canvas has no size — the plan view is showing, and a
    * depth map of nothing is worse than no depth map.
    */
-  depthSnapshot(): string {
+  structureSnapshot(): { inside: string, depth: string } {
     if (this.canvas.clientWidth === 0 || this.canvas.clientHeight === 0) {
-      return ''
+      return { inside: '', depth: '' }
     }
 
     const shown = this.cameras.mode
@@ -621,6 +621,18 @@ export class SceneManager {
      */
     const reach = this.room === null ? 12 : this.roomReach()
 
+    /*
+     * The colour frame first, from exactly this camera.
+     *
+     * The renderer is given both: the depth map as the constraint and this as the material
+     * it starts from. They have to be the same view or they contradict each other, and a
+     * model told to follow two different rooms follows neither — which is why they are taken
+     * together here rather than separately from wherever each camera happened to be.
+     */
+    this.render()
+
+    const inside = this.canvas.toDataURL('image/png')
+
     this.depthMaterial.uniforms.near!.value = 0.2
     this.depthMaterial.uniforms.far!.value = reach
 
@@ -641,11 +653,11 @@ export class SceneManager {
       this.cameras.setMode(shown)
     }
 
-    // The colour frame back in the buffer, so a snapshot taken straight after this one is a
-    // picture of the room and not a grey one, and from the camera the customer had.
+    // The customer's own view back in the buffer, so a snapshot taken straight after this
+    // one is a picture of the room they were looking at and not a grey one.
     this.render()
 
-    return map
+    return { inside, depth: map }
   }
 
   /** Half the room's longest diagonal, for clamping the depth range around it. */

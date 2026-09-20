@@ -798,9 +798,15 @@ export class RoomEditor {
     return this.scene.snapshot()
   }
 
-  /** The same frame as a depth map, for a renderer that must follow the room rather than read it. */
-  depthSnapshot(): string {
-    return this.scene.depthSnapshot()
+  /**
+   * The pair a control-conditioned renderer is given: one view of the room, twice.
+   *
+   * The depth map is the constraint and the colour frame is the material it starts from,
+   * and they are taken together from the same camera because two views of one room are two
+   * rooms as far as the renderer is concerned.
+   */
+  structureSnapshot(): { inside: string, depth: string } {
+    return this.scene.structureSnapshot()
   }
 
   dispose(): void {

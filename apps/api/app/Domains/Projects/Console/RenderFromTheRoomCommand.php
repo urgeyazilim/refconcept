@@ -77,13 +77,24 @@ final class RenderFromTheRoomCommand extends Command
             task: AiTask::ImageRenderStructured,
             input: [
                 'prompt' => $prompt,
-                // The depth map, read off the private disk and handed over as bytes. The
-                // only thing about this room that ever leaves: no photograph, no plate, no
-                // colour, no window view.
-                'image_sources' => [[
-                    'disk' => (string) $layout->depth_disk,
-                    'path' => (string) $layout->depth_path,
-                ]],
+                /*
+                 * The depth map first, then the same view in colour. Order matters: the
+                 * adapter reads the first as the constraint and the second as the material
+                 * to start from.
+                 *
+                 * Both are our own renders of geometry the customer confirmed. No
+                 * photograph of their home leaves, no plate, no window view.
+                 */
+                'image_sources' => array_values(array_filter([
+                    [
+                        'disk' => (string) $layout->depth_disk,
+                        'path' => (string) $layout->depth_path,
+                    ],
+                    $layout->inside_path === null ? null : [
+                        'disk' => (string) $layout->inside_disk,
+                        'path' => (string) $layout->inside_path,
+                    ],
+                ])),
                 'image_urls' => [],
             ],
             subject: $version,

@@ -93,8 +93,8 @@ const studioDone = computed(() => ({
 /** The 3D scene, for the picture the renderer works from and for adding products to. */
 const scene = ref<{
   snapshot: () => string | null
-  /** The same frame as a depth map, for a renderer that must obey the room rather than read it. */
-  depthSnapshot: () => string | null
+  /** One view from inside, as colour and as a depth map, for a renderer that must obey the room. */
+  structureSnapshot: () => { inside: string, depth: string } | null
   add: (item: LayoutItem) => void
 } | null>(null)
 
@@ -643,18 +643,19 @@ async function sendSnapshot(): Promise<void> {
   }
 
   /*
-   * And the same frame as a depth map.
+   * And the pair a control-conditioned renderer is given.
    *
-   * The colour frame is what a person recognises and what the fidelity check compares
-   * against. The depth map is what a control-conditioned renderer can be made to obey — it
-   * is the difference between showing a model the room and giving it the room.
+   * The frame above is the doll's-house view: what a person recognises, and what the fidelity
+   * check compares a render against. These two are one view from inside the room — the depth
+   * map that fixes where everything is, and the colour frame that says what it is made of.
+   * Together they are the difference between showing a model the room and giving it the room.
    */
-  const depth = scene.value?.depthSnapshot()
+  const structure = scene.value?.structureSnapshot()
 
   try {
     await api.post(`${base}/layout/snapshot`, {
       image,
-      ...(typeof depth === 'string' && depth !== '' ? { depth } : {}),
+      ...(structure && structure.depth !== '' ? { depth: structure.depth, inside: structure.inside } : {}),
     })
   }
   catch {

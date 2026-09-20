@@ -314,6 +314,7 @@ test.describe('design vs room', () => {
 
     expect(typeof sent.image, 'plan ekranı odanın karesini göndermedi').toBe('string')
     expect(typeof sent.depth, 'plan ekranı derinlik haritasını göndermedi').toBe('string')
+    expect(typeof sent.inside, 'plan ekranı odanın içeriden karesini göndermedi').toBe('string')
     expect(String(sent.depth).startsWith('data:image/png')).toBeTruthy()
 
     /*
@@ -323,6 +324,7 @@ test.describe('design vs room', () => {
      * near walls pale and the far corner dark.
      */
     writeFileSync(SHOT + '/derinlik.png', Buffer.from(String(sent.depth).split(',')[1] ?? '', 'base64'))
+    writeFileSync(SHOT + '/iceriden.png', Buffer.from(String(sent.inside).split(',')[1] ?? '', 'base64'))
 
     const layout = await request.get(`${API}/api/v1/projects/${projectId}/rooms/${roomId}/layout`, { headers })
 

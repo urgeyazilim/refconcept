@@ -481,6 +481,16 @@ final class RoomLayoutController
              * wall, because the geometry stops being advice and becomes an input.
              */
             'depth' => ['sometimes', 'nullable', 'string', 'max:8000000'],
+            /*
+             * The same view as the depth map, in colour.
+             *
+             * The constraint says where everything is; this says what it is made of. A
+             * depth-control model handed a grey CAD gradient and nothing else answers with an
+             * illustration — three real renders said so — and the colour frame is the
+             * material it starts from. Same view as the depth map or they contradict each
+             * other, which is why the scene draws them together.
+             */
+            'inside' => ['sometimes', 'nullable', 'string', 'max:8000000'],
         ]);
 
         $bytes = $this->decodePng((string) $validated['image']);
@@ -489,10 +499,15 @@ final class RoomLayoutController
             ? $this->decodePng($validated['depth'])
             : null;
 
+        $inside = is_string($validated['inside'] ?? null) && $validated['inside'] !== ''
+            ? $this->decodePng($validated['inside'])
+            : null;
+
         $layout = $this->layouts->draftFor($room, $geometry, $request->user()?->getKey());
 
         $stored = $this->keep((string) $layout->getKey(), $bytes, 'view');
         $map = $depth === null ? null : $this->keep((string) $layout->getKey(), $depth, 'depth');
+        $room3d = $inside === null ? null : $this->keep((string) $layout->getKey(), $inside, 'inside');
 
         $layout->forceFill([
             'snapshot_disk' => $stored['disk'],
@@ -502,6 +517,8 @@ final class RoomLayoutController
             // another is worse than no depth map, because it looks usable.
             'depth_disk' => $map['disk'] ?? null,
             'depth_path' => $map['path'] ?? null,
+            'inside_disk' => $room3d['disk'] ?? null,
+            'inside_path' => $room3d['path'] ?? null,
         ])->save();
 
         // Deliberately no path and no URL. The client knows it succeeded; it has no business
