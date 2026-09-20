@@ -18,11 +18,11 @@ export async function completeBrief(page: Page, options: { style?: string } = {}
   await expect(page.getByRole('heading', { name: 'Hangi tarzı seviyorsunuz?' })).toBeVisible()
 
   await page.getByRole('button', { name: options.style ?? 'Modern', exact: false }).first().click()
-  await page.getByRole('button', { name: 'İleri' }).click()
+  await next(page)
 
   await expect(page.getByRole('heading', { name: 'Renkler nasıl olsun?' })).toBeVisible()
   await page.getByRole('button', { name: 'Sıcak Nötr', exact: false }).first().click()
-  await page.getByRole('button', { name: 'İleri' }).click()
+  await next(page)
 
   /*
    * Then straight through the room questions on their defaults. Bounded rather than looped
@@ -34,9 +34,45 @@ export async function completeBrief(page: Page, options: { style?: string } = {}
   for (let step = 0; step < 15; step++) {
     if (await start.count() > 0) break
 
-    await page.getByRole('button', { name: 'İleri' }).click()
+    await next(page)
   }
 
   await expect(start).toBeVisible()
   await start.click()
+}
+
+/**
+ * One press of "İleri", through a step that is redrawing itself.
+ *
+ * Choosing a tile re-renders the question, so the button can be detached between the moment
+ * Playwright resolves it and the moment the click lands — and Playwright's own retry
+ * resolves the replacement and races it again. It fails as "element was detached from the
+ * DOM, retrying" and then a timeout, which reads like a broken wizard and is not one.
+ *
+ * So: press, and if the press did not land, look at whether the wizard moved on anyway
+ * before pressing again. Pressing twice on one question would silently skip the next one,
+ * which is worse than the flake — the heading check is what makes that safe.
+ */
+async function next(page: Page): Promise<void> {
+  const heading = () => page.locator('h2, h3').first().textContent().catch(() => null)
+
+  const before = await heading()
+
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      await page.getByRole('button', { name: 'İleri' }).first().click({ timeout: 5_000 })
+
+      return
+    }
+    catch {
+      // Landed after all, or the step changed under it: either way there is nothing to press.
+      if (await heading() !== before) {
+        return
+      }
+
+      await page.waitForTimeout(500)
+    }
+  }
+
+  throw new Error(`Brief sihirbazında "İleri" basılamadı; ekranda "${before}" duruyor.`)
 }
