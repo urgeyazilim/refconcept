@@ -919,6 +919,7 @@ const statusTone: Record<string, string> = {
         class="min-h-0 flex-1 overflow-hidden rounded-lg border border-line/70"
         :stage="shownVersionId ? progress[shownVersionId]?.stage : null"
         :progress-bps="shownVersionId ? (progress[shownVersionId]?.progress_bps ?? 0) : 0"
+        :follows-layout="shownVersion?.follows_layout === true"
       />
 
       <!-- Everything else: the guide as one band, then the step's panel across the full width. -->

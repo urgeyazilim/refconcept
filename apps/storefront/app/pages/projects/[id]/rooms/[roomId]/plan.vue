@@ -1053,6 +1053,15 @@ async function renderFinal(): Promise<void> {
       {
         parent_version_id: current.version_id,
         user_prompt: 'Oda planındaki yerleşimi birebir uygula: her ürün plandaki konumunda ve yönünde dursun.',
+        /*
+         * A picture of what is standing in the room, not a new idea about it.
+         *
+         * Without this the pipeline planned the room again and looked through the catalogue
+         * again — so the customer who had just spent ten minutes arranging their own
+         * furniture could be handed a picture of different furniture, with a basket under it
+         * that agreed with neither. It keeps the plan and the products they arranged.
+         */
+        follow_layout: true,
       },
     )
 

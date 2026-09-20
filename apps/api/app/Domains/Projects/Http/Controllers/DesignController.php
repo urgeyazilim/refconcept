@@ -163,6 +163,16 @@ final class DesignController
             'user_prompt' => ['required', 'string', 'min:3', 'max:2000'],
             'style_code' => ['sometimes', 'nullable', 'string', 'max:60'],
             'render_quality' => ['sometimes', Rule::enum(RenderQuality::class)],
+            /*
+             * A picture of an arrangement somebody already made, rather than a new idea.
+             *
+             * Sent by the plan screen, where the customer has just moved the furniture
+             * themselves. It keeps the parent's plan and the parent's products, so the
+             * picture holds the things standing in their 3D room and the basket under it
+             * agrees. A refinement — "make the sofa darker" — leaves it off and gets a new
+             * plan and a fresh look through the catalogue, which is what it is asking for.
+             */
+            'follow_layout' => ['sometimes', 'boolean'],
         ]);
 
         $parent = DesignVersion::query()->findOrFail($validated['parent_version_id']);
@@ -175,6 +185,7 @@ final class DesignController
                 quality: RenderQuality::from((string) ($validated['render_quality'] ?? 'draft')),
                 userPrompt: (string) $validated['user_prompt'],
                 styleCode: $validated['style_code'] ?? null,
+                followsLayout: ($validated['follow_layout'] ?? false) === true,
             );
         } catch (DesignVersionRefused $e) {
             throw $e->toValidationException('parent_version_id');
@@ -249,6 +260,15 @@ final class DesignController
                     'attempts' => (int) ($version->fidelity['attempts'] ?? 1),
                 ],
                 'render_base' => $version->render_inputs['base']['kind'] ?? null,
+                /*
+                 * Whether this is a picture of an arrangement the customer made themselves.
+                 *
+                 * The waiting screen narrates the work, and for this kind there is less of
+                 * it: the plan and the products are theirs already and nothing goes looking
+                 * for either. Telling somebody "ürünleri seçiyoruz" over work that is not
+                 * happening is the small lie that makes the rest of the screen worth less.
+                 */
+                'follows_layout' => (bool) $version->follows_layout,
 
                 /*
                  * The layout, not only the picture. This is what a customer reads when

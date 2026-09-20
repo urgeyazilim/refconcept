@@ -11,6 +11,7 @@ use App\Domains\Credits\Enums\CreditLotSource;
 use App\Domains\Credits\Exceptions\InsufficientCredits;
 use App\Domains\Credits\Services\CreditLedger;
 use App\Domains\Identity\Models\User;
+use App\Domains\Matching\Models\DesignMatch;
 use App\Domains\Matching\Services\ProductEmbedder;
 use App\Domains\Projects\Enums\DesignVersionStatus;
 use App\Domains\Projects\Enums\GenerationStage;
@@ -1094,4 +1095,95 @@ it('leaves an arrangement the customer already made alone when a new design fini
     // Ten minutes of somebody's own moving is not overwritten by an engine that finished.
     expect(DesignLayoutItem::query()->where('layout_id', $layout->getKey())->count())->toBe(1)
         ->and(DesignLayoutItem::query()->where('layout_id', $layout->getKey())->value('position_x_mm'))->toBe(1_200);
+});
+
+/*
+ * --- a picture of an arrangement somebody already made ---------------------
+ *
+ * The customer moves the furniture in 3D, likes it, and presses "Render al". The waiting
+ * screen said "Ürünleri seçiyoruz" and the product owner asked why — which was the right
+ * question, because it was. The pipeline planned the room again and ran the matcher over the
+ * catalogue again, so the picture could come back holding a different sofa from the one
+ * standing in their room and the one in the basket underneath it.
+ */
+
+it('yerleşimi çiz: keeps the plan and the products the customer arranged', function (): void {
+    $first = $this->launcher->launch($this->design, null, $this->owner);
+
+    $plan = DesignPlan::query()->where('design_version_id', $first->getKey())->firstOrFail();
+    $chosen = DesignMatch::query()->where('design_version_id', $first->getKey())->pluck('sku_id')->sort()->values();
+
+    $before = AiJob::query()->where('task', AiTask::DesignPlan->value)->count();
+
+    $second = $this->launcher->launch(
+        $this->design->fresh(),
+        // Fresh: the object in hand predates the pipeline finishing, and a parent that is not
+        // Ready is refused — correctly.
+        $first->fresh(),
+        $this->owner,
+        userPrompt: 'Oda planındaki yerleşimi birebir uygula.',
+        followsLayout: true,
+    );
+
+    $inherited = DesignPlan::query()->where('design_version_id', $second->getKey())->firstOrFail();
+
+    expect($second->fresh()?->status)->toBe(DesignVersionStatus::Ready)
+        // No second trip to the planner: the layout was already decided, by hand.
+        ->and(AiJob::query()->where('task', AiTask::DesignPlan->value)->count())->toBe($before)
+        // The same plan, on its own row, so the tree still says what each version was made from.
+        ->and($inherited->getKey())->not->toBe($plan->getKey())
+        ->and($inherited->placements)->toBe($plan->placements)
+        ->and($inherited->style)->toBe($plan->style);
+
+    // And the same products, which is the whole point: the picture and the basket agree.
+    expect(DesignMatch::query()->where('design_version_id', $second->getKey())->pluck('sku_id')->sort()->values()->all())
+        ->toBe($chosen->all());
+});
+
+it('yerleşimi çiz: says it did not go looking again', function (): void {
+    $first = $this->launcher->launch($this->design, null, $this->owner);
+
+    $second = $this->launcher->launch(
+        $this->design->fresh(),
+        // Fresh: the object in hand predates the pipeline finishing, and a parent that is not
+        // Ready is refused — correctly.
+        $first->fresh(),
+        $this->owner,
+        userPrompt: 'Oda planındaki yerleşimi birebir uygula.',
+        followsLayout: true,
+    );
+
+    $events = DesignVersionEvent::query()
+        ->where('design_version_id', $second->getKey())
+        ->get()
+        ->groupBy(fn (DesignVersionEvent $event): string => $event->stage->value);
+
+    /*
+     * A minute of somebody's attention narrated truthfully. "Ürünleri seçiyoruz" over work
+     * that is not happening is the kind of small lie that makes everything else on the
+     * screen worth less.
+     */
+    expect($events->get(GenerationStage::Plan->value)?->pluck('status')->all())->toBe(['skipped'])
+        ->and($events->get(GenerationStage::Match->value)?->pluck('status')->all())->toBe(['skipped']);
+});
+
+it('yerleşimi çiz: plans again when there is nothing to inherit', function (): void {
+    $first = $this->launcher->launch($this->design, null, $this->owner);
+
+    // A parent that never wrote a plan — a design that failed before it got there. Planning
+    // again is the only way forward, flag or no flag.
+    DesignPlan::query()->where('design_version_id', $first->getKey())->delete();
+
+    $before = AiJob::query()->where('task', AiTask::DesignPlan->value)->count();
+
+    $second = $this->launcher->launch(
+        $this->design->fresh(),
+        $first->fresh(),
+        $this->owner,
+        userPrompt: 'Oda planındaki yerleşimi birebir uygula.',
+        followsLayout: true,
+    );
+
+    expect($second->fresh()?->status)->toBe(DesignVersionStatus::Ready)
+        ->and(AiJob::query()->where('task', AiTask::DesignPlan->value)->count())->toBe($before + 1);
 });

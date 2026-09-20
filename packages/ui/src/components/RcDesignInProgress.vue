@@ -28,8 +28,17 @@ const props = withDefaults(
     stage?: string | null
     /** How far along, in basis points, as the engine reckons it. */
     progressBps?: number
+    /**
+     * Whether this picture is of an arrangement the customer already made.
+     *
+     * Then the plan and the products are theirs and nothing goes looking for either, so two
+     * of the stages are a sentence rather than a minute of work — and saying "ürünleri
+     * seçiyoruz" over work that is not happening is the small lie that makes everything
+     * else on the screen worth less.
+     */
+    followsLayout?: boolean
   }>(),
-  { stage: null, progressBps: 0 },
+  { stage: null, progressBps: 0, followsLayout: false },
 )
 
 /**
@@ -66,7 +75,23 @@ const narration: Record<string, { title: string, detail: string }> = {
   },
 }
 
-const current = computed(() => narration[props.stage ?? 'queued'] ?? narration.queued!)
+/** The same stages, for a picture of a room somebody has already arranged. */
+const kept: Record<string, { title: string, detail: string }> = {
+  plan: {
+    title: 'Yerleşiminiz olduğu gibi',
+    detail: 'Odayı siz dizdiniz; planı yeniden kurmuyorum, olduğu yerde bırakıyorum.',
+  },
+  match: {
+    title: 'Ürünleriniz olduğu gibi',
+    detail: 'Seçtiğiniz ürünler aynen kalıyor; katalogda yeniden arama yapmıyorum.',
+  },
+}
+
+const current = computed(() => {
+  const stage = props.stage ?? 'queued'
+
+  return (props.followsLayout ? kept[stage] : null) ?? narration[stage] ?? narration.queued!
+})
 
 /**
  * Which parts of the sketch have been reached.

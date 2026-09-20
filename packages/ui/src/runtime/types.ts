@@ -712,6 +712,8 @@ export interface DesignTreeNode {
   } | null
   /** What the picture was painted onto: the emptied room, or the photograph itself. */
   render_base: 'plate' | 'photo' | null
+  /** A picture of an arrangement the customer made themselves: plan and products inherited. */
+  follows_layout?: boolean
   created_at: string | null
   children: DesignTreeNode[]
 }

@@ -51,6 +51,7 @@ final class DesignVersionLauncher
         ?string $userPrompt = null,
         ?string $styleCode = null,
         ?string $stylePrompt = null,
+        bool $followsLayout = false,
     ): DesignVersion {
         $cost = $this->quote($design, $quality);
 
@@ -67,7 +68,18 @@ final class DesignVersionLauncher
             creditCost: $cost,
         );
 
-        $version->forceFill(['render_quality' => $quality])->save();
+        /*
+         * Whether this is a picture of a layout somebody already arranged.
+         *
+         * If it is, the pipeline inherits the parent's plan and products instead of making
+         * new ones: the customer decided what goes where, by hand, and running the matcher
+         * again over a catalogue that may have moved is how the picture ends up holding a
+         * different sofa from the basket under it.
+         */
+        $version->forceFill([
+            'render_quality' => $quality,
+            'follows_layout' => $followsLayout,
+        ])->save();
 
         if ($cost > 0) {
             try {

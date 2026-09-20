@@ -35,6 +35,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $style_code
  * @property string|null $style_prompt
  * @property RenderQuality $render_quality
+ * @property bool $follows_layout a picture of an arrangement the customer already made
  * @property string|null $user_prompt
  * @property string|null $ai_job_id
  * @property array<string, mixed>|null $render_inputs
@@ -87,6 +88,7 @@ class DesignVersion extends Model
             'version_number' => 'integer',
             'credit_cost' => 'integer',
             'completed_at' => 'datetime',
+            'follows_layout' => 'boolean',
             'render_inputs' => 'array',
             'fidelity' => 'array',
         ];

@@ -5,6 +5,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — "Render al" was quietly choosing different furniture
+
+The product owner arranged their room in 3D, pressed "Render al", and asked why the waiting
+screen said "Ürünleri seçiyoruz". It was the right question. It was.
+
+A version branched from the plan ran the whole pipeline again from the top: a fresh design
+plan, and a fresh pass of the matcher over the catalogue. The request it was sent even says
+"Oda planındaki yerleşimi birebir uygula" — and behind it the engine was deciding the room
+over again. Three things wrong with that, and only one was the wording.
+
+- **A paid call to answer a question nobody asked.** The layout is already decided, by hand,
+  by them.
+- **The picture could hold different furniture from the basket.** The matcher runs against a
+  catalogue that moves, so the render could come back with a different sofa from the one
+  standing in their 3D room — which is the exact failure the pipeline's own comments say the
+  matching order exists to prevent.
+- **The minute they spend waiting was narrated as work that was not happening.**
+
+A version can now be marked as following a layout. It inherits the parent's plan and the
+parent's products — copied onto its own rows, so the design tree still says what each version
+was made from — and the only thing it does is draw the picture. The waiting screen says so:
+"Yerleşiminiz olduğu gibi", "Ürünleriniz olduğu gibi".
+
+Off by default. A refinement — "make the sofa darker" — is a different request and does want
+a new plan and a fresh look through the catalogue. And a parent that never wrote a plan falls
+back to planning, because from there it is the only way forward.
+
+
 ### Changed — The renderer is shown the room from inside, with a map of its distances
 
 Four paid renders through a control-conditioned model settled what it could and could not do.

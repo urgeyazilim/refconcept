@@ -96,7 +96,21 @@ final class DesignGenerationPipeline
 
         try {
             $analysis = $this->analyse($version, $room);
-            $plan = $this->plan($version, $room, $analysis);
+
+            /*
+             * A picture of an arrangement somebody already made keeps their plan and their
+             * products. It does not make new ones.
+             *
+             * The customer moved the furniture themselves and pressed "Render al". Planning
+             * the room again is a paid call to answer a question nobody asked, and running
+             * the matcher again over a catalogue that may have moved is how the picture ends
+             * up holding a different sofa from the one standing in their 3D room and the one
+             * in the basket underneath it — the exact failure the matching order exists to
+             * prevent.
+             */
+            $inherited = $version->follows_layout ? $this->inherit($version) : null;
+
+            $plan = $inherited['plan'] ?? $this->plan($version, $room, $analysis);
 
             /*
              * Products are chosen before the picture is drawn, and that order is the whole
@@ -110,7 +124,7 @@ final class DesignGenerationPipeline
              * Matching depends only on the plan, so nothing is lost by doing it first, and
              * the render can then be handed the actual products.
              */
-            $matches = $this->match($version);
+            $matches = $inherited['matches'] ?? $this->match($version);
             $this->render($version, $room, $analysis, $plan, $matches);
             $this->arrange($version, $room);
         } catch (DesignGenerationFailed $e) {
@@ -724,8 +738,7 @@ final class DesignGenerationPipeline
      * that failed because the catalogue had no sofas in their budget would be a render
      * they paid for and cannot see. The list is rebuildable on demand, so a bad moment
      * here costs nothing permanent.
-     */
-    /**
+     *
      * @return Collection<int, DesignMatch>
      */
     private function match(DesignVersion $version): Collection
@@ -767,6 +780,71 @@ final class DesignGenerationPipeline
         );
 
         return $matches;
+    }
+
+    /**
+     * The parent's plan and the parent's products, copied onto this version.
+     *
+     * Copied rather than pointed at: a plan and a shopping list belong to one version, which
+     * is what makes a design tree readable — somebody looking at v3 sees what v3 was made
+     * from, and v3 is still there after v2 is deleted. The cost is a handful of rows and the
+     * alternative is a tree where half the branches are empty and the other half share.
+     *
+     * Null when there is nothing to inherit, and then the caller does the work as usual. A
+     * parent with no plan is a design that failed before it wrote one, and re-planning is
+     * the only way forward from there.
+     *
+     * @return array{plan: DesignPlan, matches: Collection<int, DesignMatch>}|null
+     */
+    private function inherit(DesignVersion $version): ?array
+    {
+        $parent = $version->parent_version_id === null
+            ? null
+            : DesignVersion::query()->with('plan')->find($version->parent_version_id);
+
+        $source = $parent?->plan;
+
+        if ($source === null) {
+            return null;
+        }
+
+        $plan = $version->plan ?? DesignPlan::query()->create([
+            'design_version_id' => $version->getKey(),
+            'room_analysis_id' => $source->room_analysis_id,
+            'style' => $source->style,
+            'palette' => $source->palette,
+            'placements' => $source->placements,
+            'composition' => $source->composition,
+            'notes' => $source->notes,
+            'rejected' => $source->rejected,
+        ]);
+
+        $this->event(
+            $version,
+            GenerationStage::Plan,
+            'skipped',
+            'Yerleşim zaten sizin kurduğunuz gibi; planı olduğu yerde bıraktım.',
+        );
+
+        /** @var Collection<int, DesignMatch> $copied */
+        $copied = collect();
+
+        foreach (DesignMatch::query()->where('design_version_id', $parent->getKey())->orderBy('placement_index')->orderBy('rank')->get() as $match) {
+            $copy = $match->replicate(['design_version_id']);
+            $copy->design_version_id = $version->getKey();
+            $copy->save();
+
+            $copied->push($copy);
+        }
+
+        $this->event(
+            $version,
+            GenerationStage::Match,
+            'skipped',
+            sprintf('Seçtiğiniz %d ürün olduğu gibi kaldı; yeniden aramadım.', $copied->count()),
+        );
+
+        return ['plan' => $plan, 'matches' => $copied];
     }
 
     /**
