@@ -471,29 +471,37 @@ final class RoomLayoutController
             // A canvas gives us a data URL. Capped at roughly six megabytes of base64, which
             // is a generous 2000-pixel PNG and far short of anything worth worrying about.
             'image' => ['required', 'string', 'max:8000000'],
+            /*
+             * The same frame as a depth map, when the browser could draw one.
+             *
+             * Optional, because an older page and a hidden canvas both send the colour frame
+             * alone, and a room with one picture of itself is still a room with a plan. What
+             * it is for: a renderer handed a reference image takes the idea and resolves the
+             * rest however it likes; handed a depth map as a control image it cannot move a
+             * wall, because the geometry stops being advice and becomes an input.
+             */
+            'depth' => ['sometimes', 'nullable', 'string', 'max:8000000'],
         ]);
 
         $bytes = $this->decodePng((string) $validated['image']);
 
+        $depth = is_string($validated['depth'] ?? null) && $validated['depth'] !== ''
+            ? $this->decodePng($validated['depth'])
+            : null;
+
         $layout = $this->layouts->draftFor($room, $geometry, $request->user()?->getKey());
 
-        $temporary = tempnam(sys_get_temp_dir(), 'layout');
-
-        abort_if($temporary === false, 500, 'Geçici dosya oluşturulamadı.');
-
-        try {
-            file_put_contents($temporary, $bytes);
-
-            $stored = $this->photos->storeLayoutSnapshot((string) $layout->getKey(), $temporary);
-        } finally {
-            // Scratch space nobody empties becomes an archive of every room ever planned.
-            @unlink($temporary);
-        }
+        $stored = $this->keep((string) $layout->getKey(), $bytes, 'view');
+        $map = $depth === null ? null : $this->keep((string) $layout->getKey(), $depth, 'depth');
 
         $layout->forceFill([
             'snapshot_disk' => $stored['disk'],
             'snapshot_path' => $stored['path'],
             'snapshot_taken_at' => now(),
+            // Both or neither: a depth map of one arrangement beside a colour frame of
+            // another is worse than no depth map, because it looks usable.
+            'depth_disk' => $map['disk'] ?? null,
+            'depth_path' => $map['path'] ?? null,
         ])->save();
 
         // Deliberately no path and no URL. The client knows it succeeded; it has no business
@@ -586,6 +594,30 @@ final class RoomLayoutController
         }
 
         return $query->latest('created_at')->first();
+    }
+
+    /**
+     * One picture of a plan, on the private disk.
+     *
+     * It is the inside of somebody's home either way round — a depth map of a room is still
+     * the shape of their flat — so it lands under the same rules as their photographs.
+     *
+     * @return array{disk: string, path: string}
+     */
+    private function keep(string $layoutId, string $bytes, string $kind): array
+    {
+        $temporary = tempnam(sys_get_temp_dir(), 'layout');
+
+        abort_if($temporary === false, 500, 'Geçici dosya oluşturulamadı.');
+
+        try {
+            file_put_contents($temporary, $bytes);
+
+            return $this->photos->storeLayoutSnapshot($layoutId, $temporary, $kind);
+        } finally {
+            // Scratch space nobody empties becomes an archive of every room ever planned.
+            @unlink($temporary);
+        }
     }
 
     /**

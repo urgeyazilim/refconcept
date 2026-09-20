@@ -1,3 +1,4 @@
+import { writeFileSync } from 'node:fs'
 import { expect, test } from '@playwright/test'
 import type { APIRequestContext, Page } from '@playwright/test'
 import { completeBrief } from './support/brief'
@@ -264,6 +265,19 @@ test.describe('design vs room', () => {
     expect(placements.length, 'tasarımın planı boş geldi').toBeGreaterThan(0)
 
     // --- the room, arranged from it ---------------------------------------------------
+    /*
+     * The plan sends the renderer two pictures of itself, and this catches them leaving.
+     *
+     * The colour frame is what a person recognises. The depth map is the one a
+     * control-conditioned renderer can be made to obey, and it is the whole reason a design
+     * can ever match the room it was built from — so a page that quietly stops drawing it
+     * would take the guarantee away with nothing on screen to show for it.
+     */
+    const snapshotSent = page.waitForRequest(
+      request => request.url().includes('/layout/snapshot') && request.method() === 'POST',
+      { timeout: 120_000 },
+    )
+
     await gotoInteractive(page, `${STOREFRONT}/projects/${projectId}/rooms/${roomId}/plan?compose=${version.id}`)
     /*
      * The measurements are the threshold of the 3D door, so this is where they are asked.
@@ -295,6 +309,20 @@ test.describe('design vs room', () => {
      * with a screenshot in each window.
      */
     await page.screenshot({ path: `${SHOT}/tasarim-ve-oda.png`, animations: 'disabled', timeout: 60_000 })
+
+    const sent = (await snapshotSent).postDataJSON()
+
+    expect(typeof sent.image, 'plan ekranı odanın karesini göndermedi').toBe('string')
+    expect(typeof sent.depth, 'plan ekranı derinlik haritasını göndermedi').toBe('string')
+    expect(String(sent.depth).startsWith('data:image/png')).toBeTruthy()
+
+    /*
+     * Kept on disk beside the frame, because a depth map is the one thing here nobody can
+     * judge from a description. Flat grey means the camera range swallowed the room and the
+     * renderer would have nothing to follow; what it should look like is the room in relief,
+     * near walls pale and the far corner dark.
+     */
+    writeFileSync(SHOT + '/derinlik.png', Buffer.from(String(sent.depth).split(',')[1] ?? '', 'base64'))
 
     const layout = await request.get(`${API}/api/v1/projects/${projectId}/rooms/${roomId}/layout`, { headers })
 

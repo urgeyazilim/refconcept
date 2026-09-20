@@ -351,6 +351,9 @@ watch(
  */
 defineExpose({
   snapshot: () => editor.value?.snapshot() ?? null,
+  // The room as a structure rather than as a picture: near white, far black. A renderer
+  // handed this cannot move a wall, because the geometry is an input and not a suggestion.
+  depthSnapshot: () => editor.value?.depthSnapshot() ?? null,
   add: (item: LayoutItem) => editor.value?.add(item),
 })
 </script>

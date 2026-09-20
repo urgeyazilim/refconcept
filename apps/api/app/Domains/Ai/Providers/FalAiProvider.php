@@ -86,7 +86,21 @@ final class FalAiProvider implements AiProvider
 
     public function supports(AiCall $call): bool
     {
-        return $call->model->modality === AiModality::Model3d;
+        return $call->model->modality === AiModality::Model3d
+            || ($call->model->modality === AiModality::Image && $this->isControlled($call));
+    }
+
+    /**
+     * Whether this is a render the room controls rather than one it only suggests.
+     *
+     * Read off the model's own code, because that is what decides the request shape: a
+     * control-conditioned endpoint takes a depth map where an ordinary one takes nothing, and
+     * pointing the route at a plain generator would silently produce a render nothing
+     * constrains — which is exactly the failure this whole path exists to end.
+     */
+    private function isControlled(AiCall $call): bool
+    {
+        return str_contains($call->model->code, 'control');
     }
 
     public function execute(AiCall $call): AiResult
@@ -116,6 +130,10 @@ final class FalAiProvider implements AiProvider
          */
         if (str_contains($call->model->code, 'vggt')) {
             return $this->reconstruct($call, $key);
+        }
+
+        if ($call->model->modality === AiModality::Image) {
+            return $this->controlled($call, $key);
         }
 
         $image = $call->imageUrls[0] ?? null;
@@ -252,6 +270,121 @@ final class FalAiProvider implements AiProvider
      * does: a signed link to a customer's room must not leave this system, and a link signed
      * for the browser's host cannot be fetched from where the model runs anyway.
      */
+    /**
+     * A render the room controls: the arrangement as a depth map, and nothing else of theirs.
+     *
+     * The whole point is the order of authority. The depth map is what the customer
+     * confirmed — their walls at their measurements, their door and window where the reading
+     * found them, every product at the size a seller recorded — and a control-conditioned
+     * model cannot depart from it. The prompt decides everything the geometry does not:
+     * materials, light, colour, style. The colour screenshot this replaces was the same
+     * information offered as a suggestion, and their design came back with the window on a
+     * different wall from their own flat.
+     *
+     * **Only the depth map leaves, and that is deliberate.** This provider cannot be handed
+     * bytes: it fetches what it is given, so anything sent to it has to be put on fal's CDN
+     * first, behind an unguessable but unauthenticated link. A photograph of somebody's
+     * living room must never be on such a link, so none is sent — not the photograph, not
+     * the plate, not the render. What goes is a grey geometric frame with no colour, no
+     * texture, no window view and nothing of theirs in it, and it is deleted from the room
+     * the moment there is a better answer.
+     *
+     * That is also why this endpoint is the text-to-image one rather than the image-to-image
+     * one: the second takes a photograph as its colour reference, and the price of that
+     * reference is a customer's home on a public URL.
+     */
+    private function controlled(AiCall $call, string $key): AiResult
+    {
+        $depth = $call->options['depth_url'] ?? null;
+
+        if (! is_string($depth) || $depth === '') {
+            /*
+             * A configuration failure rather than a provider one.
+             *
+             * Without the depth map this endpoint is an expensive ordinary renderer, and
+             * running it anyway would spend somebody's money on the picture we already knew
+             * how to make badly. The caller falls back to the renderer it has.
+             */
+            return AiResult::failure(
+                AiFailureKind::NoRouteConfigured,
+                'Odaya bağlı render için derinlik haritası gerekiyor.',
+            );
+        }
+
+        try {
+            $controlUrl = $this->hosted($depth, $key, $call->options);
+        } catch (Throwable $e) {
+            return AiResult::failure(
+                AiFailureKind::NetworkError,
+                'Derinlik haritası fal.ai deposuna yüklenemedi: '.$e->getMessage(),
+            );
+        }
+
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Key '.$key,
+                'Content-Type' => 'application/json',
+            ])
+                ->timeout(self::TIMEOUT_SECONDS)
+                ->post(rtrim($call->options['base_url'] ?? self::DEFAULT_BASE_URL, '/').'/'.$call->model->code, [
+                    'prompt' => $call->prompt,
+                    'control_lora_image_url' => $controlUrl,
+                    'image_size' => 'landscape_4_3',
+                    /*
+                     * How hard the depth map holds the picture.
+                     *
+                     * At full, because the arrangement is not a style choice: it is what the
+                     * customer confirmed, and what they are about to be invited to buy at
+                     * those sizes. Everything a control image does not decide — the oak, the
+                     * daylight, the wall colour — the prompt decides.
+                     */
+                    'control_lora_strength' => (float) ($call->options['control_strength'] ?? 1.0),
+                    'num_inference_steps' => (int) ($call->options['steps'] ?? 28),
+                    'guidance_scale' => (float) ($call->options['guidance'] ?? 3.5),
+                    'num_images' => 1,
+                    'output_format' => 'png',
+                    'enable_safety_checker' => true,
+                ]);
+        } catch (ConnectionException $e) {
+            return AiResult::failure(AiFailureKind::NetworkError, $e->getMessage());
+        } catch (Throwable $e) {
+            return AiResult::failure(AiFailureKind::ProviderError, $e->getMessage());
+        }
+
+        if ($response->failed()) {
+            return AiResult::failure(
+                $this->kindFor($response->status()),
+                $this->messageFrom($response->json(), $response->status()),
+                httpStatus: $response->status(),
+            );
+        }
+
+        /** @var array<int, array<string, mixed>> $images */
+        $images = (array) data_get($response->json() ?? [], 'images', []);
+
+        $urls = [];
+
+        foreach ($images as $image) {
+            if (isset($image['url']) && is_string($image['url']) && $image['url'] !== '') {
+                $urls[] = $image['url'];
+            }
+        }
+
+        if ($urls === []) {
+            return AiResult::failure(
+                AiFailureKind::MalformedOutput,
+                'fal.ai yanıtında kullanılabilir bir görsel yok.',
+                httpStatus: $response->status(),
+            );
+        }
+
+        return AiResult::success(
+            imageUrls: $urls,
+            imageCount: count($urls),
+            httpStatus: $response->status(),
+        );
+    }
+
     private function reconstruct(AiCall $call, string $key): AiResult
     {
         $photographs = array_values(array_filter(

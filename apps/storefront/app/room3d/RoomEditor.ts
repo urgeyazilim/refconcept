@@ -798,6 +798,11 @@ export class RoomEditor {
     return this.scene.snapshot()
   }
 
+  /** The same frame as a depth map, for a renderer that must follow the room rather than read it. */
+  depthSnapshot(): string {
+    return this.scene.depthSnapshot()
+  }
+
   dispose(): void {
     // Anything edited in the last second and a bit is written now rather than lost, because
     // "I moved it and closed the tab" is the most ordinary way to leave a page there is.

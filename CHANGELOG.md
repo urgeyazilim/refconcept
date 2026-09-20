@@ -5,6 +5,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added — A render the room controls, instead of one it only advises
+
+Every render so far has been a photorealistic model handed a screenshot of the plan and asked
+to follow it. It does not follow it: it takes the idea and resolves the rest however it likes.
+The product owner's design came back with the window on a different wall from their own flat,
+an armchair nobody sells, a plant and a table lamp — and the fidelity check said
+`faithful: false` and named all four, and it was shown anyway, because there was nothing
+better to show.
+
+A control-conditioned renderer is the difference between showing a model the room and giving
+it the room. The whole path is built and **paused**; nothing spends until the two pictures
+have been put side by side.
+
+- **The scene draws itself as a depth map.** One material swapped over the scene, the same
+  camera and pixels as the colour frame, with the depth range clamped to the room so five
+  metres fill it instead of occupying a sliver of an orbiting camera's range.
+- **The layout keeps both pictures**, written in one request so they are always the same
+  arrangement or both absent.
+- **Only the depth map ever leaves.** fal fetches what it is given, so anything sent to it is
+  put on its CDN behind an unguessable but unauthenticated link — and a photograph of
+  somebody's living room must never be on such a link. So the endpoint is the text-to-image
+  one: what goes up is a grey geometric frame with no colour, no texture, no window view and
+  nothing of theirs in it. Their oak floor and wall colour travel as words, which is what the
+  reading records surfaces for.
+- **`image_render_structured`**, on `fal-ai/flux-control-lora-depth`, paused with its reason
+  on it and costing the customer nothing while it is being judged.
+- The E2E now proves the plan screen actually sends the depth map, and writes it to
+  `test-results/design-vs-room/derinlik.png` — flat grey there would mean a renderer with
+  nothing to follow, and nobody can tell that from a description.
+
+
 ### Fixed — Three reasons the room did not look like the design
 
 The product owner put their room beside the design it was made from and said the placement

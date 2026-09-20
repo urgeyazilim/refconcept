@@ -35,6 +35,8 @@ use Illuminate\Support\Carbon;
  * @property string|null $snapshot_disk
  * @property string|null $snapshot_path
  * @property Carbon|null $snapshot_taken_at
+ * @property string|null $depth_disk the same frame as a depth map, for a renderer that must obey the room
+ * @property string|null $depth_path
  * @property string|null $created_by
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at

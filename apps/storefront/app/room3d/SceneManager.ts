@@ -7,6 +7,8 @@ import {
   DirectionalLight,
   Group,
   Mesh,
+  MeshDepthMaterial,
+  NoToneMapping,
   Line,
   LineBasicMaterial,
   PCFSoftShadowMap,
@@ -71,6 +73,14 @@ export class SceneManager {
   private readonly guides = new Group()
 
   private readonly guideMaterial = new LineBasicMaterial({ color: 0xb08f52, transparent: true, opacity: 0.8 })
+
+  /**
+   * The material the whole scene wears while a depth map is drawn.
+   *
+   * One, kept: swapping it over the scene is cheaper than a second renderer and guarantees
+   * the depth frame and the colour frame share a camera, an aspect and a pixel grid.
+   */
+  private readonly depthMaterial = new MeshDepthMaterial()
 
   private room: Group | null = null
 
@@ -515,6 +525,85 @@ export class SceneManager {
     return this.canvas.toDataURL('image/png')
   }
 
+  /**
+   * The same frame as a depth map: near is white, far is black.
+   *
+   * This is the room as a structure rather than as a picture, and it is what a renderer can
+   * be *made* to obey. A colour screenshot is a reference — a model looks at it, takes the
+   * idea and resolves the rest however it likes, which is how a design came back with the
+   * window on a different wall and an armchair nobody sells. A depth map goes in as a
+   * control image, and then the walls, the openings and every piece of furniture are where
+   * the customer's own room put them, because the geometry is an input and not a suggestion.
+   *
+   * Drawn by swapping one material over the whole scene rather than by keeping a second
+   * renderer: same camera, same aspect, same pixels, so the two frames line up exactly.
+   *
+   * Returns an empty string when the canvas has no size — the plan view is showing, and a
+   * depth map of nothing is worse than no depth map.
+   */
+  depthSnapshot(): string {
+    if (this.canvas.clientWidth === 0 || this.canvas.clientHeight === 0) {
+      return ''
+    }
+
+    const camera = this.cameras.active
+    const background = this.scene.background
+    const tone = this.renderer.toneMapping
+
+    /*
+     * The depth range pulled in around the room before the frame is drawn.
+     *
+     * MeshDepthMaterial writes the depth buffer, which spreads the camera's whole near-to-far
+     * range across 0 to 1. With a far plane set for comfortable orbiting, a five-metre room
+     * occupies a sliver of that range and comes out as one flat grey. Clamped to the room and
+     * restored afterwards, the same five metres fill the range and the map has contrast a
+     * control model can actually read.
+     */
+    const near = camera.near
+    const far = camera.far
+    const reach = this.room === null ? 12 : this.roomReach()
+
+    camera.near = Math.max(0.05, camera.position.length() - reach)
+    camera.far = camera.position.length() + reach
+    camera.updateProjectionMatrix()
+
+    this.scene.overrideMaterial = this.depthMaterial
+    this.scene.background = null
+    // Tone mapping is for photographs of a room; a depth map is a measurement drawn as grey.
+    this.renderer.toneMapping = NoToneMapping
+
+    this.renderer.render(this.scene, camera)
+
+    const map = this.canvas.toDataURL('image/png')
+
+    this.scene.overrideMaterial = null
+    this.scene.background = background
+    this.renderer.toneMapping = tone
+
+    camera.near = near
+    camera.far = far
+    camera.updateProjectionMatrix()
+
+    // The colour frame back in the buffer, so a snapshot taken straight after this one is a
+    // picture of the room and not a grey one.
+    this.render()
+
+    return map
+  }
+
+  /** Half the room's longest diagonal, for clamping the depth range around it. */
+  private roomReach(): number {
+    if (this.geometry === null) {
+      return 12
+    }
+
+    const width = toUnits(this.geometry.width_mm)
+    const length = toUnits(this.geometry.length_mm)
+    const height = toUnits(this.geometry.height_mm)
+
+    return Math.sqrt(width * width + length * length + height * height)
+  }
+
   dispose(): void {
     if (this.frame !== null) {
       cancelAnimationFrame(this.frame)
@@ -539,6 +628,7 @@ export class SceneManager {
 
     this.furniture.disposeMaterials()
     this.guideMaterial.dispose()
+    this.depthMaterial.dispose()
 
     this.cameras.dispose()
     this.renderer.dispose()

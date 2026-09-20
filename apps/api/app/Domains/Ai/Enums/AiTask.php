@@ -33,6 +33,23 @@ enum AiTask: string
     case ImageEdit = 'image_edit';
 
     /**
+     * A render that has to obey the room rather than be reminded of it.
+     *
+     * The other renderers are handed a photograph of the plan and asked to follow it, which
+     * is asking a photorealistic model to take a reference image seriously. It does not: it
+     * takes the idea and resolves the rest however it likes, and the product owner's design
+     * came back with the window on a different wall from their own flat, an armchair nobody
+     * sells, a plant and a table lamp. The fidelity check said so and we showed it anyway,
+     * because there was nothing better to show.
+     *
+     * This one is given the arrangement as a depth map, through a control-conditioned model.
+     * The geometry stops being advice and becomes an input: the walls, the openings and
+     * every piece of furniture come out where the customer's own room put them, because
+     * there is nowhere else the model is able to put them.
+     */
+    case ImageRenderStructured = 'image_render_structured';
+
+    /**
      * Take the furniture out of a room photograph.
      *
      * The plate every render starts from: the customer's own walls, floor, windows and
@@ -121,6 +138,7 @@ enum AiTask: string
             self::ImageRenderDraft => 'Görsel üretimi (taslak)',
             self::ImageRenderPremium => 'Görsel üretimi (yüksek kalite)',
             self::ImageEdit => 'Görsel düzenleme',
+            self::ImageRenderStructured => 'Görsel üretimi (odaya bağlı)',
             self::RoomClear => 'Oda boşaltma',
             self::RenderCheck => 'Render sadakat denetimi',
             self::VideoTour => 'Oda videosu',
@@ -144,7 +162,8 @@ enum AiTask: string
         return match ($this) {
             self::RoomAnalysis, self::ObjectExtraction, self::ProductTagging, self::RenderCheck => AiModality::Vision,
             self::TextEmbedding => AiModality::Embedding,
-            self::ImageRenderDraft, self::ImageRenderPremium, self::ImageEdit, self::RoomClear => AiModality::Image,
+            self::ImageRenderDraft, self::ImageRenderPremium, self::ImageEdit,
+            self::ImageRenderStructured, self::RoomClear => AiModality::Image,
             self::VideoTour => AiModality::Video,
             self::ProductModel, self::RoomScan => AiModality::Model3d,
             self::ProductViewTagging => AiModality::Vision,

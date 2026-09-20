@@ -120,11 +120,14 @@ final class RoomPhotoStorage
      *
      * @return array{disk: string, path: string}
      */
-    public function storeLayoutSnapshot(string $layoutId, string $sourcePath): array
+    public function storeLayoutSnapshot(string $layoutId, string $sourcePath, string $kind = 'view'): array
     {
         $disk = $this->disk();
 
-        $path = sprintf('layout-snapshots/%s/%s.png', $layoutId, Str::uuid7()->toString());
+        // Two pictures of one arrangement: the one a person recognises, and the depth map a
+        // control-conditioned renderer is made to obey. Named apart so neither can be served
+        // in place of the other by a path somebody assembled by hand.
+        $path = sprintf('layout-snapshots/%s/%s-%s.png', $layoutId, $kind, Str::uuid7()->toString());
 
         $this->put($disk, $path, $sourcePath, 'image/png');
 

@@ -93,6 +93,8 @@ const studioDone = computed(() => ({
 /** The 3D scene, for the picture the renderer works from and for adding products to. */
 const scene = ref<{
   snapshot: () => string | null
+  /** The same frame as a depth map, for a renderer that must obey the room rather than read it. */
+  depthSnapshot: () => string | null
   add: (item: LayoutItem) => void
 } | null>(null)
 
@@ -622,8 +624,20 @@ async function sendSnapshot(): Promise<void> {
     return
   }
 
+  /*
+   * And the same frame as a depth map.
+   *
+   * The colour frame is what a person recognises and what the fidelity check compares
+   * against. The depth map is what a control-conditioned renderer can be made to obey — it
+   * is the difference between showing a model the room and giving it the room.
+   */
+  const depth = scene.value?.depthSnapshot()
+
   try {
-    await api.post(`${base}/layout/snapshot`, { image })
+    await api.post(`${base}/layout/snapshot`, {
+      image,
+      ...(typeof depth === 'string' && depth !== '' ? { depth } : {}),
+    })
   }
   catch {
     // See above.
