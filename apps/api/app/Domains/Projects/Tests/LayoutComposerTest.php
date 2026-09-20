@@ -221,15 +221,39 @@ it('dolaşım: keeps the floor in front of the door empty, round the corner too'
 
 it('dolaşım: does not float the sofa when what faces it leaves no room to walk past', function (): void {
     $result = $this->composer->compose($this->geometry, [], [
+        piece('kitaplik', 2_000, 2_100, 'south'),
+        piece('kanepe', 2_200, 900, 'north'),
+    ]);
+
+    $sofa = find($result['items'], 'kanepe');
+
+    /*
+     * 5200 deep, less a 2100 mm bookcase and its 60 mm of clearance, is 3040. The sofa, the
+     * gap to the coffee table, the table and a passage past the group come to 2970, which
+     * leaves 70 mm — not the 350 a float is worth having. Fifteen centimetres off a wall is
+     * not an island, it is a gap nobody can reach into, so the sofa goes to the wall.
+     */
+    expect($sofa['position_z_mm'])->toBe(510);
+});
+
+it('dolaşım: floats the sofa when the passage past the group survives it', function (): void {
+    $result = $this->composer->compose($this->geometry, [], [
         piece('kitaplik', 2_000, 1_800, 'south'),
         piece('kanepe', 2_200, 900, 'north'),
     ]);
 
     $sofa = find($result['items'], 'kanepe');
 
-    // 5200 deep, less a 1800 mm deep bookcase on the far wall, is 3340 — under the 3800 the
-    // float needs. The sofa goes to the wall so the walkway survives.
-    expect($sofa['position_z_mm'])->toBe(510);
+    /*
+     * The same room with a 300 mm shallower bookcase: 3340 of clear depth against 2970 of
+     * need, so the float fits with 370 to spare and the sofa stands off the wall.
+     *
+     * This used to go to the wall, because the rule was a single number — float in a room
+     * with 3.8 m of clear depth — and 3340 is under it. The product owner's own living room
+     * is 4 m across with a television unit facing the sofa, which comes to 3.54 m, and their
+     * sofa went flat against the window wall in a room that could afford to pull it out.
+     */
+    expect($sofa['position_z_mm'])->toBe(800);
 });
 
 it('ölçek: stops when standing furniture would cover more than 40 % of the floor', function (): void {

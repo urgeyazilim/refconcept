@@ -53,10 +53,12 @@ final class LayoutComposer
     private const FLOAT_MM = 350;
 
     /**
-     * Dolaşım: below this much clear depth — the room less whatever faces the seat — the room
-     * cannot afford a floating seating group and everything hugs a wall.
+     * Dolaşım: the passage between the seating group and whatever faces it.
+     *
+     * Not a design figure — the width of a person carrying something, which is what a living
+     * room has to allow between a coffee table and a television unit.
      */
-    private const FLOAT_THRESHOLD_MM = 3_800;
+    private const WALKWAY_MM = 750;
 
     /** Yükseklik: height a picture hangs at, centre above the floor. */
     private const PICTURE_CENTRE_MM = 1_500;
@@ -391,7 +393,7 @@ final class LayoutComposer
         $roomDepth = in_array($wall, ['north', 'south'], true) ? $state->length() : $state->width();
         $clear = $roomDepth - $state->reachFrom(LayoutComposerState::opposite($wall));
 
-        $offset = $clear >= self::FLOAT_THRESHOLD_MM
+        $offset = $this->floats($depth, $clear)
             ? self::FLOAT_MM + intdiv($depth, 2)
             : self::AGAINST_WALL_MM + intdiv($depth, 2);
 
@@ -503,6 +505,32 @@ final class LayoutComposer
             $dx < 0 => 90,
             default => 270,
         };
+    }
+
+    /**
+     * Dolaşım: whether the seating can stand off its wall rather than against it.
+     *
+     * This was a single number — float in a room with 3.8 m of clear depth, otherwise go to
+     * the wall — and the product owner's living room is 4 m across with a television unit on
+     * the far side, which comes to 3.54 m of clear depth. Under the threshold, so their sofa
+     * went flat against the window wall with six centimetres behind it, in a room that could
+     * afford to pull it out. The plan had asked in words for the group to stand clear of the
+     * walls and the threshold overruled it.
+     *
+     * Arithmetic instead of a number: the depth in front of the seat has to hold the seat
+     * itself, the gap to the coffee table, the table, and a passage between the group and
+     * whatever it faces. Whatever is left over is what the float can spend, and it only
+     * floats if the whole 35 cm is there — a sofa fifteen centimetres off a wall is not an
+     * island, it is a gap nobody can reach into.
+     */
+    private function floats(int $depth, int $clear): bool
+    {
+        $needed = $depth
+            + self::TABLE_GAP_MM
+            + self::GROUP_TABLE_HALF_MM * 2
+            + self::WALKWAY_MM;
+
+        return $clear - $needed >= self::FLOAT_MM;
     }
 
     /**

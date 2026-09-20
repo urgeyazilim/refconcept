@@ -5,6 +5,45 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — Three reasons the room did not look like the design
+
+The product owner put their room beside the design it was made from and said the placement
+was still wrong. Measured against the room it was not: nothing outside the walls, nothing
+overlapping, the doorway clear. Three separate things were making it read as wrong.
+
+- **A wall the camera looks through left nothing behind.** A television unit against a wall
+  that is not drawn is a television unit standing at the edge of a bare floor. Hidden walls now
+  keep their bottom 40 cm — low enough to see over, high enough that everything against them
+  has something behind it.
+- **A deep piece belonged to no wall.** `wallOf` measured from a piece's centre against a
+  one-metre allowance, so a 2.1 m bookcase standing 60 mm off a wall counted as standing in
+  the middle of the room. Nothing reserved its run along that wall and nothing counted it as
+  reaching in. Measured from the near face now, at half a metre.
+- **The float was a number instead of a sum.** Seating stood off its wall only in a room with
+  3.8 m of clear depth. The owner's living room is 4 m across with a television unit facing
+  the sofa — 3.54 m — so their sofa went flat against the window wall in a room that could
+  afford to pull it out, and the plan had asked in words for the group to stand clear. The
+  depth in front of the seat now has to hold the seat, the gap to the table, the table and a
+  750 mm passage; what is left over is what the float may spend. Their sofa stands 35 cm off
+  the wall and the passage past the group is 98 cm.
+
+### Changed — A piece that is not on the list does not exist
+
+The same room looked empty beside its design: seven pieces and 22 % of the floor, against a
+picture with a floor lamp, curtains, a table lamp and plants. The plan's own notes say "Plana
+eklenen lambadere ek olarak" — in addition to the floor lamp added to the plan. There is no
+floor lamp in the plan. The model decided on one, wrote about it in prose, and never put a row
+in `placements`; the room is furnished from `placements` alone.
+
+The catalogue was not the problem: a lambader, a perde and a bitki are all in it, active and
+measured, and no design has ever asked for one.
+
+- **Design plan v5** says what was assumed. Anything named in the composition or the notes
+  must have a row, or the sentence goes. Three layers of light means three rows; a window
+  means a curtain row; greenery means a plant row. All of them `is_required: false`, because
+  the sofa is what a room needs and a floor lamp is what finishes it.
+
+
 ### Fixed — The first reading of a room was the last one
 
 The product owner pressed "Tasarıma göre yeniden diz", got the same room back, and said the

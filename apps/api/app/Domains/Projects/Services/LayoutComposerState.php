@@ -646,23 +646,32 @@ final class LayoutComposerState
      */
     public function wallOf(array $item): ?string
     {
-        $x = (int) $item['position_x_mm'];
-        $z = (int) $item['position_z_mm'];
+        /*
+         * From the piece's near face, not from its middle.
+         *
+         * This measured from the centre against a one-metre allowance, which quietly loses
+         * anything deeper than two metres: a 2.1 m bookcase standing 60 mm off a wall has its
+         * centre 1.11 m away, so it belonged to no wall at all. Nothing then reserved its run
+         * along that wall, and nothing counted it as reaching into the room — the seating
+         * across from it worked out its own space as though the wall were bare and floated
+         * into the walkway the bookcase was already using.
+         */
+        [$x0, $x1, $z0, $z1] = $this->boxOf($item);
 
         $distances = [
-            'north' => $z,
-            'south' => $this->length() - $z,
-            'west' => $x,
-            'east' => $this->width() - $x,
+            'north' => $z0,
+            'south' => $this->length() - $z1,
+            'west' => $x0,
+            'east' => $this->width() - $x1,
         ];
 
         asort($distances);
 
         $wall = array_key_first($distances);
 
-        // A metre is generous enough to catch a sofa floated off a wall and tight enough to
-        // leave a rug in the middle of the room belonging to nothing.
-        return $distances[$wall] <= 1_000 ? (string) $wall : null;
+        // Half a metre from the near face: generous enough for a sofa floated 35 cm off its
+        // wall, tight enough to leave a rug in the middle of the room belonging to nothing.
+        return $distances[$wall] <= 500 ? (string) $wall : null;
     }
 
     /**
