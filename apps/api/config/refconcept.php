@@ -59,6 +59,25 @@ return [
      */
     'simulated_email_domain' => env('REFCONCEPT_SIMULATED_EMAIL_DOMAIN', ''),
 
+    /*
+     * Whether a stored route is allowed to name the simulator at all.
+     *
+     * Off everywhere but the test suite, which is the one place a route pointing at the
+     * simulator is the point rather than an accident — eleven hundred tests exercise the
+     * whole AI path on every commit without spending a lira, and they do it by routing to it.
+     *
+     * Anywhere else it is a mistake, and it has been an expensive one. The end-to-end suite
+     * used to write the simulator into this table for the length of a run; one run died
+     * before it put the routes back and the running installation answered from the simulator
+     * for six hours. The product owner photographed their living room, waited, was handed a
+     * canned living room in zero seconds and asked whether the system was working at all.
+     *
+     * With this off, {@see AiGateway::realOnly()} refuses such a route outright, so the
+     * failure is "this task has no route" — a sentence an operator can act on — rather than
+     * an invented room presented to a customer as a reading of their own.
+     */
+    'simulator_in_routing_table' => (bool) env('REFCONCEPT_SIMULATOR_IN_ROUTING_TABLE', false),
+
     'money' => [
         'default_currency' => env('REFCONCEPT_DEFAULT_CURRENCY', 'TRY'),
         'supported_currencies' => ['TRY'],

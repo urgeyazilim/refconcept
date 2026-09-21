@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domains\Projects\Models;
 
+use App\Domains\Ai\Contracts\SimulatedOwner;
 use App\Domains\Identity\Models\User;
 use App\Domains\Projects\Enums\DesignVersionStatus;
 use App\Domains\Projects\Enums\RenderQuality;
@@ -49,7 +50,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read DesignBrief|null $brief
  */
-class DesignVersion extends Model
+class DesignVersion extends Model implements SimulatedOwner
 {
     use HasUuidV7;
 
@@ -92,6 +93,18 @@ class DesignVersion extends Model
             'render_inputs' => 'array',
             'fidelity' => 'array',
         ];
+    }
+
+    /**
+     * Whose work this version is, followed through the room.
+     *
+     * For the simulator's per-account decision and nothing else; see {@see SimulatedOwner}.
+     * Every step of the design pipeline hangs off a version, so this one method covers the
+     * plan, the render and the check.
+     */
+    public function simulatedOwner(): ?User
+    {
+        return $this->design?->room?->simulatedOwner();
     }
 
     /** @return BelongsTo<Design, $this> */

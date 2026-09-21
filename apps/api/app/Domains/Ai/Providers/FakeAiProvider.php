@@ -66,8 +66,15 @@ final class FakeAiProvider implements AiProvider
 
     public function supports(AiCall $call): bool
     {
-        // The fake serves everything on purpose: a test about routing should fail on
-        // the routing, not on the fake declining to play a part.
+        /*
+         * Serves every modality on purpose: a test about routing should fail on the
+         * routing, not on the simulator declining to play a part.
+         *
+         * Whether it may be reached at all is decided in the gateway, where the rest of
+         * the routing policy lives — see AiGateway::realOnly(). A second opinion here
+         * would be a second place that rule lives, and the second place is the one that
+         * drifts.
+         */
         return true;
     }
 

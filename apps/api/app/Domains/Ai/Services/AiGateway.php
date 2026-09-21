@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domains\Ai\Services;
 
+use App\Domains\Ai\Contracts\SimulatedOwner;
 use App\Domains\Ai\Enums\AiFailureKind;
 use App\Domains\Ai\Enums\AiJobStatus;
 use App\Domains\Ai\Enums\AiModality;
@@ -245,11 +246,51 @@ final class AiGateway
             ->active()
             ->first();
 
-        return $route === null ? null : $this->simulatedFor($job, $route);
+        if ($route === null) {
+            return null;
+        }
+
+        return $this->simulatedFor($job, $route) ?? $this->realOnly($route);
     }
 
     /**
-     * The same route, answered by the simulator, for an account that is being tested with.
+     * The route, unless it points at the simulator without anybody having asked.
+     *
+     * {@see simulatedFor()} is the only way to the simulator, outside the test suite, which
+     * routes to it on purpose and says so with `simulator_in_routing_table`. Everywhere else
+     * a stored route that names it is a mistake — somebody testing by hand, a migration, or
+     * the end-to-end suite, which used to write the simulator into this table for the length
+     * of a run and put it back afterwards. One run died before the restore and the live site
+     * answered from the simulator for six hours: the product owner photographed their living
+     * room, waited, and was handed canned furniture in zero seconds, then asked whether the
+     * system was working at all. Nothing anywhere said it was not.
+     *
+     * Refused rather than repaired, and refused whole rather than falling through to the
+     * fallback. "Bu görev için yönlendirme yok" is a sentence an operator can act on; a
+     * room invented out of nothing and presented as a reading is not, and the customer is
+     * the one who finds out. {@see AiTaskRoute::candidateModels()} already drops a
+     * simulator sitting behind a real primary, for the same reason.
+     */
+    private function realOnly(AiTaskRoute $route): ?AiTaskRoute
+    {
+        if (config('refconcept.simulator_in_routing_table') === true) {
+            return $route;
+        }
+
+        $route->loadMissing(['primaryModel.provider', 'fallbackModel.provider']);
+
+        foreach ([$route->primaryModel, $route->fallbackModel] as $model) {
+            if ($model?->provider?->driver === 'fake') {
+                return null;
+            }
+        }
+
+        return $route;
+    }
+
+    /**
+     * The same route, answered by the simulator, for an account that is being tested with,
+     * or nothing at all when this is not such an account.
      *
      * The end-to-end suite used to point the platform's routes at the simulator for the length
      * of a run and put them back afterwards, which is a switch with no fence around it: anybody
@@ -261,21 +302,21 @@ final class AiGateway
      * The decision is per person now. Nothing global moves, so a run cannot reach anybody
      * else's work, and a run that dies halfway leaves no routes to put back.
      *
-     * Off unless an e-mail domain is configured, which it is not in production. The job's own
-     * user is the only thing consulted; a job with nobody behind it is never simulated.
+     * Off unless an e-mail domain is configured, which it is not in production.
      */
-    private function simulatedFor(AiJob $job, AiTaskRoute $route): AiTaskRoute
+    private function simulatedFor(AiJob $job, AiTaskRoute $route): ?AiTaskRoute
     {
         $domain = mb_strtolower(trim((string) config('refconcept.simulated_email_domain', '')));
 
-        if ($domain === '' || $job->user_id === null) {
-            return $route;
+        if ($domain === '') {
+            return null;
         }
 
-        $email = mb_strtolower((string) ($job->user->email ?? ''));
+        // The only caller of ownerEmail(), and the only reason it exists.
+        $email = $this->ownerEmail($job);
 
-        if ($email === '' || ! str_ends_with($email, '@'.$domain)) {
-            return $route;
+        if ($email === null || ! str_ends_with($email, '@'.$domain)) {
+            return null;
         }
 
         $standIn = AiModel::query()
@@ -286,7 +327,7 @@ final class AiGateway
             ->first();
 
         if ($standIn === null) {
-            return $route;
+            return null;
         }
 
         /*
@@ -301,6 +342,32 @@ final class AiGateway
         $simulated->id = $route->id;
 
         return $simulated;
+    }
+
+    /**
+     * Whose work this job is, even when nobody pressed a button for it.
+     *
+     * The person who made the request, when there was one. Otherwise the subject is asked:
+     * a reading and every step of a design run inside a queued job with no user, and
+     * treating those as nobody's is what forced the end-to-end suite to repoint the whole
+     * installation at the simulator instead of one account. A run that died before it put
+     * the routes back left the site answering from the simulator, silently.
+     *
+     * Used for the simulation decision and nothing else. The job still belongs to nobody
+     * as far as billing, the concurrency cap and the history screen are concerned.
+     */
+    private function ownerEmail(AiJob $job): ?string
+    {
+        $email = mb_strtolower((string) ($job->user->email ?? ''));
+
+        if ($email === '') {
+            $subject = $job->subject;
+            $owner = $subject instanceof SimulatedOwner ? $subject->simulatedOwner() : null;
+
+            $email = mb_strtolower((string) ($owner->email ?? ''));
+        }
+
+        return $email === '' ? null : $email;
     }
 
     // --- internals -----------------------------------------------------------

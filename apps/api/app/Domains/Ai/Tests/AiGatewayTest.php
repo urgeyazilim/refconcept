@@ -8,6 +8,7 @@ use App\Domains\Ai\Enums\AiJobStatus;
 use App\Domains\Ai\Enums\AiTask;
 use App\Domains\Ai\Models\AiCostRate;
 use App\Domains\Ai\Models\AiFailure;
+use App\Domains\Ai\Models\AiJob;
 use App\Domains\Ai\Models\AiModel;
 use App\Domains\Ai\Models\AiProvider as AiProviderModel;
 use App\Domains\Ai\Models\AiRequest;
@@ -19,6 +20,9 @@ use App\Domains\Ai\Services\AiCall;
 use App\Domains\Ai\Services\AiGateway;
 use App\Domains\Ai\Services\AiResult;
 use App\Domains\Identity\Models\User;
+use App\Domains\Projects\Models\Design;
+use App\Domains\Projects\Models\DesignVersion;
+use App\Domains\Projects\Models\Project;
 
 /**
  * The gateway's policy, exercised against a provider that cannot surprise it.
@@ -497,6 +501,30 @@ describe('an account that is being tested with', function (): void {
         expect($resolved?->primaryModel?->getKey())->toBe($model->getKey());
     });
 
+    /*
+     * Every step of a design runs inside a queued job that nobody pressed a button for, so
+     * those jobs carry no user. Treating them as nobody's work is what forced the end-to-end
+     * suite to repoint the whole platform instead of one account, and a run that died halfway
+     * then left the site answering from the simulator without saying so.
+     */
+    it('follows a design version back to the person whose room it is', function (): void {
+        makeAiRoute(AiTask::SupportAssist);
+
+        $tester = User::factory()->create(['email' => 'walkthrough-3@e2e.refconcept.local']);
+
+        expect($this->gateway->resolveRoute(jobAbout(versionOwnedBy($tester)))?->primaryModel?->provider?->driver)
+            ->toBe('fake');
+    });
+
+    it("leaves a customer's own design on the model the operator chose", function (): void {
+        [, $model] = makeAiRoute(AiTask::SupportAssist);
+
+        $customer = User::factory()->create(['email' => 'musteri-2@example.com']);
+
+        expect($this->gateway->resolveRoute(jobAbout(versionOwnedBy($customer)))?->primaryModel?->getKey())
+            ->toBe($model->getKey());
+    });
+
     it('does nothing at all when no domain is configured', function (): void {
         config()->set('refconcept.simulated_email_domain', '');
 
@@ -509,3 +537,76 @@ describe('an account that is being tested with', function (): void {
         expect($resolved?->primaryModel?->getKey())->toBe($model->getKey());
     });
 });
+
+/*
+ * --- the simulator is not reachable by accident ----------------------------
+ *
+ * Everything above is about choosing the simulator on purpose. This is about the routing
+ * table naming it when nobody asked, which is how a real customer met it: an end-to-end run
+ * wrote the simulator into the shared routes and died before putting them back, and for six
+ * hours the running installation answered every reading from it. The product owner
+ * photographed their living room, waited, was handed a canned living room in zero seconds,
+ * and asked whether the system was working at all.
+ *
+ * The test suite is the one place such a route is legitimate — every test in this file is
+ * one — so it says so in its configuration, and these two turn that off to stand where
+ * production stands.
+ */
+
+it('refuses a route that names the simulator when nobody asked for it', function (): void {
+    config()->set('refconcept.simulator_in_routing_table', false);
+
+    makeAiRoute(AiTask::SupportAssist);
+
+    $customer = User::factory()->create(['email' => 'musteri-3@example.com']);
+
+    /*
+     * No route rather than a repaired one. "Bu görev için yönlendirme yok" is something an
+     * operator can act on within a minute; a room invented out of nothing and handed to
+     * somebody as a reading of their own is something only the customer finds out about.
+     */
+    expect($this->gateway->resolveRoute(makeAiJob(AiTask::SupportAssist, [], $customer)))->toBeNull();
+});
+
+it('still hands the simulator to the account being tested with', function (): void {
+    config()->set('refconcept.simulator_in_routing_table', false);
+    config()->set('refconcept.simulated_email_domain', 'e2e.refconcept.local');
+
+    makeAiRoute(AiTask::SupportAssist);
+
+    // The fence is around the table, not around the simulator: asking by account still works,
+    // which is what lets the end-to-end suite run without writing anything global down.
+    $tester = User::factory()->create(['email' => 'walkthrough-4@e2e.refconcept.local']);
+
+    expect($this->gateway->resolveRoute(makeAiJob(AiTask::SupportAssist, [], $tester))?->primaryModel?->provider?->driver)
+        ->toBe('fake');
+});
+
+/** A design version on a room belonging to this person, with the chain the gateway walks. */
+function versionOwnedBy(User $owner): DesignVersion
+{
+    $room = Project::factory()->ownedBy($owner)->withRoom()->create()->rooms()->firstOrFail();
+
+    $design = Design::query()->create([
+        'room_id' => $room->getKey(),
+        'name' => 'Test tasarımı',
+    ]);
+
+    return DesignVersion::query()->create([
+        'design_id' => $design->getKey(),
+        'version_number' => 1,
+    ]);
+}
+
+/** A job with no user, about a subject — which is every step of the design pipeline. */
+function jobAbout(DesignVersion $version): AiJob
+{
+    $job = makeAiJob(AiTask::SupportAssist);
+
+    $job->forceFill([
+        'subject_type' => $version::class,
+        'subject_id' => $version->getKey(),
+    ])->save();
+
+    return $job;
+}

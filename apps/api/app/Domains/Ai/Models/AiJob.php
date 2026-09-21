@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Carbon;
 
 /**
@@ -99,6 +100,19 @@ class AiJob extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * What the job is being done to — a room, a design version, a product.
+     *
+     * The column holds a class name, so this needs no morph map. Read rather than written:
+     * {@see AiJobDispatcher} stamps the two columns when it accepts the job.
+     *
+     * @return MorphTo<Model, $this>
+     */
+    public function subject(): MorphTo
+    {
+        return $this->morphTo();
     }
 
     /** @return BelongsTo<AiTaskRoute, $this> */

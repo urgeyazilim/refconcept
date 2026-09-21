@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Domains\Projects\Models;
 
+use App\Domains\Ai\Contracts\SimulatedOwner;
 use App\Domains\Catalog\Enums\RoomType;
+use App\Domains\Identity\Models\User;
 use App\Domains\Projects\Enums\MeasurementQuality;
 use App\Support\Concerns\HasUuidV7;
 use Illuminate\Database\Eloquent\Builder;
@@ -41,7 +43,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
  */
-class Room extends Model
+class Room extends Model implements SimulatedOwner
 {
     use HasUuidV7;
     use SoftDeletes;
@@ -82,6 +84,18 @@ class Room extends Model
             'height_mm' => 'integer',
             'position' => 'integer',
         ];
+    }
+
+    /**
+     * Whose room this is.
+     *
+     * For the simulator's per-account decision and nothing else; see {@see SimulatedOwner}.
+     * A reading is started by a queued job with nobody behind it, so without this the only
+     * way to test the reading path was to repoint the whole installation at the simulator.
+     */
+    public function simulatedOwner(): ?User
+    {
+        return $this->project?->owner;
     }
 
     /** @return BelongsTo<Project, $this> */
