@@ -5,6 +5,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — A reading that succeeded, was paid for, and was thrown away on the way to the table
+
+The product owner asked whether the system was working at all, because the screen had said
+"odanı okuyorum" for hours. The readings had in fact succeeded — fifty-two seconds and
+fifty-five seconds, full answers with three openings, the radiators and the measurements — and
+the room had no reading saved against it.
+
+`room_analyses.measurement_quality` is a twenty-character enum. The engine that reads rooms
+now answers in prose, and it put a sentence there: "Standart iç kapı boyutları ve dört
+fotoğrafın birlikte değerlendirilmesine dayalı, düşük güvenli yaklaşık ölçülendirme." The
+insert was refused, and because the analysis, its measurements and the openings are written in
+one transaction — correctly, so a room is never left half-read — the whole thing rolled back.
+A call that was made, thought about and paid for, gone, with nothing on screen or in the log
+to say why.
+
+- **The quality is matched against the words that column holds**, and anything else is
+  recorded as nothing. Not truncated: the first twenty characters of a sentence is not a
+  category, it is a category nobody can look up. The sentence is not lost either — the whole
+  answer goes into `payload` untouched.
+- **The room type is fitted to its column** rather than allowed to take a reading down. Free
+  text rather than an enum, so the front of an expansive answer is still a room type.
+
+
 ### Fixed — "Okuma uzun sürdü" over a reading that was still running
 
 The product owner pressed "Yeniden oku" twice on a room that was being read perfectly well,

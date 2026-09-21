@@ -8,6 +8,7 @@ use App\Domains\Ai\Enums\AiJobStatus;
 use App\Domains\Ai\Enums\AiTask;
 use App\Domains\Ai\Exceptions\AiJobRefused;
 use App\Domains\Ai\Services\AiJobDispatcher;
+use App\Domains\Projects\Enums\MeasurementQuality;
 use App\Domains\Projects\Exceptions\DesignGenerationFailed;
 use App\Domains\Projects\Models\Room;
 use App\Domains\Projects\Models\RoomAnalysis;
@@ -199,11 +200,13 @@ final class RoomAnalyser
                 'room_id' => $room->getKey(),
                 'media_id' => $mediaId,
                 'ai_job_id' => $jobId,
-                'detected_room_type' => $this->stringOrNull($structured['room_type'] ?? null),
+                // Forty characters, and a model that answers with a sentence would take the
+                // whole reading down with it.
+                'detected_room_type' => $this->fitted($structured['room_type'] ?? null, 40),
                 // A confidence of 0.94 becomes 9400 basis points. A float beside a price
                 // is how the price becomes a float.
                 'confidence_bps' => $this->confidenceToBps($structured['confidence'] ?? null),
-                'measurement_quality' => $this->stringOrNull($structured['measurement_quality'] ?? null),
+                'measurement_quality' => $this->quality($structured['measurement_quality'] ?? null),
                 'payload' => $structured + ['photo_ids' => $photoIds === [] ? [$mediaId] : $photoIds],
                 'fixed_elements' => $this->arrayOrNull($structured['fixed_elements'] ?? null),
                 'surfaces' => $this->arrayOrNull($structured['surfaces'] ?? null),
@@ -230,6 +233,48 @@ final class RoomAnalyser
 
             return $analysis;
         });
+    }
+
+    /**
+     * How the measurements were arrived at, as one of the words that column holds.
+     *
+     * The column is a twenty-character enum and the reading is a model answering in prose.
+     * GPT-6 Astra put a whole sentence here — "Standart iç kapı boyutları ve dört fotoğrafın
+     * birlikte değerlendirilmesine dayalı, düşük güvenli yaklaşık ölçülendirme" — the insert
+     * was refused, the transaction rolled back, and a reading that had already been made and
+     * paid for disappeared. The customer watched "odanı okuyorum" until they gave up and
+     * asked for two more readings of a room that had been read three times.
+     *
+     * Not truncated, because the first twenty characters of a sentence is not a category —
+     * it is a category nobody can look up. An answer that is not one of the words means the
+     * question was not understood, and the honest record of that is nothing. The prose
+     * itself is kept: the whole structured answer goes into `payload` untouched.
+     */
+    private function quality(mixed $value): ?string
+    {
+        return is_string($value)
+            ? MeasurementQuality::tryFrom(strtolower(trim($value)))?->value
+            : null;
+    }
+
+    /**
+     * A string the column can hold, or nothing.
+     *
+     * Same reasoning as {@see quality()} and a different shape: a room type is free text
+     * rather than an enum, so something too long is more likely a model being expansive than
+     * a model misunderstanding — and the first forty characters of "living room with a
+     * dining area" is still a room type. Longer than that and it is a paragraph, which is
+     * not.
+     */
+    private function fitted(mixed $value, int $limit): ?string
+    {
+        $text = $this->stringOrNull($value);
+
+        if ($text === null) {
+            return null;
+        }
+
+        return mb_strlen($text) <= $limit ? $text : mb_substr($text, 0, $limit);
     }
 
     private function confidenceToBps(mixed $confidence): ?int

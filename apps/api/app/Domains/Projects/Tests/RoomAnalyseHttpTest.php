@@ -182,3 +182,76 @@ it('drops a colour it could not paint with', function (): void {
 
     expect($surfaces['wall_color'])->toBeNull();
 });
+
+/*
+ * --- what the reading says versus what the column holds --------------------
+ *
+ * A reading is a model answering in prose and some of the columns it lands in are short. The
+ * first engine answered "estimated"; the one that reads rooms now answered "Standart iç kapı
+ * boyutları ve dört fotoğrafın birlikte değerlendirilmesine dayalı, düşük güvenli yaklaşık
+ * ölçülendirme", the insert was refused, the whole transaction rolled back, and a reading
+ * that had already been made and paid for vanished. The customer watched "odanı okuyorum"
+ * until they gave up and asked for two more readings of a room that had been read three
+ * times, and nothing anywhere said why.
+ */
+
+it('keeps a reading whose measurement quality came back as a sentence', function (): void {
+    $analyser = app(RoomAnalyser::class);
+
+    $photo = ($this->photo)(0);
+
+    $analysis = $analyser->store(
+        $this->room,
+        (string) $photo->getKey(),
+        null,
+        [
+            'room_type' => 'living_room',
+            'confidence' => 0.78,
+            'measurement_quality' => 'Standart iç kapı boyutları ve dört fotoğrafın birlikte değerlendirilmesine dayalı, düşük güvenli yaklaşık ölçülendirme.',
+            'estimated_dimensions' => ['width_mm' => 3_900, 'length_mm' => 5_200, 'height_mm' => 2_700],
+        ],
+        [(string) $photo->getKey()],
+    );
+
+    /*
+     * The reading survives and the column holds nothing, because the first twenty characters
+     * of a sentence is not a category — it is a category nobody can look up. The sentence
+     * itself is not lost: the whole answer goes into the payload untouched.
+     */
+    expect($analysis->exists)->toBeTrue()
+        ->and($analysis->measurement_quality)->toBeNull()
+        ->and($analysis->detected_room_type)->toBe('living_room')
+        ->and($analysis->payload['measurement_quality'])->toStartWith('Standart iç kapı');
+});
+
+it('keeps the measurement quality when the reading answers with one of the words', function (): void {
+    $photo = ($this->photo)(0);
+
+    $analysis = app(RoomAnalyser::class)->store(
+        $this->room,
+        (string) $photo->getKey(),
+        null,
+        ['room_type' => 'living_room', 'measurement_quality' => 'Estimated'],
+        [(string) $photo->getKey()],
+    );
+
+    // Case folded, because a model that shouts is still answering the question.
+    expect($analysis->measurement_quality)->toBe('estimated');
+});
+
+it('keeps a reading whose room type came back as a description', function (): void {
+    $photo = ($this->photo)(0);
+
+    $analysis = app(RoomAnalyser::class)->store(
+        $this->room,
+        (string) $photo->getKey(),
+        null,
+        ['room_type' => 'oturma odası ve yemek alanı birleşik, geçiş holüne açılan salon'],
+        [(string) $photo->getKey()],
+    );
+
+    // Forty characters is what the column holds. A room type is free text rather than an
+    // enum, so the front of an expansive answer is still a room type; a paragraph is not.
+    expect($analysis->exists)->toBeTrue()
+        ->and(mb_strlen((string) $analysis->detected_room_type))->toBeLessThanOrEqual(40);
+});
