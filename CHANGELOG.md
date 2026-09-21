@@ -5,6 +5,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — "Okuma uzun sürdü" over a reading that was still running
+
+The product owner pressed "Yeniden oku" twice on a room that was being read perfectly well,
+because the screen had told them it had taken too long. It had not. The readings in the log
+either side of it took fifty-two, fifty-five and seventy seconds and all of them succeeded.
+
+Ninety seconds was a Gemini number, and it was in two places at once.
+
+- **The screen gave up after ninety seconds** — the same as the server's own per-attempt
+  limit, so it could not outlast even one retry and announced a failure over work that was
+  about to finish. It waits six minutes now, which is past the point where something is
+  genuinely wrong rather than merely slow.
+- **The server cut off attempts that would have finished.** Ninety seconds an attempt was
+  generous at twenty-nine and tight at seventy; one reading took a hundred and eighty-six
+  seconds across three attempts to produce what the first was most of the way through. Three
+  minutes an attempt now, and two attempts rather than three — a call that ran out of time at
+  three minutes is unlikely to be quicker for being asked again, and a third attempt is mostly
+  a third bill.
+- **Taking the furniture out moved engines too**, from sixteen seconds to ninety-nine, and its
+  two-minute limit was about to start cutting that off as well.
+- The guide says the new numbers: a minute for the reading, one to two for the plate.
+
+
 ### Fixed — The schema stopped being enforced when the tasks moved to OpenAI
 
 A design failed with "Yerleşim planı hazırlanamadı: Geçersiz yanıt biçimi", after six

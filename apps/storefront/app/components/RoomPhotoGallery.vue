@@ -367,7 +367,7 @@ onBeforeUnmount(() => {
       </RcAlert>
 
       <p v-if="clearing !== null" class="mt-3 text-xs text-muted">
-        Yaklaşık yarım dakika sürer; bu sırada sayfada kalabilirsiniz.
+        Yaklaşık bir-iki dakika sürer; bu sırada sayfada kalabilirsiniz.
       </p>
 
       <div v-for="photo in emptied" :key="photo.id" class="mt-4">

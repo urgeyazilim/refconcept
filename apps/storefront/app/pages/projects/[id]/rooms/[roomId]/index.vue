@@ -741,7 +741,18 @@ function watchReading(before: string | null): void {
 
     const failed = room.value?.analysis_failure !== null && room.value?.analysis_failure !== undefined && (now === null || now === undefined || now.id === before)
 
-    const tooLong = Date.now() - analysingSince > 90_000
+    /*
+     * Longer than the server can possibly take, not longer than feels long.
+     *
+     * This was ninety seconds, which was the server's own per-attempt limit — so the screen
+     * could not outlast even one retry, and it announced "Okuma uzun sürdü" over a reading
+     * that was still running and about to succeed. The product owner pressed "Yeniden oku"
+     * twice and paid for two more readings of a room that was already being read.
+     *
+     * The server allows three minutes an attempt and two attempts. Six minutes is the point
+     * past which something is genuinely wrong rather than merely slow.
+     */
+    const tooLong = Date.now() - analysingSince > 360_000
 
     if ((now !== null && now !== undefined && now.id !== before && !now.is_stale) || failed || tooLong) {
       readingStalled.value = tooLong && (now === null || now === undefined || now.id === before)
@@ -949,8 +960,10 @@ const guide = computed<GuideState>(() => {
           icon: 'eye',
           say: photoCount.value === 1 ? 'Kareyi aldım, odanı okuyorum.' : `${photoCount.value} kareyi aldım, odanı okuyorum.`,
           detail: photoCount.value < 3
-            ? 'Yarım dakika kadar sürer. Bu arada bir-iki köşe daha eklersen odayı çok daha iyi anlarım; bitince devam ederiz.'
-            : 'Yarım dakika kadar sürer; buradayım. Bitince devam ederiz.',
+            // Measured on the engine that reads them now: fifty-two to seventy seconds for
+            // four photographs, where the one before it took twenty-nine.
+            ? 'Bir dakika kadar sürer. Bu arada bir-iki köşe daha eklersen odayı çok daha iyi anlarım; bitince devam ederiz.'
+            : 'Bir dakika kadar sürer; buradayım. Bitince devam ederiz.',
           busy: true,
         })
       }
@@ -1007,7 +1020,7 @@ const guide = computed<GuideState>(() => {
         return quiet({
           icon: 'eye',
           say: photoCount.value === 1 ? 'Kareye bakıyorum.' : `${photoCount.value} kareye bakıyorum.`,
-          detail: 'Odanda ne duruyor, çıkarıyorum; yarım dakika kadar sürer.',
+          detail: 'Odanda ne duruyor, çıkarıyorum; bir-iki dakika sürer.',
           busy: true,
         })
       }
@@ -1046,7 +1059,7 @@ const guide = computed<GuideState>(() => {
           icon: 'broom',
           say: 'Eşyaları kaldırayım mı?',
           detail: 'Kaldır dediklerimi çıkarıp odanın boş hâlini hazırlarım; kalsın dediklerin yerinde durur. Tasarımı o boş odaya yaparım.',
-          action: { label: clearingPlate.value ? 'Kaldırıyorum…' : 'Evet, kaldır', busy: clearingPlate.value, note: 'Yaklaşık yarım dakika' },
+          action: { label: clearingPlate.value ? 'Kaldırıyorum…' : 'Evet, kaldır', busy: clearingPlate.value, note: 'Yaklaşık bir-iki dakika' },
           secondary: clearingPlate.value ? null : { label: 'Hayır, hepsi kalsın' },
           choices: analysis.movable_objects.map(object => ({ key: object.label, label: object.label, selected: removing.value.has(object.label) })),
           busy: clearingPlate.value,
@@ -1419,7 +1432,7 @@ function guideSecondary() {
             <figure v-else-if="photoLink" class="flex min-h-0 flex-col items-center gap-2">
               <img :src="photoLink" alt="Odanın fotoğrafı" class="max-h-[calc(100vh-23rem)] w-auto rounded-lg border border-line object-contain">
               <figcaption class="text-xs text-muted">
-                {{ clearingPlate ? 'Eşyaları kaldırıyorum; yarım dakika kadar sürer.' : 'Kaldır dediklerin bu kareden çıkacak.' }}
+                {{ clearingPlate ? 'Eşyaları kaldırıyorum; bir-iki dakika sürer.' : 'Kaldır dediklerin bu kareden çıkacak.' }}
               </figcaption>
             </figure>
 
