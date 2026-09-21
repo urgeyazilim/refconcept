@@ -83,7 +83,34 @@ final class RoomAnalyser
             return null;
         }
 
-        return $this->readPhotoIds($analysis) === $this->photoIds($room) ? $analysis : null;
+        return $this->readsCurrentPhotographs($analysis, $room) ? $analysis : null;
+    }
+
+    /**
+     * Whether a reading is of the photographs the room has now.
+     *
+     * Which photographs, not in which order. The order this returns them in is the order
+     * they are sent to the model, and the customer changes that every time they pick which
+     * frame their design is drawn from — {@see photographs()} puts that one first. So
+     * choosing a different frame used to make a finished reading look like a reading of a
+     * different room: the screen went back to "odanı okuyorum" and stayed there, for a
+     * reading that had landed, been paid for and was sitting in the table the whole time.
+     * The product owner watched that for five hours and asked why it was so slow.
+     *
+     * It reads them all together and it is the same four pictures either way. What would
+     * genuinely make it stale is a photograph added or removed — or, past the limit, a
+     * different six being the ones that get read, which is why this compares what would be
+     * read now rather than everything the room holds.
+     */
+    public function readsCurrentPhotographs(RoomAnalysis $analysis, Room $room): bool
+    {
+        $read = $this->readPhotoIds($analysis);
+        $now = $this->photoIds($room);
+
+        sort($read);
+        sort($now);
+
+        return $read === $now;
     }
 
     /**

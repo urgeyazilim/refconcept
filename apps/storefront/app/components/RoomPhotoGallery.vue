@@ -147,6 +147,15 @@ const typeLabels: Record<string, string> = {
  */
 const tiles = computed(() => props.media.filter(item => item.type !== 'plate' && item.type !== 'scan'))
 
+/*
+ * Photographs, not everything the room holds.
+ *
+ * A plate is generated from a photograph and the measured scan is a file the room keeps;
+ * neither is a picture the customer took. Counting them made a room with four pictures read
+ * "5 / 20" and brought the limit on a picture early.
+ */
+const photoCount = computed(() => props.media.filter(item => item.type === 'photo').length)
+
 const plateOf = (photo: RoomMediaItem): RoomMediaItem | undefined =>
   props.media.find(item => item.type === 'plate' && item.source_media_id === photo.id)
 
@@ -241,7 +250,7 @@ onBeforeUnmount(() => {
           different corners is where it starts being worth the money.
         -->
         <RcButton
-          v-if="canEdit && media.filter(item => item.type === 'photo').length >= 2"
+          v-if="canEdit && photoCount >= 2"
           size="sm"
           variant="secondary"
           :loading="scanning"
@@ -251,7 +260,7 @@ onBeforeUnmount(() => {
           Odayı ölç
         </RcButton>
 
-        <span class="text-xs text-muted">{{ media.length }} / 20</span>
+        <span class="text-xs text-muted">{{ photoCount }} / 20</span>
       </div>
     </header>
 
@@ -402,21 +411,21 @@ onBeforeUnmount(() => {
         accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
         multiple
         class="sr-only"
-        :disabled="uploading || media.length >= 20"
+        :disabled="uploading || photoCount >= 20"
         @change="onFilesSelected"
       >
 
       <button
         type="button"
         class="flex w-full min-h-0 flex-1 items-center justify-center gap-2.5 rounded-md border border-dashed border-line-strong px-6 py-8 text-sm text-ink-secondary transition-colors hover:bg-bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-        :disabled="uploading || media.length >= 20"
+        :disabled="uploading || photoCount >= 20"
         @click="fileInput?.click()"
       >
         <svg class="rc-icon size-5" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M12 5v14m-7-7h14" />
         </svg>
         <span v-if="uploading">Yükleniyor…</span>
-        <span v-else-if="media.length >= 20">Fotoğraf sınırına ulaşıldı</span>
+        <span v-else-if="photoCount >= 20">Fotoğraf sınırına ulaşıldı</span>
         <span v-else>Fotoğraf ekle</span>
       </button>
     </div>

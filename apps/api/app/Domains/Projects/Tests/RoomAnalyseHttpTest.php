@@ -255,3 +255,50 @@ it('keeps a reading whose room type came back as a description', function (): vo
     expect($analysis->exists)->toBeTrue()
         ->and(mb_strlen((string) $analysis->detected_room_type))->toBeLessThanOrEqual(40);
 });
+
+/*
+ * --- which photographs, not in which order ---------------------------------
+ *
+ * The reading goes to the model with the chosen frame first, because that is the one the
+ * design is drawn from. Picking a different frame therefore reorders it — and staleness was
+ * decided by comparing the two lists position by position, so a finished reading of four
+ * photographs looked like a reading of some other room the moment the customer chose which
+ * one to draw from.
+ *
+ * What they saw was "4 kareyi aldım, odanı okuyorum" and nothing after it. The reading had
+ * landed in fifty-five seconds, hours earlier, and was sitting in the table the whole time.
+ * They waited, pressed the button again, paid for two more readings of a room that had been
+ * read three times, and finally asked why it was so slow. It was not slow.
+ */
+
+it('does not go stale because the customer chose a different frame to draw from', function (): void {
+    $photos = [($this->photo)(0), ($this->photo)(1), ($this->photo)(2), ($this->photo)(3)];
+    $this->room->forceFill(['primary_media_id' => $photos[0]->getKey()])->save();
+
+    app(RoomAnalyser::class)->forRoom($this->room->fresh(), refresh: true);
+
+    expect($this->actingAs($this->owner)->getJson($this->url)->json('data.analysis.is_stale'))->toBeFalse();
+
+    // "Tasarımı bundan çiziyorum" on the last frame. The same four pictures, read together.
+    $this->room->forceFill(['primary_media_id' => $photos[3]->getKey()])->save();
+
+    expect($this->actingAs($this->owner)->getJson($this->url)->json('data.analysis.is_stale'))->toBeFalse();
+
+    // And nothing is read again, so nothing is charged again.
+    Queue::fake();
+    $this->actingAs($this->owner)->postJson("{$this->url}/analyse")->assertOk()->assertJsonPath('data.status', 'ready');
+    Queue::assertNothingPushed();
+});
+
+it('still goes stale when a photograph is actually added', function (): void {
+    ($this->photo)(0);
+    ($this->photo)(1);
+
+    app(RoomAnalyser::class)->forRoom($this->room->fresh(), refresh: true);
+
+    expect($this->actingAs($this->owner)->getJson($this->url)->json('data.analysis.is_stale'))->toBeFalse();
+
+    ($this->photo)(2);
+
+    expect($this->actingAs($this->owner)->getJson($this->url)->json('data.analysis.is_stale'))->toBeTrue();
+});

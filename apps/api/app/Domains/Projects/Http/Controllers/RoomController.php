@@ -436,8 +436,10 @@ final class RoomController
             'photo_ids' => $read,
             'photo_count' => count($read),
             // Whether a photograph was added or removed since: the reading is of a room
-            // that no longer quite exists, and the screen offers to read it again.
-            'is_stale' => $read !== $this->analyser->photoIds($room),
+            // that no longer quite exists, and the screen offers to read it again. Which
+            // photographs, not in which order — picking the frame a design is drawn from
+            // reorders them and used to leave a finished reading looking unfinished.
+            'is_stale' => ! $this->analyser->readsCurrentPhotographs($analysis, $room),
             'detected_room_type' => $analysis->detected_room_type,
             'confidence_bps' => $analysis->confidence_bps,
             'fixed_elements' => $this->names($analysis->payload['fixed_elements'] ?? null),
