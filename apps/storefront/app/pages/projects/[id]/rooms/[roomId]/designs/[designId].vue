@@ -143,7 +143,7 @@ const designGuide = computed(() => {
   const plan = `/projects/${projectId}/rooms/${roomId}/plan?compose=${shownVersionId.value ?? ''}`
 
   if (!shown || (shown.status !== 'ready' && shown.status !== 'failed')) {
-    return { icon: 'sparkle' as const, say: 'Tasarımını çiziyorum.', detail: 'Ürünleri seçtim, odana yerleştiriyorum; bir-iki dakika. Buradayım.', action: null, secondary: null, busy: true }
+    return { icon: 'sparkle' as const, say: 'Tasarımını çiziyorum.', detail: 'Ürünleri seçtim, odana yerleştiriyorum; birkaç dakika sürer. Buradayım.', action: null, secondary: null, busy: true }
   }
 
   if (shown.status === 'failed') {

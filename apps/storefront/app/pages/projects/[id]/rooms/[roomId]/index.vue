@@ -949,8 +949,8 @@ const guide = computed<GuideState>(() => {
           icon: 'eye',
           say: photoCount.value === 1 ? 'Kareyi aldım, odanı okuyorum.' : `${photoCount.value} kareyi aldım, odanı okuyorum.`,
           detail: photoCount.value < 3
-            ? 'Bir dakika kadar sürer. Bu arada bir-iki köşe daha eklersen odayı çok daha iyi anlarım; bitince devam ederiz.'
-            : 'Bir dakika kadar sürer; buradayım. Bitince devam ederiz.',
+            ? 'Yarım dakika kadar sürer. Bu arada bir-iki köşe daha eklersen odayı çok daha iyi anlarım; bitince devam ederiz.'
+            : 'Yarım dakika kadar sürer; buradayım. Bitince devam ederiz.',
           busy: true,
         })
       }
@@ -1007,7 +1007,7 @@ const guide = computed<GuideState>(() => {
         return quiet({
           icon: 'eye',
           say: photoCount.value === 1 ? 'Kareye bakıyorum.' : `${photoCount.value} kareye bakıyorum.`,
-          detail: 'Odanda ne duruyor, çıkarıyorum; bir dakika kadar sürer.',
+          detail: 'Odanda ne duruyor, çıkarıyorum; yarım dakika kadar sürer.',
           busy: true,
         })
       }
@@ -1046,7 +1046,7 @@ const guide = computed<GuideState>(() => {
           icon: 'broom',
           say: 'Eşyaları kaldırayım mı?',
           detail: 'Kaldır dediklerimi çıkarıp odanın boş hâlini hazırlarım; kalsın dediklerin yerinde durur. Tasarımı o boş odaya yaparım.',
-          action: { label: clearingPlate.value ? 'Kaldırıyorum…' : 'Evet, kaldır', busy: clearingPlate.value, note: 'Yaklaşık bir dakika' },
+          action: { label: clearingPlate.value ? 'Kaldırıyorum…' : 'Evet, kaldır', busy: clearingPlate.value, note: 'Yaklaşık yarım dakika' },
           secondary: clearingPlate.value ? null : { label: 'Hayır, hepsi kalsın' },
           choices: analysis.movable_objects.map(object => ({ key: object.label, label: object.label, selected: removing.value.has(object.label) })),
           busy: clearingPlate.value,
@@ -1077,7 +1077,7 @@ const guide = computed<GuideState>(() => {
         return quiet({
           icon: 'sparkle',
           say: 'Tasarımını çiziyorum.',
-          detail: 'Ürünleri seçtim, odana yerleştiriyorum; bir-iki dakika.',
+          detail: 'Ürünleri seçtim, odana yerleştiriyorum; birkaç dakika sürer.',
           action: { label: 'Tasarıma bak', to: `/projects/${projectId}/rooms/${roomId}/designs/${design.id}` },
           busy: true,
         })
@@ -1419,7 +1419,7 @@ function guideSecondary() {
             <figure v-else-if="photoLink" class="flex min-h-0 flex-col items-center gap-2">
               <img :src="photoLink" alt="Odanın fotoğrafı" class="max-h-[calc(100vh-23rem)] w-auto rounded-lg border border-line object-contain">
               <figcaption class="text-xs text-muted">
-                {{ clearingPlate ? 'Eşyaları kaldırıyorum; bir dakika kadar sürer.' : 'Kaldır dediklerin bu kareden çıkacak.' }}
+                {{ clearingPlate ? 'Eşyaları kaldırıyorum; yarım dakika kadar sürer.' : 'Kaldır dediklerin bu kareden çıkacak.' }}
               </figcaption>
             </figure>
 
