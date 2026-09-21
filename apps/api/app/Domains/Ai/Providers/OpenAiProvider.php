@@ -371,10 +371,29 @@ final class OpenAiProvider implements AiProvider
             );
         }
 
+        /*
+         * What it cost, in the words this endpoint uses.
+         *
+         * Not `prompt_tokens` and `completion_tokens` — that is the chat endpoint, and this
+         * one says `input_tokens` and `output_tokens` instead. Nothing read them, so every
+         * image this provider made was recorded as having consumed nothing, and the rate
+         * table turned nothing into nought lira. Two rooms were emptied this morning at a
+         * hundred seconds each and the books say they were free. They were not: OpenAI bills
+         * for the picture that went in and the picture that came out.
+         *
+         * A zero here is worse than a wrong number. A wrong number is argued with; a zero is
+         * a task that looks cheap in every report, next to one that reports honestly and
+         * therefore looks expensive by comparison — which is exactly the comparison somebody
+         * makes when deciding which engine to keep.
+         */
+        $usage = (array) data_get($response->json() ?? [], 'usage', []);
+
         return AiResult::success(
             imageUrls: $urls,
             imageRefs: $refs,
             imageCount: count($urls) + count($refs),
+            inputTokens: (int) ($usage['input_tokens'] ?? 0),
+            outputTokens: (int) ($usage['output_tokens'] ?? 0),
             httpStatus: $response->status(),
         );
     }

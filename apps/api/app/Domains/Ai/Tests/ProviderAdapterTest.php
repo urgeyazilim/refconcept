@@ -83,6 +83,33 @@ describe('OpenAI adapter', function (): void {
             ->and($result->outputTokens)->toBe(30);
     });
 
+    /*
+     * This endpoint says input_tokens and output_tokens; the chat endpoint says
+     * prompt_tokens and completion_tokens. Nothing read either here, so every picture this
+     * provider made was recorded as having consumed nothing and the rate table turned that
+     * into nought lira. Two rooms were emptied in one morning, a hundred seconds each, and
+     * the books said they were free. A zero is worse than a wrong number: a wrong number
+     * gets argued with, a zero makes a task look cheap in every report next to one that
+     * reports honestly — which is the comparison somebody makes when choosing what to keep.
+     */
+    it('records what an image cost, in the words the image endpoint uses', function (): void {
+        Http::fake([
+            '*/images/generations' => Http::response([
+                'data' => [['b64_json' => base64_encode('png-bytes')]],
+                'usage' => ['input_tokens' => 1_243, 'output_tokens' => 4_160, 'total_tokens' => 5_403],
+            ]),
+        ]);
+
+        $result = app(OpenAiProvider::class)->execute(
+            callFor($this->provider, AiModality::Image, AiTask::ImageRenderDraft),
+        );
+
+        expect($result->successful)->toBeTrue()
+            ->and($result->imageCount)->toBe(1)
+            ->and($result->inputTokens)->toBe(1_243)
+            ->and($result->outputTokens)->toBe(4_160);
+    });
+
     it('classifies a rate limit as something worth trying again', function (): void {
         Http::fake(['*/chat/completions' => Http::response(['error' => ['message' => 'Rate limit reached']], 429)]);
 
