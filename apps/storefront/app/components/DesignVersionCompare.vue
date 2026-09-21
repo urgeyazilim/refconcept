@@ -37,7 +37,14 @@ const mode = ref<'side' | 'wipe'>('side')
 
     <div v-if="mode === 'side'" class="grid gap-3 sm:grid-cols-2">
       <figure v-for="side in [left, right]" :key="side.label" class="overflow-hidden rounded-md bg-charcoal">
-        <img :src="side.src" :alt="side.label" class="aspect-[16/10] w-full object-cover" draggable="false">
+        <!--
+          Contained rather than covered, at the shape a render is.
+          
+          Both sides here are renders, and a 3:2 picture cropped into a 16:10 box loses its
+          top and bottom — which on the design screen is the ceiling and the floor of a room
+          somebody paid to see. Nothing here is a thumbnail; it is the work.
+        -->
+        <img :src="side.src" :alt="side.label" class="aspect-[3/2] w-full object-contain" draggable="false">
         <figcaption class="px-3 py-2 text-xs text-white/80">{{ side.label }}</figcaption>
       </figure>
     </div>

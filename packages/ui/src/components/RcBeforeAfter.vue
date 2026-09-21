@@ -27,6 +27,29 @@ const props = withDefaults(
 
 const emit = defineEmits<{ (event: 'expand', which: 'before' | 'after'): void }>()
 
+/**
+ * The render's own shape, once the browser knows it.
+ *
+ * The frame used to be a fixed 16:10 and both pictures were cropped to fill it. A render is
+ * 3:2, so the top and bottom of the thing the customer paid for were cut off — and the
+ * product owner said exactly that: they could not see it properly. The frame takes the
+ * render's shape instead, so the render is shown whole.
+ *
+ * Nothing is cropped any more, either. Both pictures are contained rather than covered, so
+ * a window that will not fit the frame letterboxes into the charcoal instead of losing its
+ * top and bottom — and the frame already has the render's shape, so on the usual path there
+ * is nothing to letterbox. Somebody who asked to see their room should see all of it.
+ */
+const shape = ref<number | null>(null)
+
+function measure(event: Event) {
+  const image = event.target as HTMLImageElement
+
+  if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+    shape.value = image.naturalWidth / image.naturalHeight
+  }
+}
+
 /** Where the wipe sits, as a percentage from the left. */
 const position = ref(50)
 const frame = ref<HTMLElement | null>(null)
@@ -83,12 +106,31 @@ function nudge(step: number) {
 </script>
 
 <template>
-  <!-- Never taller than the stage it stands on: a 16:10 picture at full width was a screen and a half. -->
-  <div class="overflow-hidden rounded-md bg-charcoal">
-    <!-- Room below for the two lines that say what is in the picture and what the check found. -->
+  <!--
+    The picture at its own shape, as large as the screen allows, centred.
+
+    Height first and width derived from it, rather than the other way round. A frame given
+    the full width and then capped in height stops being the picture's shape, and everything
+    inside it is either cropped or letterboxed — which is how the top and bottom of somebody's
+    room went missing. Sized from the height the stage can spare, the frame *is* the picture's
+    shape, so there is nothing to crop and nothing to letterbox. On a narrow screen the width
+    binds instead and the height follows it down.
+
+    Room left below for the two lines that say what is in the picture and what the check found.
+  -->
+  <!-- The card hugs the picture: a slab of charcoal either side of it is not a design decision. -->
+  <div class="mx-auto w-fit overflow-hidden rounded-md bg-charcoal">
+    <!--
+      The width the stage can afford at this shape; the height follows from the ratio. On a
+      narrow screen max-width binds first and the height comes down with it.
+    -->
     <div
       ref="frame"
-      class="relative aspect-[16/10] max-h-[calc(100vh-25rem)] w-full touch-none select-none"
+      class="relative mx-auto max-w-full touch-none select-none"
+      :style="{
+        aspectRatio: String(shape ?? 1.5),
+        width: `calc((100vh - 23rem) * ${shape ?? 1.5})`,
+      }"
       @pointerdown="startDrag"
       @pointermove="onDrag"
       @pointerup="endDrag"
@@ -98,8 +140,9 @@ function nudge(step: number) {
       <img
         :src="afterSrc"
         :alt="afterLabel"
-        class="absolute inset-0 size-full object-cover"
+        class="absolute inset-0 size-full object-contain"
         draggable="false"
+        @load="measure"
       >
 
       <!--
@@ -111,7 +154,7 @@ function nudge(step: number) {
       <img
         :src="beforeSrc"
         :alt="beforeLabel"
-        class="absolute inset-0 size-full object-cover"
+        class="absolute inset-0 size-full object-contain"
         :style="{ clipPath: `inset(0 ${100 - position}% 0 0)` }"
         draggable="false"
       >
@@ -165,6 +208,26 @@ function nudge(step: number) {
         @click.stop="emit('expand', 'after')"
       >
         {{ afterLabel }}
+      </button>
+
+      <!--
+        The way to see it properly, said out loud.
+
+        The two labels have always opened the picture full screen and neither of them looks
+        like it does: they read as captions, because that is what a pill in the corner of a
+        photograph is. The product owner had the whole feature in front of them and asked why
+        it was missing. A button that says what it does, with the icon everybody already
+        knows, and it sits where nothing is happening.
+      -->
+      <button
+        type="button"
+        class="absolute right-4 bottom-4 z-20 flex items-center gap-1.5 rounded-pill bg-black/45 px-3 py-1.5 text-xs text-white backdrop-blur-sm transition-colors hover:bg-black/65"
+        @click.stop="emit('expand', 'after')"
+      >
+        <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+        </svg>
+        Tam ekran
       </button>
     </div>
   </div>

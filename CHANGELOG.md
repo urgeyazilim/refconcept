@@ -5,6 +5,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — The render was being cropped, and the way to see it whole looked like a caption
+
+The product owner said they could not see their design properly and asked what was wrong.
+Two things were, and both of them had been there from the start.
+
+- **The picture was cropped.** The frame was a fixed 16:10 and both images were covered into
+  it. A render is 3:2, so the top and bottom of the thing somebody paid for were cut off —
+  the ceiling and the floor of their own room. The frame now takes the render's own shape,
+  measured when the browser loads it, and both images are contained rather than covered, so
+  nothing is ever lost. The card hugs the picture instead of sitting it on a slab of charcoal.
+- **The frame is sized from the height the screen can spare**, and the width follows from the
+  shape. Sized the other way round — full width, then capped — the frame stops being the
+  picture's shape and something has to give, which is how this happened.
+- **"Tam ekran", in words.** The two corner labels have always opened the picture full screen
+  and neither of them looks like it does: a pill in the corner of a photograph reads as a
+  caption. There is a button that says what it does now, with the icon everybody knows.
+- The side-by-side comparison of two versions had the same crop, and does not any more.
+
+
 ### Fixed — "Render al" was quietly choosing different furniture
 
 The product owner arranged their room in 3D, pressed "Render al", and asked why the waiting
