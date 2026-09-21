@@ -86,13 +86,31 @@ final class OpenAiProvider implements AiProvider
 
     // --- internals -----------------------------------------------------------
 
-    /** Turns text into a vector. */
+    /**
+     * Turns text into a vector, at the width this system can store.
+     *
+     * OpenAI's embeddings answer at their model's full width — 3072 for the large one —
+     * and our column is `vector(768)`, so the answer would be unstorable and every
+     * product would fail to embed with a database error nobody reads. The 3-series takes
+     * a `dimensions` parameter for exactly this, and truncating is what it is designed
+     * for rather than a trick: the model is trained so the first N components carry the
+     * most.
+     *
+     * Asked only of models that accept it. Sending it to one that does not is a 400, and
+     * a provider refusing the whole call is worse than a vector nobody asked to narrow.
+     */
     private function embed(AiCall $call): AiResult
     {
-        $response = $this->client($call)->post('/embeddings', [
+        $payload = [
             'model' => $call->model->code,
             'input' => $call->prompt,
-        ]);
+        ];
+
+        if (str_starts_with($call->model->code, 'text-embedding-3')) {
+            $payload['dimensions'] = (int) config('refconcept.embedding_dimensions', 768);
+        }
+
+        $response = $this->client($call)->post('/embeddings', $payload);
 
         if ($response->failed()) {
             return $this->translateFailure($response);
@@ -116,6 +134,17 @@ final class OpenAiProvider implements AiProvider
             inputTokens: (int) data_get($body, 'usage.prompt_tokens', 0),
             httpStatus: $response->status(),
         );
+    }
+
+    /**
+     * Whether this model still accepts a temperature.
+     *
+     * The GPT-4 and GPT-3.5 families do. Everything since — the 5s, the 6s, the o-series —
+     * takes the default and refuses anything else.
+     */
+    private function takesTemperature(string $code): bool
+    {
+        return str_starts_with($code, 'gpt-4') || str_starts_with($code, 'gpt-3.5');
     }
 
     private function generateText(AiCall $call): AiResult
@@ -148,8 +177,25 @@ final class OpenAiProvider implements AiProvider
         $payload = [
             'model' => $call->model->code,
             'messages' => $messages,
-            'temperature' => $call->temperature(),
         ];
+
+        /*
+         * Temperature, only to the models that still take one.
+         *
+         * OpenAI's reasoning-era models refuse it outright — "Unsupported value:
+         * 'temperature' does not support 0.2 with this model. Only the default (1) value is
+         * supported" — and the whole call fails with a 400 before anything is generated. The
+         * first real call to gpt-6-astra said exactly that, and the customer would have seen
+         * "Oda fotoğrafı okunamadı. Daha aydınlık bir fotoğrafla tekrar deneyin", which is a
+         * sentence about their photograph and had nothing to do with their photograph.
+         *
+         * Allowed by family rather than refused by it: a model we have not met is assumed to
+         * be one of the new ones, because the failure of guessing wrong that way is a slightly
+         * less deterministic answer, and the other way it is a task that cannot run at all.
+         */
+        if ($this->takesTemperature($call->model->code)) {
+            $payload['temperature'] = $call->temperature();
+        }
 
         if ($call->model->max_output_tokens !== null) {
             $payload['max_tokens'] = $call->model->max_output_tokens;

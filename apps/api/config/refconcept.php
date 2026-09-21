@@ -6,6 +6,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Ürün vektörünün genişliği
+    |--------------------------------------------------------------------------
+    |
+    | The width of the vector column, and therefore of every embedding that has to
+    | fit in it. It is here rather than in one provider because it is a fact about
+    | the database: `product_embeddings.embedding` is `vector(768)`, and a model
+    | that answers with any other width cannot be stored at all.
+    |
+    | Providers differ. Google's embedding model answers at this width; OpenAI's
+    | answers at 3072 unless it is asked for fewer, which its 3-series supports
+    | exactly so that a column like ours stays usable. Changing this number means
+    | changing the column and re-embedding the whole catalogue, so it is not a knob.
+    |
+    */
+    'embedding_dimensions' => 768,
+
+    /*
+    |--------------------------------------------------------------------------
     | Platform identity
     |--------------------------------------------------------------------------
     | The brand is RefConcept. The legacy name "RefOne" must never appear in

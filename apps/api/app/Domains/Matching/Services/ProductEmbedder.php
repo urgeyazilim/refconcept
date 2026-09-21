@@ -6,6 +6,8 @@ namespace App\Domains\Matching\Services;
 
 use App\Domains\Ai\Enums\AiJobStatus;
 use App\Domains\Ai\Enums\AiTask;
+use App\Domains\Ai\Models\AiJob;
+use App\Domains\Ai\Models\AiRequest;
 use App\Domains\Ai\Services\AiJobDispatcher;
 use App\Domains\Matching\Enums\EmbeddingSource;
 use App\Domains\Matching\Models\ProductEmbedding;
@@ -92,7 +94,7 @@ final class ProductEmbedder
             throw new RuntimeException('Sağlayıcı boş bir vektör döndürdü.');
         }
 
-        return $this->store($product, $vector, $hash, $this->modelOf($job->output));
+        return $this->store($product, $vector, $hash, $this->modelOf($job));
     }
 
     /**
@@ -261,12 +263,26 @@ final class ProductEmbedder
     }
 
     /**
-     * @param  array<string, mixed>|null  $output
+     * Which model actually produced this vector.
+     *
+     * Read from the attempt rather than from the job's output, because the output is what
+     * the customer is shown and which engine answered is not theirs to see. The attempt row
+     * has carried the model all along; this was looking for it in the wrong place and every
+     * vector in the catalogue was stamped "unknown" — which made "can these two vectors be
+     * compared" unanswerable, and two vectors from different models cannot be.
+     *
+     * The last attempt, because that is the one that succeeded: a job that fell back
+     * answered under the fallback's name and the vector belongs to that space.
      */
-    private function modelOf(?array $output): string
+    private function modelOf(AiJob $job): string
     {
-        // The job records which model ran; falling back to a marker rather than an empty
-        // string keeps "which model produced this vector" answerable either way.
-        return is_string($output['model'] ?? null) ? $output['model'] : 'unknown';
+        $code = AiRequest::query()
+            ->where('job_id', $job->getKey())
+            ->orderByDesc('attempt')
+            ->with('model')
+            ->first()
+            ?->model?->code;
+
+        return is_string($code) && $code !== '' ? $code : 'unknown';
     }
 }

@@ -76,6 +76,7 @@ final class DesignGenerationPipeline
         private readonly ShoppingListBuilder $shoppingList,
         private readonly BriefToPlacements $briefPlacements,
         private readonly LayoutAutoComposer $autoComposer,
+        private readonly LayoutPlanImage $plans,
     ) {}
 
     /**
@@ -125,8 +126,23 @@ final class DesignGenerationPipeline
              * the render can then be handed the actual products.
              */
             $matches = $inherited['matches'] ?? $this->match($version);
-            $this->render($version, $room, $analysis, $plan, $matches);
+
+            /*
+             * The room is arranged before the picture is drawn, not after.
+             *
+             * It used to be the other way round, and that one line is why every first design
+             * ever made had `render_inputs.layout` null. The renderer can be handed a picture
+             * of the plan and there was never one to hand it: the browser draws that picture
+             * and on a first design nobody has opened the 3D room yet. So the model was given
+             * a photograph, a list of furniture and nothing else, and did what it is good at
+             * — it invented a handsome room. The product owner's own living room came back
+             * with the window where their television is.
+             *
+             * Arranging first costs nothing: it is arithmetic against a room the customer has
+             * already confirmed, and it was going to happen a second later anyway.
+             */
             $this->arrange($version, $room);
+            $this->render($version, $room, $analysis, $plan, $matches);
         } catch (DesignGenerationFailed $e) {
             return $this->fail($version, $e);
         } catch (AiJobRefused $e) {
@@ -1277,12 +1293,75 @@ final class DesignGenerationPipeline
 
         $this->event(
             $version,
-            GenerationStage::Render,
+            GenerationStage::Plan,
             'succeeded',
             $left === 0
                 ? sprintf('3B odaya %d ürün yerleştirildi.', $placed)
                 : sprintf('3B odaya %d ürün yerleştirildi; %d ürün yerleştirilemedi.', $placed, $left),
         );
+
+        $this->drawPlan($result['layout']);
+    }
+
+    /**
+     * A picture of the arrangement, for the renderer, drawn here because nothing else will.
+     *
+     * The browser draws a far better one — the room in 3D, from inside, with a depth map
+     * beside it — and it draws it the moment somebody opens the plan screen. Until then there
+     * is nothing, and "until then" includes every first design. A flat plan view is a poor
+     * substitute for a rendered room and an enormous improvement on no structure at all.
+     *
+     * Only when there is nothing better. The browser's picture is never overwritten by this
+     * one: it knows what the furniture looks like and this knows only where it stands.
+     */
+    private function drawPlan(DesignLayout $layout): void
+    {
+        if ($layout->snapshot_path !== null) {
+            return;
+        }
+
+        $geometry = RoomGeometryVersion::query()->find($layout->geometry_version_id);
+        $room = $layout->room;
+
+        if ($geometry === null || $room === null) {
+            return;
+        }
+
+        try {
+            $bytes = $this->plans->draw($geometry, $layout, $room->constraints->all());
+        } catch (Throwable $e) {
+            Log::warning('Yerleşim krokisi çizilemedi.', ['layout_id' => $layout->getKey(), 'reason' => $e->getMessage()]);
+
+            return;
+        }
+
+        if ($bytes === null) {
+            return;
+        }
+
+        $temporary = tempnam(sys_get_temp_dir(), 'plan');
+
+        if ($temporary === false) {
+            return;
+        }
+
+        try {
+            file_put_contents($temporary, $bytes);
+
+            $stored = $this->storage->storeLayoutSnapshot((string) $layout->getKey(), $temporary, 'plan');
+        } catch (Throwable $e) {
+            Log::warning('Yerleşim krokisi kaydedilemedi.', ['layout_id' => $layout->getKey(), 'reason' => $e->getMessage()]);
+
+            return;
+        } finally {
+            @unlink($temporary);
+        }
+
+        $layout->forceFill([
+            'snapshot_disk' => $stored['disk'],
+            'snapshot_path' => $stored['path'],
+            'snapshot_taken_at' => now(),
+        ])->save();
     }
 
     /** How many other views of the room go to the renderer: enough for the other walls, not a payload. */

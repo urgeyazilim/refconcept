@@ -5,6 +5,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed — Every reading and every decision runs on GPT-6 Astra
+
+The product owner tried both engines and asked for OpenAI across the board. The pictures were
+already drawn there; this moves the rest: reading the room, taking the furniture out, planning
+the design, ranking the products, and the vectors behind the search.
+
+**It is better on a real room.** The same four photographs, read twice. Gemini found a door
+and a window, and put the window on the wrong wall. Astra found the frosted-glass living-room
+door, a french balcony behind the net curtain with its railing, a small window under the air
+conditioner, both radiators either side of the glass, the four-shade pendant and the cove
+lighting round the ceiling — each with the photograph it was seen in and its own confidence.
+
+**And it is cheaper here.** `$10` in and `$50` out per million is eight times Gemini's input
+and five times its output, and the reading still came to about 33 cents against 52, because it
+spent a fifth of the thinking. It is slower: 67 seconds against 29.
+
+- **Temperature is no longer sent to models that refuse it.** The first real call failed with
+  "Unsupported value: 'temperature' does not support 0.2 with this model", and the customer
+  would have been told their photograph was too dark. The GPT-4 and 3.5 families still take
+  one; everything since takes the default.
+- **Embeddings are asked for at the width the column has.** OpenAI answers at 3072 and
+  `product_embeddings.embedding` is `vector(768)`; the 3-series takes a `dimensions`
+  parameter for exactly this.
+- **Every vector was rebuilt.** Two embedding models place the same sentence in different
+  spaces, so the old rows were deleted rather than left to poison every match quietly.
+- **Which model produced a vector is answerable again.** It was read from the job's output,
+  which never carried it, so every vector in the catalogue was stamped "unknown" — and the
+  output is shown to the customer, where the engine's name does not belong. It comes from the
+  attempt row, which has recorded it all along.
+- **The new models are priced**, because a model with no rate reports every call as free and a
+  platform that cannot say what it spent finds out at the end of the month.
+
+
 ### Fixed — The render was being cropped, and the way to see it whole looked like a caption
 
 The product owner said they could not see their design properly and asked what was wrong.

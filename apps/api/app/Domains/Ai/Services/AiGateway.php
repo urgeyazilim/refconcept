@@ -485,6 +485,14 @@ final class AiGateway
         if ($result->successful) {
             $job->forceFill([
                 'status' => AiJobStatus::Succeeded,
+                /*
+                 * Deliberately no model and no provider in here.
+                 *
+                 * A job's output is shown to the customer, and which engine answered is
+                 * ours rather than theirs — there is a test that says so. Anything that
+                 * genuinely needs to know reads `ai_requests`, which records the model per
+                 * attempt precisely so this column does not have to.
+                 */
                 'output' => [
                     'text' => $result->text,
                     'structured' => $result->structured,
