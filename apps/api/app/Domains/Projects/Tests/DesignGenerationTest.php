@@ -1187,3 +1187,89 @@ it('yerleşimi çiz: plans again when there is nothing to inherit', function ():
     expect($second->fresh()?->status)->toBe(DesignVersionStatus::Ready)
         ->and(AiJob::query()->where('task', AiTask::DesignPlan->value)->count())->toBe($before + 1);
 });
+
+/*
+ * --- the renderer is given the room ---------------------------------------
+ *
+ * The arrangement used to happen after the picture was drawn, which is why
+ * `render_inputs.layout` was null on every first design ever made: the renderer can be
+ * handed a picture of the plan and there was never one to hand it. A photorealistic model
+ * with no structure to follow invents a handsome room, and the product owner's own living
+ * room came back with the window where their television is.
+ */
+
+it('yerleşim önce: hands the renderer a picture of the plan on the first design', function (): void {
+    RoomGeometryVersion::query()->create([
+        'room_id' => $this->room->getKey(),
+        'version' => 1,
+        'source' => 'ai',
+        'width_mm' => 4_000,
+        'length_mm' => 5_000,
+        'height_mm' => 2_700,
+    ]);
+
+    $version = $this->launcher->launch($this->design, null, $this->owner);
+
+    $finished = $version->fresh();
+
+    $layout = DesignLayout::query()->where('room_id', $this->room->getKey())->firstOrFail();
+
+    /*
+     * Arranged, drawn, and the drawing named in the record of what the picture was made
+     * from. All three, because any one of them alone is the failure this fixes: an
+     * arrangement nobody drew, a drawing nobody sent, or a send nobody recorded.
+     */
+    expect($layout->snapshot_path)->not->toBeNull()
+        ->and($finished?->render_inputs['layout'])->not->toBeNull()
+        ->and($finished?->render_inputs['layout']['snapshot'])->toBeTrue();
+
+    // And the renderer was told what the extra picture is, or it would draw it as furniture.
+    $render = AiJob::query()->where('task', AiTask::ImageRenderDraft->value)->latest('created_at')->firstOrFail();
+
+    expect(implode(' ', (array) $render->input['image_roles']))->toContain('3B yerleşim şeması');
+});
+
+it('yerleşim önce: never draws over the picture the browser made', function (): void {
+    $geometry = RoomGeometryVersion::query()->create([
+        'room_id' => $this->room->getKey(),
+        'version' => 1,
+        'source' => 'ai',
+        'width_mm' => 4_000,
+        'length_mm' => 5_000,
+        'height_mm' => 2_700,
+    ]);
+
+    $geometry->forceFill(['is_confirmed' => true, 'confirmed_at' => now()])->save();
+
+    $layout = DesignLayout::query()->create([
+        'room_id' => $this->room->getKey(),
+        'geometry_version_id' => $geometry->getKey(),
+        'version' => 1,
+        'source' => 'ai',
+        'status' => 'draft',
+        'created_by' => $this->owner->getKey(),
+    ]);
+
+    $layout->forceFill([
+        'snapshot_disk' => 'local',
+        'snapshot_path' => 'layout-snapshots/tarayici.png',
+        'snapshot_taken_at' => now(),
+    ])->save();
+
+    $this->launcher->launch($this->design, null, $this->owner);
+
+    /*
+     * The browser's picture is the room in 3D from inside, with a depth map beside it. This
+     * one is a flat plan and knows only where things stand. Overwriting the first with the
+     * second would be trading the better reference for the one that was cheaper to make.
+     */
+    expect($layout->fresh()?->snapshot_path)->toBe('layout-snapshots/tarayici.png');
+});
+
+it('yerleşim önce: says nothing about a plan in a room nobody has measured', function (): void {
+    $version = $this->launcher->launch($this->design, null, $this->owner);
+
+    // No measurements, no arrangement, no drawing — and the record says so rather than
+    // naming a picture that was never made.
+    expect($version->fresh()?->render_inputs['layout'])->toBeNull();
+});

@@ -5,6 +5,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — The room was arranged after the picture was drawn
+
+The product owner put their photograph beside the design made from it and asked why the room
+could not be detected. It was: the reading found the door, the window, the radiators. The
+picture never saw any of it.
+
+One line of the pipeline. `arrange()` ran after `render()`, so on a first design the
+renderer was handed a photograph, a list of furniture and nothing else — `render_inputs.layout`
+was null on every first design ever made. A photorealistic model with no structure to follow
+does what it is good at and invents a handsome room, which is how a living room came back with
+the window where the television is.
+
+- **The room is arranged before the picture is drawn.** It costs nothing: arithmetic against a
+  room the customer already confirmed, and it was going to happen a second later anyway.
+- **The server draws the plan when nobody else has.** The browser draws a far better
+  reference — the room in 3D from inside, with a depth map beside it — the moment somebody
+  opens the plan screen, and "until then" included every first design. A flat plan view with
+  the walls, the openings marked and every product at its real size is a poor substitute for a
+  rendered room and an enormous improvement on nothing.
+- **It never draws over the browser's picture.** That one knows what the furniture looks like;
+  this one knows only where it stands.
+- A room nobody has measured still reports no plan rather than naming a picture that was never
+  made.
+
+
 ### Changed — Every reading and every decision runs on GPT-6 Astra
 
 The product owner tried both engines and asked for OpenAI across the board. The pictures were
