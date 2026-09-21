@@ -108,6 +108,81 @@ describe('OpenAI adapter', function (): void {
             ->and($result->warrantsFallback())->toBeFalse();
     });
 
+    it('hands the schema over rather than asking only for JSON', function (): void {
+        Http::fake([
+            '*/chat/completions' => Http::response([
+                'choices' => [['message' => ['content' => '{"style":"modern"}'], 'finish_reason' => 'stop']],
+                'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
+            ]),
+        ]);
+
+        app(OpenAiProvider::class)->execute(callFor(
+            $this->provider,
+            AiModality::Text,
+            AiTask::DesignPlan,
+            ['properties' => ['style' => ['type' => 'string']], 'required' => ['style']],
+        ));
+
+        Http::assertSent(function (Request $request): bool {
+            $format = $request['response_format'] ?? [];
+
+            /*
+             * `json_object` only promises the braces match. The first design plan after the
+             * structured tasks moved to OpenAI came back six times — valid JSON every time,
+             * missing `style` and every `max_width_mm` every time — and the customer paid
+             * three credits and waited seven minutes to be told the format was invalid.
+             *
+             * And the top-level type, because most of the stored schemas leave it out and
+             * OpenAI refuses the whole call over it: "schema must be a JSON Schema of
+             * 'type: object', got 'type: None'".
+             */
+            return ($format['type'] ?? null) === 'json_schema'
+                && ($format['json_schema']['schema']['type'] ?? null) === 'object'
+                && ($format['json_schema']['strict'] ?? null) === false;
+        });
+    });
+
+    it('asks only for JSON when the task has no schema to give', function (): void {
+        Http::fake([
+            '*/chat/completions' => Http::response([
+                'choices' => [['message' => ['content' => '{}'], 'finish_reason' => 'stop']],
+                'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 2],
+            ]),
+        ]);
+
+        app(OpenAiProvider::class)->execute(callFor(
+            $this->provider,
+            AiModality::Text,
+            AiTask::DesignPlan,
+            [],
+        ));
+
+        // An empty schema is not a schema, and sending one would be refused. The gateway
+        // still validates whatever comes back.
+        Http::assertSent(fn (Request $request): bool => ($request['response_format']['type'] ?? null) === 'json_object');
+    });
+
+    it('sends a temperature only to the models that still take one', function (): void {
+        Http::fake([
+            '*/chat/completions' => Http::response([
+                'choices' => [['message' => ['content' => 'merhaba'], 'finish_reason' => 'stop']],
+                'usage' => ['prompt_tokens' => 4, 'completion_tokens' => 2],
+            ]),
+        ]);
+
+        $call = callFor($this->provider, AiModality::Text, AiTask::SupportAssist);
+        $call->model->forceFill(['code' => 'gpt-6-astra'])->save();
+
+        app(OpenAiProvider::class)->execute($call);
+
+        /*
+         * The reasoning-era models refuse it outright — "Unsupported value: 'temperature'
+         * does not support 0.2 with this model" — and the whole call fails before anything
+         * is generated. A customer was told their photograph was too dark.
+         */
+        Http::assertSent(fn (Request $request): bool => ! array_key_exists('temperature', (array) $request->data()));
+    });
+
     it('separates a safety refusal from an ordinary bad request', function (): void {
         // Both arrive as a 400 from this provider, and they mean opposite things: one
         // warrants trying a different provider, the other warrants stopping.

@@ -5,6 +5,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — The schema stopped being enforced when the tasks moved to OpenAI
+
+A design failed with "Yerleşim planı hazırlanamadı: Geçersiz yanıt biçimi", after six
+attempts, seven minutes and three credits. Every one of the six came back as valid JSON and
+every one was missing `style` and every `max_width_mm`.
+
+The adapter asked OpenAI for `json_object`, which only promises that the braces match. That
+was a reasonable choice while the structured tasks ran on Gemini, because Gemini takes a
+schema and honours it and a second enforcer would have meant two definitions of valid. When
+the tasks moved, the enforcement moved with them and nothing took its place — so the only
+thing holding the shape was the prompt, and retrying an unenforced shape is paying six times
+for the same misunderstanding.
+
+- **The schema goes over with the request.** Not strict: strict mode wants
+  `additionalProperties: false` and every property required on every object, and our schemas
+  are deliberately open — the room reading came back with a label, a photograph index and a
+  confidence per opening that nothing asked for and everything wants. The gateway still
+  validates what arrives, so this is a better instruction rather than a second authority.
+- **The top-level type is filled in.** Most stored schemas have properties and no `type`,
+  because the provider they were written against inferred it; OpenAI refuses the whole call
+  over it. Filled in by the adapter rather than by rewriting immutable prompt versions,
+  because it is a dialect difference and not a change of intent.
+
+The same plan now succeeds on the first attempt.
+
+
 ### Fixed — The room was arranged after the picture was drawn
 
 The product owner put their photograph beside the design made from it and asked why the room

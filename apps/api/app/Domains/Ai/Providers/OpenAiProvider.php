@@ -137,6 +137,46 @@ final class OpenAiProvider implements AiProvider
     }
 
     /**
+     * The same schema, said the way OpenAI needs to hear it.
+     *
+     * Most of the stored schemas have properties and no top-level `type`, because the
+     * provider they were written against inferred it. OpenAI does not: it answers "schema
+     * must be a JSON Schema of 'type: \"object\"', got 'type: \"None\"'" and refuses the
+     * whole call, which reaches a customer as a design that could not be drawn.
+     *
+     * Filled in here rather than rewritten in the prompts, because a prompt version is
+     * immutable and this is a dialect difference rather than a change of intent. Applied
+     * to nested objects too: the same omission is in the same places all the way down.
+     *
+     * @param  array<string, mixed>  $schema
+     * @return array<string, mixed>
+     */
+    private function wellFormed(array $schema): array
+    {
+        if (! isset($schema['type'])) {
+            if (isset($schema['properties'])) {
+                $schema['type'] = 'object';
+            } elseif (isset($schema['items'])) {
+                $schema['type'] = 'array';
+            }
+        }
+
+        if (isset($schema['properties']) && is_array($schema['properties'])) {
+            foreach ($schema['properties'] as $name => $property) {
+                if (is_array($property)) {
+                    $schema['properties'][$name] = $this->wellFormed($property);
+                }
+            }
+        }
+
+        if (isset($schema['items']) && is_array($schema['items'])) {
+            $schema['items'] = $this->wellFormed($schema['items']);
+        }
+
+        return $schema;
+    }
+
+    /**
      * Whether this model still accepts a temperature.
      *
      * The GPT-4 and GPT-3.5 families do. Everything since — the 5s, the 6s, the o-series —
@@ -202,13 +242,40 @@ final class OpenAiProvider implements AiProvider
         }
 
         /*
-         * `json_object` rather than a full schema handoff: the gateway validates the
-         * shape itself, against the same schema whichever provider ran the call. Asking
-         * two providers to enforce it in their own dialects would mean two definitions
-         * of "valid" and a task that passes on one and fails on the other.
+         * The schema itself, not just "answer in JSON".
+         *
+         * This used to send `json_object`, on the reasoning that the gateway validates the
+         * shape anyway and two providers enforcing it in their own dialects would mean two
+         * definitions of valid. That reasoning was sound while the structured tasks ran on
+         * Gemini, which takes a schema and honours it — `json_object` only promises that
+         * the braces match.
+         *
+         * When the tasks moved to OpenAI the enforcement moved with them and nothing took
+         * its place. The first real design plan came back six times — three from Astra,
+         * three from the fallback — each one valid JSON, each one missing `style` and every
+         * `max_width_mm`, and the customer was told "Geçersiz yanıt biçimi. Lütfen tekrar
+         * deneyin" after seven minutes and three credits. Retrying an unenforced shape is
+         * paying six times for the same misunderstanding.
+         *
+         * Not strict. Strict mode demands `additionalProperties: false` and every property
+         * required, on every object in the tree, and our schemas are deliberately open —
+         * the room reading came back with a label, a photo index and a confidence per
+         * opening that nothing asked for and everything wants. The gateway still validates
+         * what arrives, so this is a much better instruction rather than a second authority.
          */
         if ($call->expectsStructuredOutput() && $call->model->supports_structured_output) {
-            $payload['response_format'] = ['type' => 'json_object'];
+            $schema = $call->responseSchema;
+
+            $payload['response_format'] = $schema === null || $schema === []
+                ? ['type' => 'json_object']
+                : [
+                    'type' => 'json_schema',
+                    'json_schema' => [
+                        'name' => str_replace('_', '', $call->task->value),
+                        'schema' => $this->wellFormed($schema),
+                        'strict' => false,
+                    ],
+                ];
         }
 
         $response = $this->client($call)->post('/chat/completions', $payload);
