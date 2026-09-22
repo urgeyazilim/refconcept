@@ -54,10 +54,22 @@ export class GizmoController {
     private readonly scene: Scene,
     private readonly delegate: GizmoDelegate,
   ) {
+    /*
+     * Handles sized for whatever is pointing at them.
+     *
+     * 0.8 and 1.05 are comfortable for a mouse, which lands on a pixel. A fingertip covers
+     * about nine millimetres of glass, so on a phone the arrows sat inside the contact patch
+     * with the sofa and the ring beyond it — tapping either did whichever the raycast reached
+     * first. Half again as large on a coarse pointer, which is what every touch device
+     * reports and no mouse does.
+     */
+    const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
+    const scale = coarse ? 1.5 : 1
+
     this.mover = new TransformControls(delegate.camera(), canvas)
     this.mover.setMode('translate')
     this.mover.setSpace('world')
-    this.mover.setSize(0.8)
+    this.mover.setSize(0.8 * scale)
     // Along the floor only. A handle that could lift a sofa into the air is one somebody
     // pulls by accident.
     this.mover.showY = false
@@ -65,7 +77,7 @@ export class GizmoController {
     this.turner = new TransformControls(delegate.camera(), canvas)
     this.turner.setMode('rotate')
     this.turner.setSpace('world')
-    this.turner.setSize(1.05)
+    this.turner.setSize(1.05 * scale)
     // About the vertical only.
     this.turner.showX = false
     this.turner.showZ = false

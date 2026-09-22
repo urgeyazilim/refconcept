@@ -507,6 +507,17 @@ defineExpose({
             class="absolute -translate-x-1/2 -translate-y-full pb-1 text-[10px] font-medium tracking-wide text-ink-secondary/70 uppercase"
             :style="{ left: `${label.x}px`, top: `${label.y}px` }"
           >{{ label.text }}</span>
+          <!--
+            The angle, while the ring is being turned. Not behind the measurements switch: it
+            is not a measurement of the room, it is a readout of the gesture in progress, and
+            somebody who turned the labels off to look at their room still needs to know what
+            angle they are dragging to.
+          -->
+          <span
+            v-else-if="label.towards === 'angle'"
+            class="absolute -translate-x-1/2 -translate-y-1/2 rounded-pill bg-accent-700 px-2.5 py-1 text-xs font-medium whitespace-nowrap text-white tabular-nums shadow-sm"
+            :style="{ left: `${label.x}px`, top: `${label.y}px` }"
+          >{{ label.text }}</span>
           <span
             v-else-if="showMeasurements"
             class="absolute -translate-x-1/2 -translate-y-1/2 rounded-pill bg-charcoal/85 px-2 py-0.5 text-[11px] whitespace-nowrap text-white tabular-nums"

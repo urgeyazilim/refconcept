@@ -395,7 +395,19 @@ export class RoomEditor {
     }
 
     this.scene.previewItem(item, this.gizmoPreview, this.collisions.stateAt(item, this.items, this.gizmoPreview))
+    this.turning = mode === 'rotate' ? this.gizmoPreview.rotation : null
+    this.publishOverlay()
   }
+
+  /**
+   * The angle the turn handle is holding, while it is held.
+   *
+   * The ring snapped to fifteen degrees and said so nowhere: the only readout was a line of
+   * text in the sidebar, which updates when the handle is let go. So turning a sofa to face
+   * the window was done by eye, released, checked, and done again — and with Shift held to
+   * free the snap there was nothing at all to aim at.
+   */
+  private turning: number | null = null
 
   /** The handle was released: whatever the preview holds becomes the layout. */
   private onGizmoCommit(): void {
@@ -403,6 +415,7 @@ export class RoomEditor {
     const id = this.selectedId
 
     this.gizmoPreview = null
+    this.turning = null
     this.scene.setGuides([])
 
     if (preview === null || id === null) {
@@ -1019,6 +1032,28 @@ export class RoomEditor {
     const selected = this.selectedId === null ? undefined : this.find(this.selectedId)
 
     const labels: OverlayLabel[] = this.wallLabels()
+
+    /*
+     * The angle rides on the piece while the ring is held, and goes away when it is let go.
+     * Put first so it sits under nothing; there are at most four gap labels and they hang off
+     * the edges of the piece, while this one is at its middle.
+     */
+    if (selected !== undefined && this.turning !== null) {
+      const point = this.scene.projectToScreen({
+        x: this.gizmoPreview?.x ?? selected.position_x_mm,
+        z: this.gizmoPreview?.z ?? selected.position_z_mm,
+      })
+
+      if (point !== null) {
+        labels.push({
+          id: `${selected.id}-angle`,
+          x: point.x,
+          y: point.y,
+          text: `${Math.round(this.turning)}°`,
+          towards: 'angle',
+        })
+      }
+    }
 
     if (selected === undefined) {
       this.options.onOverlay(labels)
