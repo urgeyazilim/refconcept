@@ -109,6 +109,45 @@ const sizing = ref(false)
 const helping = ref(false)
 
 /**
+ * What was just taken out of the room, and for how long the offer to put it back stands.
+ *
+ * Not a confirmation dialogue. "Bunu silmek istediğinize emin misiniz?" is asked of every
+ * delete and read on none of them — it trains the hand to press Evet before the eye has
+ * finished reading, which is how the wrong thing gets deleted with permission. An undo
+ * offered afterwards costs nothing when the delete was meant, and is there when it was not.
+ *
+ * Ctrl+Z does the same thing and always has; this is for the customer who does not know that,
+ * which on this screen is most of them.
+ */
+const removed = ref<string | null>(null)
+
+let removedTimer: ReturnType<typeof setTimeout> | null = null
+
+function remove(id: string, name: string): void {
+  editor.value?.remove(id)
+  removed.value = name
+
+  if (removedTimer !== null) {
+    clearTimeout(removedTimer)
+  }
+
+  // Long enough to notice and reach, short enough not to sit over the room.
+  removedTimer = setTimeout(() => {
+    removed.value = null
+  }, 7_000)
+}
+
+function putBack(): void {
+  editor.value?.undo()
+  removed.value = null
+
+  if (removedTimer !== null) {
+    clearTimeout(removedTimer)
+    removedTimer = null
+  }
+}
+
+/**
  * What the hand and the keyboard do, in the order somebody learns them.
  *
  * Grouped by what the person is trying to do rather than by which key it is: "I want to move
@@ -416,7 +455,7 @@ function onKeydown(event: KeyboardEvent): void {
   // The piece's own shortcuts: delete it, copy it, let go of it.
   if (event.key === 'Delete' || event.key === 'Backspace') {
     event.preventDefault()
-    editor.value.remove(id)
+    remove(id, selected.value?.name ?? 'Eşya')
 
     return
   }
@@ -519,6 +558,12 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('keyup', onKeyup)
   window.removeEventListener('blur', onBlur)
+
+  // A timer that fires into a component that has gone writes to a ref nobody is watching.
+  if (removedTimer !== null) {
+    clearTimeout(removedTimer)
+    removedTimer = null
+  }
 
   editor.value?.dispose()
   editor.value = null
@@ -707,6 +752,28 @@ defineExpose({
       </div>
 
       <!--
+        What was just removed, and the way back.
+
+        Above the tool bar rather than over it, because the hand that pressed Sil is still
+        there and a button appearing under a finger is a button pressed by accident.
+      -->
+      <div
+        v-if="removed !== null"
+        class="absolute bottom-16 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-pill bg-charcoal px-3 py-1.5 text-xs whitespace-nowrap text-white shadow-md"
+        role="status"
+      >
+        <span>{{ removed }} odadan çıktı.</span>
+        <!--
+          "Geri getir", not "Geri al": the undo button in the corner is already called that,
+          and two controls with one name is two controls a screen reader cannot tell apart —
+          and a customer, reading quickly, cannot either.
+        -->
+        <button type="button" class="rounded-pill bg-white/15 px-2.5 py-0.5 font-medium transition-colors hover:bg-white/25" @click="putBack">
+          Geri getir
+        </button>
+      </div>
+
+      <!--
         What the hand and the keyboard do, over the room.
 
         Every tool of this kind has one, and it is the difference between a customer who drags
@@ -771,7 +838,7 @@ defineExpose({
         />
         <RoomToolButton icon="focus" label="Buna yakınlaş" hint="Çift tıklamak da yakınlaştırır" @click="editor?.focusSelected()" />
         <span class="mx-0.5 h-4 w-px bg-line" />
-        <RoomToolButton icon="remove" label="Odadan çıkar" keys="Delete" tone="danger" @click="editor?.remove(selected.id)" />
+        <RoomToolButton icon="remove" label="Odadan çıkar" keys="Delete" tone="danger" @click="remove(selected.id, selected.name)" />
       </div>
 
       <!--

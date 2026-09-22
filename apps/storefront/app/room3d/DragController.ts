@@ -165,6 +165,7 @@ export class DragController {
     const { item, dragging, pointerId } = this.pressed
 
     this.pressed = null
+    this.sliding = null
     this.delegate.setOrbitEnabled(true)
     this.delegate.setCursor('')
 
@@ -184,14 +185,20 @@ export class DragController {
     }
 
     /*
-     * One pointer at a time.
+     * One pointer at a time — the one that got here first.
      *
      * A second finger arriving during a pinch used to land on whatever was under it and
      * overwrite the drag: the sofa jumped to the second finger and the zoom died, because the
-     * orbit controls had been switched off for a drag that was no longer the gesture anybody
-     * was making.
+     * orbit controls had been switched off for a gesture nobody was making any more.
+     *
+     * Decided by whether a press is already in hand rather than by `isPrimary`, which was
+     * the first attempt and quietly dropped presses. A mouse is supposed to report itself as
+     * primary and mostly does; a synthetic event, a pen, and a browser that has lost track of
+     * a pointer it never saw released do not, and every one of those is a customer pressing a
+     * sofa and nothing happening. Two fingers are still two pointers whatever either of them
+     * claims, and that is the thing actually worth refusing.
      */
-    if (!event.isPrimary) {
+    if (this.pressed !== null && this.pressed.pointerId !== event.pointerId) {
       return
     }
 
@@ -208,7 +215,21 @@ export class DragController {
     }
 
     const item = this.itemUnder(event)
+
+    /*
+     * Where the piece is, and how far away, before anything is projected.
+     *
+     * The sliding fallback measures from here, and it has to be set before the first
+     * projection of the gesture — which is the one on this very line.
+     */
+    this.sliding = item === undefined ? null : this.anchorOn(item)
+
     const point = item === undefined ? null : this.pointOnPlane(event, item.position_y_mm)
+
+    if (this.sliding !== null) {
+      this.sliding.screenX = event.clientX
+      this.sliding.screenY = event.clientY
+    }
 
     this.pressed = {
       pointerId: event.pointerId,
@@ -239,6 +260,18 @@ export class DragController {
   /** A hover test waiting for the next frame, so a fast pointer asks once rather than forty times. */
   private hoverPending = 0
 
+  /**
+   * Below this, the ray is too flat to trust and the drag slides instead.
+   *
+   * The sine of the angle between the ray and the floor. 0.12 is about seven degrees, which
+   * from eye height is a couple of metres in front of the feet — everything nearer than that
+   * still projects, and everything beyond it would have been the part that teleported.
+   */
+  private static readonly GRAZING = 0.12
+
+  /** Where the sliding drag started, for a gesture the ray cannot answer. */
+  private sliding: { screenX: number, screenY: number, at: Vector3, distance: number } | null = null
+
   private onPointerMove(event: PointerEvent): void {
     if (this.pressed === null) {
       this.scheduleHover(event)
@@ -246,7 +279,7 @@ export class DragController {
       return
     }
 
-    if (!event.isPrimary || event.pointerId !== this.pressed.pointerId) {
+    if (event.pointerId !== this.pressed.pointerId) {
       return
     }
 
@@ -297,6 +330,7 @@ export class DragController {
     const { item, dragging, offsetX, offsetZ } = this.pressed
 
     this.pressed = null
+    this.sliding = null
 
     this.delegate.setOrbitEnabled(true)
     this.delegate.setCursor(this.cursorFor(this.hovered))
@@ -430,12 +464,99 @@ export class DragController {
     return null
   }
 
+  /**
+   * Where the pointer lands on the horizontal plane the piece sits at.
+   *
+   * Straightforward from above, and degenerate from a low one. Standing in the room the ray
+   * runs almost parallel to the floor, so a pointer moved one pixel up walks the intersection
+   * several metres further away, and a pointer above the horizon does not meet the plane at
+   * all — `intersectPlane` returns nothing and the drag simply stops, mid-gesture, with the
+   * piece still held. The customer's sofa either teleports to the far wall or refuses to
+   * move, and both look like the room has broken.
+   *
+   * So below a shallow angle the pointer is not projected at all: the piece is slid by how
+   * far the *pointer* moved across the screen, converted to metres at the piece's own
+   * distance from the camera. It is the same gesture and the same speed under the hand, and
+   * it has no horizon to fall off.
+   */
   private pointOnPlane(event: PointerEvent, heightMm: number): Vector3 | null {
     this.castFrom(event)
 
     this.plane.constant = -toUnits(heightMm)
 
-    return this.raycaster.ray.intersectPlane(this.plane, this.hit)
+    const ray = this.raycaster.ray
+    const steepness = Math.abs(ray.direction.y)
+
+    if (steepness >= DragController.GRAZING) {
+      return ray.intersectPlane(this.plane, this.hit)
+    }
+
+    return this.pointBySliding(event, heightMm)
+  }
+
+  /**
+   * The same point, worked out from the pointer's travel rather than from where its ray lands.
+   *
+   * The screen's two axes are mapped onto the floor: rightwards across the screen is
+   * rightwards across the floor, upwards across the screen is away from the camera. Scaled by
+   * the distance to the piece, so a metre of floor under a piece across the room takes the
+   * same pointer travel as it would if the camera were there — which is what a hand expects.
+   */
+  private pointBySliding(event: PointerEvent, heightMm: number): Vector3 | null {
+    const anchor = this.sliding
+
+    if (anchor === null) {
+      return null
+    }
+
+    const camera = this.delegate.camera()
+    const rect = this.canvas.getBoundingClientRect()
+
+    // Radians per pixel, near enough: the vertical field of view over the canvas height.
+    const fov = 'fov' in camera ? (camera.fov as number) : 50
+    const metresPerPixel = (2 * Math.tan((fov * Math.PI) / 360) * anchor.distance) / Math.max(rect.height, 1)
+
+    const right = new Vector3().setFromMatrixColumn(camera.matrixWorld, 0)
+    right.y = 0
+    right.normalize()
+
+    // Forwards along the floor: the camera's own direction with the tilt taken out.
+    const forward = new Vector3(-right.z, 0, right.x)
+
+    const acrossPx = event.clientX - anchor.screenX
+    const awayPx = anchor.screenY - event.clientY
+
+    this.hit
+      .copy(anchor.at)
+      .addScaledVector(right, acrossPx * metresPerPixel)
+      .addScaledVector(forward, awayPx * metresPerPixel)
+
+    this.hit.y = toUnits(heightMm)
+
+    return this.hit
+  }
+
+  /**
+   * The piece's own position in the scene, and how far the camera is from it.
+   *
+   * Taken from the layout rather than from a raycast, because the whole point of the sliding
+   * fallback is the cases where a raycast has nothing useful to say.
+   */
+  private anchorOn(item: LayoutItem): { screenX: number, screenY: number, at: Vector3, distance: number } {
+    const at = new Vector3(toUnits(item.position_x_mm), toUnits(item.position_y_mm), toUnits(item.position_z_mm))
+
+    const camera = this.delegate.camera()
+    camera.updateMatrixWorld()
+
+    const eye = new Vector3().setFromMatrixPosition(camera.matrixWorld)
+
+    return {
+      screenX: 0,
+      screenY: 0,
+      at,
+      // Never zero: a distance of nothing makes every pointer move worth nothing.
+      distance: Math.max(eye.distanceTo(at), 0.5),
+    }
   }
 
   private castFrom(event: PointerEvent): void {

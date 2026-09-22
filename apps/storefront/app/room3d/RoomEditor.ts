@@ -33,12 +33,19 @@ export interface EditorState {
 }
 
 /** Where a piece stands. The only part of an item a layout edit ever changes. */
-interface Placement {
-  position_x_mm: number
-  position_z_mm: number
-  rotation_y_deg: number
-  locked: boolean
-}
+/**
+ * The room's furniture as it stood, for one step of the history.
+ *
+ * Whole pieces rather than their positions. It used to be a map of id to position, and that
+ * map cannot bring a piece back: undoing rebuilt the list from the pieces that were still
+ * there, so it could put one down again where it came from and could remove one that had
+ * been added — but a delete left nothing behind to restore, and Ctrl+Z on it did nothing at
+ * all, silently, under a tooltip that said Delete was undoable.
+ *
+ * A snapshot is a dozen small objects and the stack holds sixty of them; a room's worth of
+ * furniture is not the thing to be frugal about.
+ */
+type Snapshot = LayoutItem[]
 
 export interface RoomEditorOptions {
   onChange: (state: EditorState) => void
@@ -105,9 +112,9 @@ export class RoomEditor {
    * able to run backwards. The one time that goes wrong it goes wrong silently, days later,
    * on a customer's saved plan.
    */
-  private past: Array<Map<string, Placement>> = []
+  private past: Snapshot[] = []
 
-  private future: Array<Map<string, Placement>> = []
+  private future: Snapshot[] = []
 
   /** Bounded, because a long session is thousands of drags and none of them are precious. */
   private static readonly HISTORY_LIMIT = 60
@@ -976,25 +983,20 @@ export class RoomEditor {
     this.future = []
   }
 
-  private placements(): Map<string, Placement> {
-    return new Map(this.items.map(item => [item.id, {
-      position_x_mm: item.position_x_mm,
-      position_z_mm: item.position_z_mm,
-      rotation_y_deg: item.rotation_y_deg,
-      locked: item.locked,
-    }]))
+  private placements(): Snapshot {
+    // Copied, or the snapshot is the same objects the editor goes on mutating.
+    return this.items.map(item => ({ ...item }))
   }
 
-  private apply(placements: Map<string, Placement>): void {
-    this.items = this.items
-      // A piece that was added after this snapshot is not in it, and undoing an addition is
-      // taking it away again.
-      .filter(item => placements.has(item.id))
-      .map((item) => {
-        const placement = placements.get(item.id)
+  private apply(snapshot: Snapshot): void {
+    this.items = snapshot.map(item => ({ ...item }))
 
-        return placement === undefined ? item : { ...item, ...placement }
-      })
+    // A selection pointing at a piece that is not in this version of the room is not a
+    // selection: the gizmo would attach to nothing and the panel would describe a sofa that
+    // is no longer there.
+    if (this.selectedId !== null && !this.items.some(item => item.id === this.selectedId)) {
+      this.selectedId = null
+    }
 
     this.reevaluate()
     this.schedulePersist()
