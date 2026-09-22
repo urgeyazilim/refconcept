@@ -17,6 +17,17 @@ import { type RoomGeometry, type ViewMode, toUnits } from './types'
  * actually has walking in, which is the one that tells you a room is cramped before any
  * measurement does.
  */
+/** A whole view, for lending the camera out and getting it back unchanged. */
+export interface SavedView {
+  mode: ViewMode
+  position: Vector3
+  target: Vector3
+  planPosition: Vector3
+  planZoom: number
+  yaw: number
+  pitch: number
+}
+
 export class CameraManager {
   private readonly perspective: PerspectiveCamera
 
@@ -251,6 +262,58 @@ export class CameraManager {
     this.controls.enabled = enabled && this.mode !== 'inside'
   }
 
+  /**
+   * The view exactly as it stands, to be handed back exactly.
+   *
+   * The render pipeline borrows the camera: it steps inside the room, takes a colour frame
+   * and a depth map, and puts the view back. "Puts it back" was {@see setMode()}, which
+   * reframes — so the customer lined up the corner they were working on, moved a chair, and a
+   * second later the room swung round to the angle it opens at. Nobody could see why, because
+   * the thing that moved it is a snapshot taken for a model, drawn into a buffer they never
+   * see, on a throttle behind an autosave.
+   *
+   * Everything both cameras hold, because the borrow may cross a mode boundary and a mode is
+   * not enough to put a view back: the same plan view is a different picture at a different
+   * zoom.
+   */
+  takeView(): SavedView {
+    return {
+      mode: this.mode,
+      position: this.perspective.position.clone(),
+      target: this.controls.target.clone(),
+      planPosition: this.orthographic.position.clone(),
+      planZoom: this.orthographic.zoom,
+      yaw: this.walk.yaw,
+      pitch: this.walk.pitch,
+    }
+  }
+
+  /** Puts back a view taken by {@see takeView()}, without a flight and without reframing. */
+  giveBackView(view: SavedView): void {
+    // A flight in progress would keep moving towards wherever it was going.
+    this.flight = null
+
+    this.mode = view.mode
+
+    this.perspective.position.copy(view.position)
+    this.controls.target.copy(view.target)
+    this.perspective.lookAt(view.target)
+
+    this.orthographic.position.copy(view.planPosition)
+    this.orthographic.zoom = view.planZoom
+    this.orthographic.updateProjectionMatrix()
+
+    this.walk.yaw = view.yaw
+    this.walk.pitch = view.pitch
+
+    // Inside, the orbit controls are off and the walk takes the pointer and the keys.
+    this.controls.enabled = this.orbitWanted && view.mode !== 'inside'
+    this.walk.keys.clear()
+    this.walk.looking = null
+
+    this.controls.update()
+  }
+
   setMode(mode: ViewMode): void {
     const previous = this.mode
     this.mode = mode
@@ -476,6 +539,17 @@ export class CameraManager {
 
     this.controls.target.copy(this.target)
     this.controls.update()
+  }
+
+  /**
+   * The room the camera is working in, without moving it.
+   *
+   * {@see frame()} both remembers the room and points the camera at it, and those are two
+   * different things: a rebuilt room of the same size needs the first and must not have the
+   * second. Fitting the view, walking inside and the wall margins all read this.
+   */
+  remember(geometry: RoomGeometry): void {
+    this.geometry = geometry
   }
 
   frame(geometry: RoomGeometry): void {

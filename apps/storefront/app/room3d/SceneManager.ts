@@ -197,9 +197,35 @@ export class SceneManager {
     this.room = this.rooms.build(geometry, openings)
     this.scene.add(this.room)
 
-    this.cameras.frame(geometry)
+    /*
+     * The camera moves for a room of a different size, and for nothing else.
+     *
+     * This used to reframe on every rebuild, and a rebuild is not a rare thing: the room is
+     * rebuilt when a door is dragged, when the page saves and hands the same room back as
+     * fresh objects, and on every frame of an opening drag. So moving a sofa, waiting a
+     * second for the save, and having the view swing back to its opening angle was one
+     * gesture — the customer had lined up the corner they were working on, and the room took
+     * it away from them without being asked.
+     *
+     * A room whose measurements changed is genuinely a different room and worth reframing
+     * for; the same room with a window moved thirty centimetres is not.
+     */
+    const shape = `${geometry.width_mm}x${geometry.length_mm}x${geometry.height_mm}`
+
+    if (shape !== this.framed) {
+      this.framed = shape
+      this.cameras.frame(geometry)
+    }
+    else {
+      // The manager still has to know the room, or fitting and walking measure the old one.
+      this.cameras.remember(geometry)
+    }
+
     this.invalidate()
   }
+
+  /** The room the camera was last framed for, so the same one does not move it again. */
+  private framed: string | null = null
 
   /**
    * Shows the room as the reconstruction measured it, instead of as we drew it.
@@ -594,9 +620,17 @@ export class SceneManager {
       return { inside: '', depth: '' }
     }
 
-    const shown = this.cameras.mode
+    /*
+     * The camera is borrowed, and given back exactly.
+     *
+     * It used to be put back with setMode, which reframes: the customer's own angle went and
+     * the room swung to the one it opens at — a second after they moved a chair, for a
+     * snapshot taken on a throttle behind an autosave and drawn into a buffer they never see.
+     * There was nothing on screen to connect the two.
+     */
+    const view = this.cameras.takeView()
 
-    if (shown !== 'inside') {
+    if (view.mode !== 'inside') {
       this.cameras.setMode('inside')
     }
 
@@ -660,9 +694,7 @@ export class SceneManager {
     this.scene.background = background
     this.renderer.toneMapping = tone
 
-    if (shown !== 'inside') {
-      this.cameras.setMode(shown)
-    }
+    this.cameras.giveBackView(view)
 
     // The customer's own view back in the buffer, so a snapshot taken straight after this
     // one is a picture of the room they were looking at and not a grey one.
