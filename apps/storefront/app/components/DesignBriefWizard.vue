@@ -59,7 +59,14 @@ const styleCode = ref<string | null>(null)
 const paletteCode = ref<string | null>(null)
 const answers = ref<Record<string, string[]>>({})
 const note = ref('')
-const budget = ref<string>(props.budgetMinor === null ? '' : String(Math.round(props.budgetMinor / 100)))
+/**
+ * Empty, or whatever the budget field holds.
+ *
+ * Two types on purpose. `v-model` on an `<input type="number">` hands back the empty string
+ * until somebody types and a number afterwards, so declaring this `string` was a lie the
+ * compiler believed and the browser did not.
+ */
+const budget = ref<string | number>(props.budgetMinor === null ? '' : Math.round(props.budgetMinor / 100))
 
 const loading = ref(true)
 const loadError = ref<string | null>(null)
@@ -253,6 +260,25 @@ function back() {
   emit('cancel')
 }
 
+/**
+ * The budget in kuruş, entered in lira, like every other amount in the system.
+ *
+ * Reading it as text first because the field gives back two different types, and a number
+ * has no `trim` — which is how pressing "Tasarımı başlat" with a budget typed in threw
+ * instead of starting anything. Nothing sensible is treated as no budget rather than as
+ * zero: a customer who typed a stray character meant to leave it to the project, not to
+ * ask for a room furnished for nothing.
+ */
+function chosenBudgetMinor(): number | null {
+  const typed = String(budget.value ?? '').trim()
+
+  if (typed === '') return null
+
+  const lira = Number(typed)
+
+  return Number.isFinite(lira) && lira >= 0 ? Math.round(lira * 100) : null
+}
+
 function submit() {
   if (!programme.value) return
 
@@ -260,8 +286,7 @@ function submit() {
     programme_id: programme.value.id,
     style_code: styleCode.value,
     palette_code: paletteCode.value,
-    // Entered in lira and stored in kuruş, like every other amount in the system.
-    budget_minor: budget.value.trim() === '' ? null : Math.round(Number(budget.value) * 100),
+    budget_minor: chosenBudgetMinor(),
     answers: answers.value,
     note: note.value.trim() === '' ? null : note.value.trim(),
   })
