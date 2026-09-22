@@ -17,6 +17,8 @@ use App\Domains\Finance\Exceptions\SettlementRefused;
 use App\Domains\Fulfilment\Exceptions\FulfilmentRefused;
 use App\Domains\Identity\Console\GrantRoleCommand;
 use App\Domains\Inventory\Console\ReleaseExpiredReservationsCommand;
+use App\Domains\Catalog\Console\ExportCatalogueCommand;
+use App\Domains\Catalog\Console\ImportCatalogueCommand;
 use App\Domains\Matching\Console\EmbedCatalogueCommand;
 use App\Domains\Media\Console\EnsureStorageBucketsCommand;
 use App\Domains\Orders\Exceptions\OrderRefused;
@@ -47,6 +49,8 @@ return Application::configure(basePath: dirname(__DIR__))
         ReleaseExpiredReservationsCommand::class,
         SweepExpiredCreditsCommand::class,
         EmbedCatalogueCommand::class,
+        ExportCatalogueCommand::class,
+        ImportCatalogueCommand::class,
         ExpireCheckoutSessionsCommand::class,
         ExpireBankTransfersCommand::class,
         BuildSettlementsCommand::class,
