@@ -55,3 +55,9 @@ Thumbs.db
 # --- local archives ---
 _archive/
 REFCONCEPT_FULL_SOFTWARE_FACTORY_PACKAGE.zip
+
+# Environment mirrors: a gigabyte of customer photographs, password hashes and encrypted
+# bank details. Written by scripts/export-environment.sh and never committed — see
+# docs/operations/MIRROR_AN_ENVIRONMENT.md.
+/mirror
+/mirror-*
