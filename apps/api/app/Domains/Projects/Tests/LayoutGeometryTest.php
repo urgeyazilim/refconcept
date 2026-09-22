@@ -143,7 +143,7 @@ it('refuses a piece that sticks out through a wall', function (): void {
     expect($states[$sofa->id])->toBe('blocked');
 });
 
-it('refuses a wardrobe standing in the doorway', function (): void {
+it('warns about a wardrobe standing in the doorway', function (): void {
     RoomConstraint::query()->create([
         'room_id' => $this->room->getKey(),
         'type' => 'door',

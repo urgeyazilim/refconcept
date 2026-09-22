@@ -117,17 +117,31 @@ describe('constraintEngine', () => {
     expect(engine().settle(pendant, [sofa, pendant], { x: 9000, z: 2600 })).toEqual({ x: 4450, z: 2600, settled: true })
   })
 
-  it('keeps the floor in front of a door clear', () => {
+  it('leaves a piece where it was put in front of a door', () => {
     const chest = piece('chest', 600, 400, 950, 300, { category: 'komodin' })
 
     /*
-     * Dropped in the door's swing — 900 mm deep from the north wall — it is pushed out of it.
-     * The shortest way out is back through the wall, which is no way out; of the two that
-     * stay in the room, sideways (750 mm) beats deeper into the room (800 mm).
+     * Dropped in the door's swing — 900 mm deep from the north wall — and left there.
+     *
+     * It used to be pushed sideways, and being pushed is what the product owner ran into: an
+     * armchair could not be placed in front of the balcony glass, in a room where the glass
+     * is what you look at from the armchair. It slid away each time and nothing said why.
+     *
+     * The clearance in front of a door is what a designer leaves, not something the world
+     * enforces. {@see CollisionEngine} colours it amber and the panel says so; the room does
+     * not overrule somebody who has a reason.
      */
     const held = engine([door]).settle(chest, [chest], { x: 950, z: 300 })
 
-    expect(held).toEqual({ x: 1400 + 300, z: 300, settled: true })
+    expect(held).toEqual({ x: 950, z: 300, settled: true })
+  })
+
+  it('still refuses a piece pushed through a wall, door or no door', () => {
+    const chest = piece('chest', 600, 400, 950, 300, { category: 'komodin' })
+
+    // A chair in a doorway is a decision; a chest inside the north wall is not a thing that
+    // can be looked at from any angle. Half its depth clear of the wall is where it lands.
+    expect(engine([door]).settle(chest, [chest], { x: 950, z: -400 })).toEqual({ x: 950, z: 200, settled: true })
   })
 
   it('pushes a turned piece out along its own edges', () => {

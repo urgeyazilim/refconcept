@@ -274,7 +274,10 @@ describe('OpenAI adapter', function (): void {
              */
             return ($format['type'] ?? null) === 'json_schema'
                 && ($format['json_schema']['schema']['type'] ?? null) === 'object'
-                && ($format['json_schema']['strict'] ?? null) === false;
+                // The layout plan is one of the tasks that cannot work without its fields,
+                // so the shape is guaranteed rather than asked for; see the strict-mode
+                // tests above for the ones that stay open.
+                && ($format['json_schema']['strict'] ?? null) === true;
         });
     });
 

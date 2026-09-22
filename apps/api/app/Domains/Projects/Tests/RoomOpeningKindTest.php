@@ -108,12 +108,41 @@ it('records which jamb a door hangs on and which way it opens', function (): voi
         ->assertJsonPath('data.openings.0.swing', 'end_out');
 });
 
-it('will not hang a window on a hinge', function (): void {
+it('lets a window say which way it opens', function (): void {
+    /*
+     * A window opens somewhere too.
+     *
+     * It sweeps no floor, so it was never asked — but "can I open this once the sofa is
+     * there" is a question about the room, and a casement swinging inward over a console
+     * table is a window nobody opens.
+     */
     $this->actingAs($this->owner)->postJson("{$this->url}/constraints", [
         'type' => 'window',
         'swing' => 'start_in',
         'wall' => 'north',
         'offset_mm' => 1_000,
         'width_mm' => 1_400,
+    ])->assertCreated()->assertJsonPath('data.swing', 'start_in');
+});
+
+it('lets a window be top-hung and refuses a door that claims to be', function (): void {
+    // A vasistas: hinged along its top edge, no jamb, over a door or behind a counter.
+    $this->actingAs($this->owner)->postJson("{$this->url}/constraints", [
+        'type' => 'window',
+        'swing' => 'top_hung',
+        'wall' => 'north',
+        'offset_mm' => 2_000,
+        'width_mm' => 700,
+        'height_mm' => 500,
+        'sill_height_mm' => 1_800,
+    ])->assertCreated()->assertJsonPath('data.swing', 'top_hung');
+
+    // A doorway with a fanlight over it is two openings, not one door that opens two ways.
+    $this->actingAs($this->owner)->postJson("{$this->url}/constraints", [
+        'type' => 'door',
+        'swing' => 'top_hung',
+        'wall' => 'east',
+        'offset_mm' => 400,
+        'width_mm' => 900,
     ])->assertUnprocessable()->assertJsonValidationErrors(['swing']);
 });
