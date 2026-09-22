@@ -8,6 +8,9 @@ use App\Domains\Administration\Http\Middleware\EnforceAdminPermission;
 use App\Domains\Administration\Http\Middleware\SecurityHeaders;
 use App\Domains\Ai\Console\VerifyAiModelsCommand;
 use App\Domains\Ai\Exceptions\AiJobRefused;
+use App\Domains\Catalog\Console\ExportCatalogueCommand;
+use App\Domains\Catalog\Console\ImportCatalogueCommand;
+use App\Domains\Catalog\Console\SeedDemoCatalogueCommand;
 use App\Domains\Commerce\Exceptions\CartRefused;
 use App\Domains\Credits\Console\SweepExpiredCreditsCommand;
 use App\Domains\Credits\Exceptions\InsufficientCredits;
@@ -17,8 +20,6 @@ use App\Domains\Finance\Exceptions\SettlementRefused;
 use App\Domains\Fulfilment\Exceptions\FulfilmentRefused;
 use App\Domains\Identity\Console\GrantRoleCommand;
 use App\Domains\Inventory\Console\ReleaseExpiredReservationsCommand;
-use App\Domains\Catalog\Console\ExportCatalogueCommand;
-use App\Domains\Catalog\Console\ImportCatalogueCommand;
 use App\Domains\Matching\Console\EmbedCatalogueCommand;
 use App\Domains\Media\Console\EnsureStorageBucketsCommand;
 use App\Domains\Orders\Exceptions\OrderRefused;
@@ -51,6 +52,7 @@ return Application::configure(basePath: dirname(__DIR__))
         EmbedCatalogueCommand::class,
         ExportCatalogueCommand::class,
         ImportCatalogueCommand::class,
+        SeedDemoCatalogueCommand::class,
         ExpireCheckoutSessionsCommand::class,
         ExpireBankTransfersCommand::class,
         BuildSettlementsCommand::class,

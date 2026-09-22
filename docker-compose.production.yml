@@ -100,6 +100,10 @@ x-api-env: &api-env
   # encrypted-credential path and nowhere else.
   OPENAI_API_KEY: ${OPENAI_API_KEY:-}
   GOOGLE_AI_API_KEY: ${GOOGLE_AI_API_KEY:-}
+  # fal.ai: the 3D models and the room scan. Missing here for a while, which is a feature
+  # that is configured, routed, priced — and answers "no credential" the first time anybody
+  # uses it, on a server where nothing in the logs says the variable was never passed through.
+  FAL_API_KEY: ${FAL_API_KEY:-}
 
   # Card gateways are off until their integrations land. Bank transfer is the live method,
   # and turning one of these on before its phase is finished would offer a customer a
