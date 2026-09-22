@@ -19,6 +19,7 @@
  */
 import { formatDistance } from '~/room3d/MeasurementEngine'
 import { type EditorState, type OverlayLabel, RoomEditor } from '~/room3d/RoomEditor'
+import { ICONS, type IconName } from '~/room3d/icons'
 import { OPENING_TYPES, type OpeningKind, type OpeningType, TYPE_LABELS, kindsFor } from '~/room3d/openings'
 import type { DisplayMode, LayoutItem, RoomGeometry, RoomOpening, ViewMode, WallName } from '~/room3d/types'
 
@@ -96,6 +97,62 @@ const paletteOpen = ref(props.openingsOnly)
 
 /** The room's measurements, open for typing over the corner of the scene. */
 const sizing = ref(false)
+
+/**
+ * The shortcut sheet, over the room.
+ *
+ * Every tool of this kind has one and it is the difference between a customer who drags
+ * things about and a customer who is quick: nobody discovers that Shift frees the rotation
+ * snap, or that space gives the gesture to the camera, by trying things. The tooltips teach
+ * one key at a time; this is the whole list, on the key the whole world uses for it.
+ */
+const helping = ref(false)
+
+/**
+ * What the hand and the keyboard do, in the order somebody learns them.
+ *
+ * Grouped by what the person is trying to do rather than by which key it is: "I want to move
+ * something", "I want to look somewhere else". A list sorted by keycap is a reference for
+ * somebody who already knows.
+ */
+const HELP: Array<{ title: string, rows: Array<[string, string]> }> = [
+  {
+    title: 'Eşyalar',
+    rows: [
+      ['Tut ve sürükle', 'Taşır. Duvara ve diğer eşyaya kendi yaslanır'],
+      ['Halkayı çevir', 'Döndürür — 15° adımlarla'],
+      ['Shift + halka', 'İstediğin açıya serbest çevirir'],
+      ['Ok tuşları', '1 cm oynatır'],
+      ['Shift + ok', '10 cm oynatır'],
+      ['R', '90° sağa çevirir'],
+      ['Ctrl + D', 'Bir tane daha koyar, yanına'],
+      ['Delete', 'Odadan çıkarır'],
+      ['Esc', 'Elindekini bırakır, sonra seçimi bırakır'],
+    ],
+  },
+  {
+    title: 'Bakış',
+    rows: [
+      ['Boş yerde sürükle', 'Sahneyi çevirir'],
+      ['Boşluk + sürükle', 'Eşyanın üstünde olsan bile sahneyi çevirir'],
+      ['Tekerlek', 'İmlecin olduğu yere yakınlaşır'],
+      ['+ / −', 'Yakınlaşır, uzaklaşır'],
+      ['1 · 2 · 3', 'Tepeden · dışarıdan · içeride'],
+      ['Çift tık', 'Tıkladığın eşyaya yakınlaşır'],
+      ['W A S D', 'İçerideyken odada yürür'],
+    ],
+  },
+  {
+    title: 'Oda',
+    rows: [
+      ['Soldaki paletten seç', 'Kapı ya da pencere koyar'],
+      ['Kapıyı tut ve sürükle', 'Duvar boyunca kaydırır; başka duvara da geçer'],
+      ['Sağ alttaki ölçüye bas', 'Odanın boyunu buradan değiştirir'],
+      ['Ctrl + Z', 'Geri alır'],
+      ['Ctrl + Shift + Z', 'İleri alır'],
+    ],
+  },
+]
 
 const size = reactive({ width: '', length: '', height: '' })
 
@@ -212,10 +269,17 @@ const state = shallowRef<EditorState>({
 
 const labels = shallowRef<OverlayLabel[]>([])
 
-const views: Array<{ value: ViewMode, label: string }> = [
-  { value: 'top', label: 'Üstten' },
-  { value: 'perspective', label: 'Perspektif' },
-  { value: 'inside', label: 'İçeriden' },
+/**
+ * The three ways of looking at the room, each with a drawing and a number key.
+ *
+ * The hints are not decoration. "Perspektif" and "İçeriden" are both views from inside a
+ * house to anybody who has not used a planner, and which one shows what is exactly the thing
+ * a first-time customer cannot guess.
+ */
+const views: Array<{ value: ViewMode, label: string, icon: IconName, keys: string, hint: string }> = [
+  { value: 'top', label: 'Tepeden', icon: 'top', keys: '1', hint: 'Yerleşimi düzenlemek için en kolayı' },
+  { value: 'perspective', label: 'Dışarıdan', icon: 'perspective', keys: '2', hint: 'Odaya yukarıdan bakış' },
+  { value: 'inside', label: 'İçeride', icon: 'inside', keys: '3', hint: 'Odanın içinde dur; W A S D ile yürü' },
 ]
 
 const selected = computed(() =>
@@ -281,8 +345,36 @@ function onKeydown(event: KeyboardEvent): void {
    * hand is in the middle of, and the selection is not going anywhere.
    */
   if (event.key === 'Escape') {
+    if (helping.value) {
+      helping.value = false
+
+      return
+    }
+
     editor.value.cancelGesture()
     editor.value.select(null)
+
+    return
+  }
+
+  /*
+   * The three views on 1, 2, 3 and the shortcut sheet on ?.
+   *
+   * Numbers because that is where every 3D tool puts them, and because a customer who has
+   * found one has found all three. They belong to the view, so nothing needs selecting.
+   */
+  if (event.key === '1' || event.key === '2' || event.key === '3') {
+    event.preventDefault()
+    // Indexed by the key itself rather than by arithmetic, so the type says what the
+    // three are and a fourth view cannot quietly land nowhere.
+    view.value = ({ 1: 'top', 2: 'perspective', 3: 'inside' } as const)[Number(event.key) as 1 | 2 | 3]
+
+    return
+  }
+
+  if (event.key === '?' || (event.shiftKey && event.key === '/')) {
+    event.preventDefault()
+    helping.value = !helping.value
 
     return
   }
@@ -526,41 +618,60 @@ defineExpose({
         — single, double, three panes, a French balcony, a sliding door. One tap puts it in
         the room; then it is picked up and put on a wall like anything else.
       -->
-      <div v-if="editable" class="absolute top-16 left-4 flex max-h-[calc(100%-5rem)] flex-col gap-1 rounded-md bg-surface/90 p-1 backdrop-blur-sm" role="toolbar" aria-label="Kapı ve pencere ekle">
+      <div v-if="editable" class="absolute top-16 left-4 flex max-h-[calc(100%-9rem)] w-fit flex-col rounded-md bg-surface/95 p-1.5 shadow-sm backdrop-blur-sm" role="toolbar" aria-label="Kapı ve pencere ekle">
         <button
           type="button"
-          class="flex items-center justify-between gap-2 rounded-sm px-1.5 py-1 text-[10px] font-medium text-ink-secondary transition-colors hover:bg-bg-muted"
+          class="flex items-center gap-2 rounded-sm px-1 py-1 text-xs font-medium text-ink-secondary transition-colors hover:bg-bg-muted"
           :aria-expanded="paletteOpen"
           @click="paletteOpen = !paletteOpen"
         >
-          <span class="flex items-center gap-1.5">
-            <svg class="size-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M6 3h12v18H6zM14 12h1" />
-            </svg>
-            Kapı · pencere
-          </span>
-          <span class="text-muted" aria-hidden="true">{{ paletteOpen ? '−' : '+' }}</span>
+          <svg class="size-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path :d="ICONS.openings" />
+          </svg>
+          <span>Kapı · pencere</span>
+          <svg class="ml-auto size-4 shrink-0 text-muted transition-transform" :class="{ 'rotate-180': paletteOpen }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
         </button>
 
-        <template v-if="paletteOpen">
-        <template v-for="group in PALETTE" :key="group.type">
-          <p class="px-1.5 pt-1 text-[9px] font-medium tracking-wide text-muted uppercase">{{ group.label }}</p>
-          <button
-            v-for="kind in group.kinds"
-            :key="`${kind.type}-${kind.variant}`"
-            type="button"
-            class="flex items-center gap-1.5 rounded-sm px-1.5 py-1 text-[10px] text-ink-secondary transition-colors hover:bg-bg-muted"
-            :title="`${kind.label} ${group.label.toLocaleLowerCase('tr-TR')} ekle — sonra tutup duvara sürükle`"
-            :aria-label="`${kind.label} ${group.label.toLocaleLowerCase('tr-TR')}`"
-            @click="emit('addOpening', kind)"
-          >
-            <svg class="size-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path :d="kind.icon" />
-            </svg>
-            {{ kind.label }}
-          </button>
-        </template>
-        </template>
+        <!--
+          A drawing, its name under it, and the size it comes in.
+
+          It was a list of words — "Tek kanat", "Çift kanat", "Üçlü" — three times over, once
+          per group, so the same three words appeared under three headings and the only thing
+          telling a window from a balcony door was which heading it happened to be under. A
+          drawing says which it is without being read, and the size under the name is how
+          somebody chooses between two that look alike.
+
+          Three across, because that is the width of the widest name and a grid that reflows
+          puts the same kind in a different place every time the panel opens.
+        -->
+        <div v-if="paletteOpen" class="mt-1 overflow-y-auto">
+          <template v-for="group in PALETTE" :key="group.type">
+            <p class="px-1 pt-2 pb-1 text-[10px] font-medium tracking-wide text-muted uppercase">{{ group.label }}</p>
+
+            <div class="grid grid-cols-3 gap-0.5">
+              <button
+                v-for="kind in group.kinds"
+                :key="`${kind.type}-${kind.variant}`"
+                type="button"
+                class="flex w-[4.5rem] flex-col items-center gap-1 rounded-sm px-1 py-1.5 text-center text-[10px] leading-tight text-ink-secondary transition-colors hover:bg-bg-muted"
+                :aria-label="`${kind.label} ${group.label.toLocaleLowerCase('tr-TR')} ekle`"
+                @click="emit('addOpening', kind)"
+              >
+                <svg class="size-7 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path :d="kind.icon" />
+                </svg>
+                <span>{{ kind.label }}</span>
+                <span class="text-[9px] text-muted tabular-nums">{{ Math.round(kind.width_mm / 10) }}×{{ Math.round(kind.height_mm / 10) }}</span>
+              </button>
+            </div>
+          </template>
+
+          <p class="max-w-[14rem] px-1 pt-2 text-[10px] leading-snug text-muted">
+            Bas, odaya düşsün. Sonra tutup istediğin duvara sürükle.
+          </p>
+        </div>
       </div>
 
       <!--
@@ -596,6 +707,46 @@ defineExpose({
       </div>
 
       <!--
+        What the hand and the keyboard do, over the room.
+
+        Every tool of this kind has one, and it is the difference between a customer who drags
+        things about and one who is quick: nobody discovers by trying that Shift frees the
+        rotation snap, or that space hands the gesture to the camera. The tooltips teach one
+        key at a time; this is the whole list, on the key the whole world uses for it.
+      -->
+      <div
+        v-if="helping"
+        class="absolute inset-0 z-30 flex items-center justify-center bg-charcoal/40 p-4 backdrop-blur-[2px]"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Kısayollar"
+        @click.self="helping = false"
+      >
+        <div class="max-h-full w-full max-w-3xl overflow-y-auto rounded-md bg-surface p-5 shadow-lg">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-sm font-medium text-ink">Neyi nasıl yaparsın</h2>
+              <p class="mt-0.5 text-xs text-muted">Hepsi isteğe bağlı — her şey fareyle de yapılır.</p>
+            </div>
+
+            <RoomToolButton icon="close" label="Kapat" keys="Esc" side="bottom" @click="helping = false" />
+          </div>
+
+          <div class="mt-4 grid gap-5 sm:grid-cols-3">
+            <section v-for="group in HELP" :key="group.title">
+              <h3 class="text-[10px] font-medium tracking-wide text-muted uppercase">{{ group.title }}</h3>
+              <dl class="mt-2 space-y-1.5">
+                <div v-for="[keys, what] in group.rows" :key="keys" class="text-xs leading-snug">
+                  <dt class="font-medium text-ink">{{ keys }}</dt>
+                  <dd class="text-ink-secondary">{{ what }}</dd>
+                </div>
+              </dl>
+            </section>
+          </div>
+        </div>
+      </div>
+
+      <!--
         The tools for the selected piece, on the room itself, where the hand already is.
         The panel below still explains; this is for doing.
       -->
@@ -605,15 +756,22 @@ defineExpose({
         role="toolbar"
         :aria-label="`${selected.name} için araçlar`"
       >
-        <button type="button" class="rounded-pill px-2.5 py-1.5 text-xs text-ink-secondary hover:bg-bg-muted" title="Sola çevir (90°)" @click="editor?.rotate(selected.id, -90)">⟲</button>
-        <button type="button" class="rounded-pill px-2.5 py-1.5 text-xs text-ink-secondary hover:bg-bg-muted" title="Sağa çevir (90°) · R" @click="editor?.rotate(selected.id, 90)">⟳</button>
+        <RoomToolButton icon="rotateLeft" label="Sola çevir" keys="90°" @click="editor?.rotate(selected.id, -90)" />
+        <RoomToolButton icon="rotateRight" label="Sağa çevir" keys="R" hint="Halkayı Shift ile serbest çevir" @click="editor?.rotate(selected.id, 90)" />
         <span class="mx-0.5 h-4 w-px bg-line" />
-        <button type="button" class="rounded-pill px-2.5 py-1.5 text-xs text-ink-secondary hover:bg-bg-muted" @click="editor?.alignToWall(selected.id)">Duvara hizala</button>
-        <button type="button" class="rounded-pill px-2.5 py-1.5 text-xs text-ink-secondary hover:bg-bg-muted" title="Ctrl+D" @click="editor?.duplicate(selected.id)">Kopyala</button>
-        <button type="button" class="rounded-pill px-2.5 py-1.5 text-xs text-ink-secondary hover:bg-bg-muted" @click="editor?.toggleLock(selected.id)">{{ selected.locked ? 'Kilidi aç' : 'Kilitle' }}</button>
-        <button type="button" class="rounded-pill px-2.5 py-1.5 text-xs text-ink-secondary hover:bg-bg-muted" title="Çift tık da yakınlaştırır" @click="editor?.focusSelected()">Yakınlaş</button>
+        <RoomToolButton icon="alignWall" label="Duvara yasla" hint="En yakın duvara, odaya dönük" @click="editor?.alignToWall(selected.id)" />
+        <RoomToolButton icon="centre" label="Odanın ortasına" @click="editor?.centreInRoom(selected.id)" />
+        <RoomToolButton icon="duplicate" label="Bir tane daha" keys="Ctrl+D" hint="Yanına koyar" @click="editor?.duplicate(selected.id)" />
+        <RoomToolButton
+          :icon="selected.locked ? 'unlock' : 'lock'"
+          :label="selected.locked ? 'Kilidi aç' : 'Kilitle'"
+          :active="selected.locked"
+          hint="Kilitli eşya yerinden oynamaz"
+          @click="editor?.toggleLock(selected.id)"
+        />
+        <RoomToolButton icon="focus" label="Buna yakınlaş" hint="Çift tıklamak da yakınlaştırır" @click="editor?.focusSelected()" />
         <span class="mx-0.5 h-4 w-px bg-line" />
-        <button type="button" class="rounded-pill px-2.5 py-1.5 text-xs text-danger-strong hover:bg-danger-subtle" title="Delete" @click="editor?.remove(selected.id)">Sil</button>
+        <RoomToolButton icon="remove" label="Odadan çıkar" keys="Delete" tone="danger" @click="editor?.remove(selected.id)" />
       </div>
 
       <!--
@@ -623,102 +781,78 @@ defineExpose({
         already holding something. Bottom left, away from the view switcher, because they are
         pressed repeatedly and a button that moves under a repeated press is a misclick.
       -->
-      <div v-if="display === '3d'" class="absolute bottom-4 left-4 flex flex-col gap-1 rounded-pill bg-surface/90 p-1 backdrop-blur-sm">
-        <button
-          type="button"
-          class="size-8 rounded-pill text-base leading-none text-ink-secondary transition-colors hover:bg-bg-muted"
-          title="Yakınlaştır · +"
-          aria-label="Yakınlaştır"
-          @click="editor?.zoom('in')"
-        >+</button>
-        <button
-          type="button"
-          class="size-8 rounded-pill text-base leading-none text-ink-secondary transition-colors hover:bg-bg-muted"
-          title="Uzaklaştır · −"
-          aria-label="Uzaklaştır"
-          @click="editor?.zoom('out')"
-        >−</button>
+      <div v-if="display === '3d'" class="absolute top-1/2 right-4 flex -translate-y-1/2 flex-col gap-1 rounded-pill bg-surface/90 p-1 shadow-sm backdrop-blur-sm">
+        <RoomToolButton icon="zoomIn" label="Yakınlaştır" keys="+" side="top" @click="editor?.zoom('in')" />
+        <RoomToolButton icon="zoomOut" label="Uzaklaştır" keys="−" side="top" @click="editor?.zoom('out')" />
+        <span class="mx-1.5 h-px bg-line" />
+        <RoomToolButton icon="keys" label="Kısayollar" keys="?" side="top" @click="helping = true" />
       </div>
 
       <div class="absolute top-4 right-4 flex gap-1 rounded-pill bg-surface/90 p-1 backdrop-blur-sm">
-        <button
-          type="button"
-          class="rounded-pill px-3 py-1.5 text-xs transition-colors"
-          :class="display === 'plan' ? 'bg-charcoal text-white' : 'text-ink-secondary hover:bg-bg-muted'"
+        <RoomToolButton
+          icon="plan"
+          label="Kuşbakışı plan"
+          hint="Odanın kağıt üstündeki hali"
+          side="bottom"
+          :active="display === 'plan'"
           @click="display = display === 'plan' ? '3d' : 'plan'"
-        >
-          Plan
-        </button>
+        />
 
         <!--
           The room as the photographs measured it, beside the room we drew from a guess. The
           reading said this room was 3.8 by 4.5 metres one time and 4.5 by 5.0 the next; the
           reconstruction settles it, and seeing the two is how anybody would know.
         -->
-        <button
+        <RoomToolButton
           v-if="scanUrl"
-          type="button"
-          class="rounded-pill px-3 py-1.5 text-xs transition-colors"
-          :class="showingScan ? 'bg-charcoal text-white' : 'text-ink-secondary hover:bg-bg-muted'"
+          icon="scan"
+          :label="scanFailed ? 'Tarama açılmadı' : 'Fotoğraftan ölçülen oda'"
+          hint="Çizdiğimiz oda bir tahmin; bu ölçüm"
+          side="bottom"
+          :active="showingScan"
           @click="toggleScan"
-        >
-          {{ scanFailed ? 'Tarama açılmadı' : 'Tarama' }}
-        </button>
+        />
 
         <!--
           Off is for looking at the room rather than at the numbers — and for a screenshot,
           where four labels over a sofa are four labels in the picture.
         -->
-        <button
-          type="button"
-          class="rounded-pill px-3 py-1.5 text-xs transition-colors"
-          :class="showMeasurements ? 'bg-charcoal text-white' : 'text-ink-secondary hover:bg-bg-muted'"
+        <RoomToolButton
+          icon="ruler"
+          label="Ölçüleri göster"
+          hint="Seçili eşyanın çevresindeki boşluklar"
+          side="bottom"
+          :active="showMeasurements"
           @click="showMeasurements = !showMeasurements"
-        >
-          Ölçüler
-        </button>
-        <button
-          type="button"
-          class="rounded-pill px-3 py-1.5 text-xs text-ink-secondary transition-colors hover:bg-bg-muted disabled:opacity-40"
+        />
+        <RoomToolButton
+          icon="fitRoom"
+          label="Odayı sığdır"
+          hint="Kamerayı odanın tamamını görecek yere getirir"
+          side="bottom"
           :disabled="display === 'plan'"
-          title="Kamerayı odaya geri getir"
           @click="editor?.frameRoom()"
-        >
-          Odayı sığdır
-        </button>
+        />
 
         <span class="my-1 w-px bg-line" />
 
-        <button
+        <RoomToolButton
           v-for="option in views"
           :key="option.value"
+          :icon="option.icon"
+          :label="option.label"
+          :keys="option.keys"
+          :hint="option.hint"
+          side="bottom"
+          :active="view === option.value"
           :disabled="display === 'plan'"
-          type="button"
-          class="rounded-pill px-3 py-1.5 text-xs transition-colors disabled:opacity-40"
-          :class="view === option.value ? 'bg-charcoal text-white' : 'text-ink-secondary hover:bg-bg-muted'"
           @click="view = option.value"
-        >
-          {{ option.label }}
-        </button>
+        />
       </div>
 
       <div v-if="editable" class="absolute top-4 left-4 flex gap-1 rounded-pill bg-surface/90 p-1 backdrop-blur-sm">
-        <button
-          type="button"
-          class="rounded-pill px-3 py-1.5 text-xs text-ink-secondary transition-colors hover:bg-bg-muted disabled:opacity-40"
-          :disabled="!state.canUndo"
-          @click="editor?.undo()"
-        >
-          Geri al
-        </button>
-        <button
-          type="button"
-          class="rounded-pill px-3 py-1.5 text-xs text-ink-secondary transition-colors hover:bg-bg-muted disabled:opacity-40"
-          :disabled="!state.canRedo"
-          @click="editor?.redo()"
-        >
-          İleri al
-        </button>
+        <RoomToolButton icon="undo" label="Geri al" keys="Ctrl+Z" side="bottom" :disabled="!state.canUndo" @click="editor?.undo()" />
+        <RoomToolButton icon="redo" label="İleri al" keys="Ctrl+Shift+Z" side="bottom" :disabled="!state.canRedo" @click="editor?.redo()" />
       </div>
 
       <!--
