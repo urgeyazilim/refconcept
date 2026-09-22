@@ -117,17 +117,57 @@ export function describeKind(opening: Pick<RoomOpening, 'type' | 'variant' | 'wi
  * because "left" reverses on two walls out of four. `hingeIsLeft` turns it into what the
  * customer sees from inside the room.
  */
-export type DoorSwing = 'start_in' | 'end_in' | 'start_out' | 'end_out'
+export type DoorSwing = 'start_in' | 'end_in' | 'start_out' | 'end_out' | 'top_hung'
 
 export function swingOf(opening: Pick<RoomOpening, 'swing'>): DoorSwing {
   const swing = opening.swing
 
-  return swing === 'end_in' || swing === 'start_out' || swing === 'end_out' ? swing : 'start_in'
+  return swing === 'end_in' || swing === 'start_out' || swing === 'end_out' || swing === 'top_hung'
+    ? swing
+    : 'start_in'
 }
 
-export const opensIn = (swing: DoorSwing): boolean => swing === 'start_in' || swing === 'end_in'
+export const opensIn = (swing: DoorSwing): boolean => swing === 'start_in' || swing === 'end_in' || swing === 'top_hung'
 
 export const hingeAtStart = (swing: DoorSwing): boolean => swing === 'start_in' || swing === 'start_out'
+
+/** Whether it hangs on a jamb at all: a top-hung sash is hinged along its top edge. */
+export const hasJamb = (swing: DoorSwing): boolean => swing !== 'top_hung'
+
+/**
+ * Which ways an opening of this kind can go, in the order a customer would read them.
+ *
+ * A window can be top-hung — a vasistas, a tilt sash, a fanlight — which has no jamb and
+ * sweeps no floor: it takes the air above whatever is under it, which is why one goes over a
+ * door or behind a kitchen counter where a casement would be in the way. It is the difference
+ * between a window somebody can open with the sofa where it is and one they cannot.
+ *
+ * A door hangs on a jamb. A doorway with a fanlight over it is two openings, not one door
+ * that opens two ways.
+ */
+export function swingsFor(type: OpeningType): Array<{ swing: DoorSwing, label: string }> {
+  if (type === 'window') {
+    return [
+      { swing: 'start_in', label: 'İçeri açılır' },
+      { swing: 'start_out', label: 'Dışarı açılır' },
+      { swing: 'top_hung', label: 'Üstten açılır' },
+    ]
+  }
+
+  return [
+    { swing: 'start_in', label: 'İçeri açılır' },
+    { swing: 'start_out', label: 'Dışarı açılır' },
+  ]
+}
+
+/** The same direction, hung on whichever jamb this one is not on. */
+export function keepingJamb(from: DoorSwing, to: DoorSwing): DoorSwing {
+  if (to === 'top_hung') {
+    return to
+  }
+
+  return hingeAtStart(from) ? to : otherJamb(to)
+}
 
 /**
  * Whether the hinge is on the left as seen from inside the room. Facing the north wall the
@@ -147,11 +187,26 @@ export function otherJamb(swing: DoorSwing): DoorSwing {
 
 /** The swing opening the other way. */
 export function otherWay(swing: DoorSwing): DoorSwing {
+  if (swing === 'top_hung') {
+    return 'start_in'
+  }
+
   return hingeAtStart(swing) ? (opensIn(swing) ? 'start_out' : 'start_in') : (opensIn(swing) ? 'end_out' : 'end_in')
 }
 
 /** Whether the kind swings at all: a sliding door and a window do not. */
 export function hasSwing(opening: Pick<RoomOpening, 'type' | 'variant' | 'width_mm' | 'sill_height_mm'>): boolean {
+  /*
+   * A window opens somewhere too.
+   *
+   * It sweeps no floor, so it never blocked anything and was never asked about — but "can I
+   * open this window once the sofa is there" is a question about the room, and a sealed pane
+   * is the one window where the answer is no whatever is in front of it.
+   */
+  if (opening.type === 'window') {
+    return variantOf(opening) !== 'fixed'
+  }
+
   if (opening.type !== 'door' && opening.type !== 'balcony_door') {
     return false
   }

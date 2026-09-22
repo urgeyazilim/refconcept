@@ -12,7 +12,7 @@
  * sixty requests a second; not on a button either, because a plan somebody spent twenty
  * minutes on and lost to a closed tab is a plan they do not make again.
  */
-import { type DoorSwing, type OpeningKind, describeKind, hasSwing, hingeIsLeft, kindsFor, opensIn, otherJamb, otherWay, swingOf, variantOf } from '~/room3d/openings'
+import { type DoorSwing, type OpeningKind, describeKind, hasJamb, hasSwing, hingeIsLeft, keepingJamb, kindsFor, opensIn, otherJamb, swingOf, swingsFor, variantOf } from '~/room3d/openings'
 import type { LayoutItem, RoomGeometry, RoomOpening, WallName } from '~/room3d/types'
 
 definePageMeta({ middleware: ['auth', 'verified'], layout: 'default', chrome: 'studio' })
@@ -378,6 +378,61 @@ async function rekindOpening(id: string, kind: OpeningKind): Promise<void> {
 }
 
 /** A door hung on the other jamb, or opening the other way. */
+/**
+ * A measurement typed into the opening's own row.
+ *
+ * Until now the only way to change a door's width was to drag its end on the plan, which is
+ * fine for "about here" and useless for "ninety centimetres" — and the customer standing in
+ * the room with a tape measure has the exact number and no box to put it in. Centimetres on
+ * the screen, millimetres on the wire.
+ *
+ * Written straight through, like the swing: it is their own measurement of their own room,
+ * and asking whether they meant it is a dialogue box rather than a question.
+ */
+/**
+ * What a door or window can be, in millimetres, before it is somebody mistyping.
+ *
+ * The API takes anything over a centimetre, which is right for an API and wrong for a box
+ * somebody types into: a test typed seven into a width once and the room kept a seven
+ * centimetre radiator, plausible enough to survive and small enough that nothing would ever
+ * fit beside it. These are the widest and narrowest anything on a wall in a home is.
+ */
+const OPENING_BOUNDS: Record<'width_mm' | 'height_mm' | 'sill_height_mm', { min: number, max: number }> = {
+  width_mm: { min: 200, max: 6_000 },
+  height_mm: { min: 200, max: 3_500 },
+  // A sill of nothing is a doorway, and a window ledge above two and a half metres is a
+  // clerestory nobody is putting a sofa under.
+  sill_height_mm: { min: 0, max: 2_500 },
+}
+
+async function setOpeningSize(id: string, field: 'width_mm' | 'height_mm' | 'sill_height_mm', centimetres: string): Promise<void> {
+  const value = Math.round(Number(centimetres) * 10)
+  const bounds = OPENING_BOUNDS[field]
+
+  if (!Number.isFinite(value) || value < bounds.min || value > bounds.max) {
+    // Put the box back to what the room actually holds, so a refused number does not sit
+    // there looking saved.
+    openings.value = [...openings.value]
+    saveError.value = `Ölçü ${bounds.min / 10}–${bounds.max / 10} cm arasında olmalı.`
+
+    return
+  }
+
+  saveError.value = null
+
+  const previous = openings.value
+
+  openings.value = previous.map(opening => (opening.id === id ? { ...opening, [field]: value } : opening))
+
+  try {
+    await api.patch(`${base}/constraints/${id}`, { [field]: value, notes: 'Sizin düzelttiğiniz.' })
+  }
+  catch (error) {
+    openings.value = previous
+    saveError.value = error instanceof Error ? error.message : 'Ölçü kaydedilemedi.'
+  }
+}
+
 async function setSwing(id: string, swing: DoorSwing): Promise<void> {
   const previous = openings.value
 
@@ -420,6 +475,20 @@ const overwrite = ref(false)
 /** Shown when the customer says the measurements are wrong. Centimetres, like a tape. */
 const correcting = ref(false)
 const correction = reactive({ width: '', length: '', height: '' })
+
+/**
+ * Whether two swings mean the same direction, ignoring which jamb.
+ *
+ * The buttons offer three directions; a swing carries a direction *and* a jamb, so
+ * `start_in` and `end_in` are both "İçeri açılır" and the jamb is a separate question.
+ */
+function sameWay(current: DoorSwing, wanted: DoorSwing): boolean {
+  if (current === 'top_hung' || wanted === 'top_hung') {
+    return current === wanted
+  }
+
+  return opensIn(current) === opensIn(wanted)
+}
 
 const geometry = computed<RoomGeometry | null>(() =>
   confirmed.value === null
@@ -1482,24 +1551,79 @@ onMounted(async () => {
                     {{ kind.label }}
                   </button>
                 </div>
-                <!-- Which jamb it hangs on and which way it opens: the quarter of floor a door needs. -->
+                <!--
+                  The measurements, typed.
+
+                  Dragging an end on the plan is fine for "about here" and useless for "ninety
+                  centimetres" — and somebody standing in the room with a tape measure has the
+                  exact number and had nowhere to put it. A sill of zero is a doorway, so the
+                  third box is only for the things that have one.
+                -->
+                <div class="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-muted">
+                  <label class="flex items-center gap-1">
+                    <span>Genişlik</span>
+                    <input
+                      type="number"
+                      inputmode="numeric"
+                      class="w-14 rounded-sm border border-line bg-surface px-1.5 py-0.5 text-right text-ink tabular-nums"
+                      :value="opening.width_mm === null ? '' : Math.round(opening.width_mm / 10)"
+                      @change="setOpeningSize(opening.id, 'width_mm', ($event.target as HTMLInputElement).value)"
+                    >
+                    <span>cm</span>
+                  </label>
+                  <label class="flex items-center gap-1">
+                    <span>Yükseklik</span>
+                    <input
+                      type="number"
+                      inputmode="numeric"
+                      class="w-14 rounded-sm border border-line bg-surface px-1.5 py-0.5 text-right text-ink tabular-nums"
+                      :value="opening.height_mm === null ? '' : Math.round(opening.height_mm / 10)"
+                      @change="setOpeningSize(opening.id, 'height_mm', ($event.target as HTMLInputElement).value)"
+                    >
+                    <span>cm</span>
+                  </label>
+                  <label v-if="opening.type === 'window'" class="flex items-center gap-1">
+                    <span>Yerden</span>
+                    <input
+                      type="number"
+                      inputmode="numeric"
+                      class="w-14 rounded-sm border border-line bg-surface px-1.5 py-0.5 text-right text-ink tabular-nums"
+                      :value="opening.sill_height_mm === null ? '' : Math.round(opening.sill_height_mm / 10)"
+                      @change="setOpeningSize(opening.id, 'sill_height_mm', ($event.target as HTMLInputElement).value)"
+                    >
+                    <span>cm</span>
+                  </label>
+                </div>
+
+                <!--
+                  Which way it opens, and for a door which jamb it hangs on.
+
+                  For a door this is the quarter of floor nothing may stand on. For a window it
+                  is whether it can be opened once the sofa is there — a casement swinging
+                  inward over a console table is one nobody opens, and a top-hung sash over the
+                  same table is fine.
+                -->
                 <div v-if="hasSwing(opening)" class="mt-1.5 flex flex-wrap gap-1" role="group" :aria-label="`${describeKind(opening)} yönü`">
                   <button
-                    v-if="variantOf(opening) !== 'double_door'"
+                    v-for="way in swingsFor(opening.type as OpeningKind['type'])"
+                    :key="way.swing"
+                    type="button"
+                    class="rounded-pill border px-2 py-0.5 text-[11px] transition-colors"
+                    :class="sameWay(swingOf(opening), way.swing) ? 'border-charcoal bg-charcoal text-white' : 'border-line text-ink-secondary hover:bg-bg-muted'"
+                    :aria-pressed="sameWay(swingOf(opening), way.swing)"
+                    @click="setSwing(opening.id, keepingJamb(swingOf(opening), way.swing))"
+                  >
+                    {{ way.label }}
+                  </button>
+
+                  <button
+                    v-if="hasJamb(swingOf(opening)) && variantOf(opening) !== 'double_door'"
                     type="button"
                     class="rounded-pill border border-line px-2 py-0.5 text-[11px] text-ink-secondary transition-colors hover:bg-bg-muted"
-                    :title="'Menteşeyi öbür tarafa al'"
+                    title="Menteşeyi öbür tarafa al"
                     @click="setSwing(opening.id, otherJamb(swingOf(opening)))"
                   >
                     Menteşe {{ hingeIsLeft(opening.wall, swingOf(opening)) ? 'solda' : 'sağda' }} ⇄
-                  </button>
-                  <button
-                    type="button"
-                    class="rounded-pill border border-line px-2 py-0.5 text-[11px] text-ink-secondary transition-colors hover:bg-bg-muted"
-                    :title="'Öbür yöne açılsın'"
-                    @click="setSwing(opening.id, otherWay(swingOf(opening)))"
-                  >
-                    {{ opensIn(swingOf(opening)) ? 'İçeri açılır' : 'Dışarı açılır' }} ⇄
                   </button>
                 </div>
               </li>

@@ -315,8 +315,14 @@ final class RoomController
             // window and a French-balcony door are not things, and drawing one would be a
             // room the customer does not have.
             'variant' => ['sometimes', 'nullable', Rule::enum(OpeningVariant::class)],
-            // Which jamb a door hangs on and which way it opens. Doors only: a window does
-            // not sweep the floor, and a sliding door sweeps nothing.
+            /*
+             * Which way it opens.
+             *
+             * For a door this is the quarter of floor nothing may stand on. For a window it
+             * is whether the customer can open it with the sofa where it is — a casement
+             * that swings inward over a console table is one nobody opens, and a top-hung
+             * sash over the same table is fine. A sliding door sweeps nothing and takes none.
+             */
             'swing' => ['sometimes', 'nullable', Rule::enum(DoorSwing::class)],
             'label' => ['sometimes', 'nullable', 'string', 'max:160'],
             'wall' => ['sometimes', 'nullable', Rule::in(['north', 'east', 'south', 'west', 'ceiling', 'floor'])],
@@ -340,10 +346,11 @@ final class RoomController
             }
 
             $swing = DoorSwing::tryFrom((string) $request->input('swing', ''));
-            $isDoor = in_array($type, [ConstraintType::Door, ConstraintType::BalconyDoor], true);
 
-            if ($swing !== null && $type !== null && ! $isDoor) {
-                $check->errors()->add('swing', 'Yalnızca bir kapı bir yöne açılır.');
+            // A top-hung sash is a window; a door hangs on a jamb. Neither is a wall or a
+            // ceiling, which have no direction to open in at all.
+            if ($swing !== null && $type !== null && ! in_array($swing, DoorSwing::for($type), true)) {
+                $check->errors()->add('swing', sprintf('%s bir %s için geçerli değil.', ucfirst($swing->label()), mb_strtolower($type->label())));
             }
         });
 
