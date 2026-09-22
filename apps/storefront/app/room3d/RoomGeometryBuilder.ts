@@ -259,7 +259,16 @@ export class RoomGeometryBuilder {
     const inward = name === 'north' || name === 'east' ? 1 : -1
     const innerZ = inward === 1 ? thickness : 0
 
-    mesh.add(...this.skirting(spanMm, openings, inward, innerZ))
+    /*
+     * Spread through a helper, because `add()` with no arguments is an error.
+     *
+     * Three reads its first argument whatever the count, so spreading an empty array reaches
+     * it as `undefined` and it logs "object not an instance of THREE.Object3D". A wall with
+     * an opening nobody has measured produces no fixtures, and a room is rebuilt on every
+     * frame of an opening drag — so the console filled with dozens of copies of a message
+     * about a bug that was not there, and buried the ones that were.
+     */
+    addAll(mesh, this.skirting(spanMm, openings, inward, innerZ))
 
     // The cornice, when the photograph showed one. Unbroken: a doorway stops at the lintel.
     if (geometry.crown_molding === true) {
@@ -267,7 +276,7 @@ export class RoomGeometryBuilder {
     }
 
     for (const opening of openings) {
-      mesh.add(...this.fixture(opening, spanMm, geometry.height_mm, inward, innerZ, thickness))
+      addAll(mesh, this.fixture(opening, spanMm, geometry.height_mm, inward, innerZ, thickness))
     }
 
     this.placeWall(mesh, name, geometry, thickness)
@@ -685,5 +694,20 @@ export class RoomGeometryBuilder {
         mesh.position.set(width + thickness, 0, 0)
         break
     }
+  }
+}
+
+/**
+ * Adds every object in a list, and nothing when the list is empty.
+ *
+ * `Object3D.add()` reads its first argument whatever the count, so spreading an empty array
+ * reaches it as `undefined` and it logs "object not an instance of THREE.Object3D". A wall
+ * with an opening nobody has measured produces no fixtures; a room is rebuilt on every frame
+ * of an opening drag; and the console filled with dozens of copies of a complaint about a bug
+ * that was not there, which is how a real one goes unnoticed.
+ */
+function addAll(parent: Object3D, children: Object3D[]): void {
+  if (children.length > 0) {
+    parent.add(...children)
   }
 }

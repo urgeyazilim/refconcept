@@ -194,6 +194,7 @@ export class FurnitureBuilder {
     const edges = new LineSegments(new EdgesGeometry(geometry), this.edgeMaterial)
     edges.name = 'edges'
     edges.position.y = body.position.y
+    untouchable(edges)
 
     group.add(body, edges)
 
@@ -214,6 +215,7 @@ export class FurnitureBuilder {
     cage.position.y = body.position.y
     cage.visible = false
     cage.renderOrder = 2
+    untouchable(cage)
     group.add(cage)
 
     // Only for what stands on the floor: a picture on the wall casts nothing on it.
@@ -223,6 +225,7 @@ export class FurnitureBuilder {
       shadow.rotation.x = -Math.PI / 2
       shadow.position.y = 0.004
       shadow.renderOrder = 1
+      untouchable(shadow)
       group.add(shadow)
 
       const outline = new PlaneGeometry(toUnits(width), toUnits(depth))
@@ -231,6 +234,7 @@ export class FurnitureBuilder {
       footprint.rotation.x = -Math.PI / 2
       footprint.position.y = 0.006
       footprint.visible = false
+      untouchable(footprint)
       outline.dispose()
       group.add(footprint)
     }
@@ -550,4 +554,22 @@ export class FurnitureBuilder {
 
     return request
   }
+}
+
+/**
+ * Takes an object out of the raycaster's reach.
+ *
+ * Outlines, the footprint rectangle and the contact shadow are drawn for the eye and are not
+ * the piece. Three raycasts them anyway — it does not skip invisible objects, and a
+ * `LineSegments` answers within `Raycaster.params.Line.threshold` of a line, which defaults
+ * to one world unit: a metre, here. So every outline had a metre-thick shell around it, and
+ * pressing on the floor near a bookcase picked up the bookcase, or picked up whichever of two
+ * neighbouring pieces happened to be hit first. Pointing at furniture stopped being something
+ * you could aim.
+ *
+ * Emptying `raycast` is how three itself says "not selectable"; it costs nothing per frame,
+ * where a threshold would still test every line.
+ */
+function untouchable(object: Object3D): void {
+  object.raycast = () => {}
 }

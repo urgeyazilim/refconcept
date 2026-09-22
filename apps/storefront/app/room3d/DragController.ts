@@ -135,6 +135,11 @@ export class DragController {
   }
 
   dispose(): void {
+    if (this.hoverPending !== 0) {
+      cancelAnimationFrame(this.hoverPending)
+      this.hoverPending = 0
+    }
+
     for (const [name, handler] of this.handlers) {
       this.canvas.removeEventListener(name, handler as EventListener)
     }
@@ -231,17 +236,12 @@ export class DragController {
   /** What the resting pointer was last over, so hover is reported on change only. */
   private hovered: string | null = null
 
+  /** A hover test waiting for the next frame, so a fast pointer asks once rather than forty times. */
+  private hoverPending = 0
+
   private onPointerMove(event: PointerEvent): void {
     if (this.pressed === null) {
-      // A resting pointer: say what it is over, once per change. Not while the gizmo has the
-      // gesture — its handles are over the piece and would flicker the hover on and off.
-      const over = this.delegate.gizmoActive() ? this.hovered : (this.itemUnder(event)?.id ?? null)
-
-      if (over !== this.hovered) {
-        this.hovered = over
-        this.delegate.onHover(over)
-        this.delegate.setCursor(this.cursorFor(over))
-      }
+      this.scheduleHover(event)
 
       return
     }
@@ -343,6 +343,37 @@ export class DragController {
     })
 
     this.delegate.onCommit(item.id, { x: snapped.x, z: snapped.z, rotation: snapped.rotation })
+  }
+
+  /**
+   * The piece under the resting pointer, asked for at most once a frame.
+   *
+   * A hover test is a recursive raycast through every mesh of every piece in the room, and a
+   * moved pointer fires forty of them a second — each one walking a product's whole imported
+   * model, triangle by triangle. On a full room that is most of a frame's budget spent
+   * answering a question whose answer cannot change until the next frame is drawn, and it
+   * showed as the room going sticky under a pointer that was only passing over it.
+   */
+  private scheduleHover(event: PointerEvent): void {
+    if (this.hoverPending !== 0) {
+      return
+    }
+
+    const at = { clientX: event.clientX, clientY: event.clientY } as PointerEvent
+
+    this.hoverPending = requestAnimationFrame(() => {
+      this.hoverPending = 0
+
+      // Not while the gizmo has the gesture — its handles are over the piece and would
+      // flicker the hover on and off.
+      const over = this.delegate.gizmoActive() ? this.hovered : (this.itemUnder(at)?.id ?? null)
+
+      if (over !== this.hovered) {
+        this.hovered = over
+        this.delegate.onHover(over)
+        this.delegate.setCursor(this.cursorFor(over))
+      }
+    })
   }
 
   /**
