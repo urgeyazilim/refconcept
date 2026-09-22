@@ -390,8 +390,19 @@ export class SceneManager {
       }
     }
 
-    this.canvas.style.cursor = id === null ? '' : 'grab'
     this.invalidate()
+  }
+
+  /**
+   * What the pointer looks like over the canvas.
+   *
+   * Set by whoever knows what the gesture would do, rather than inferred here from hover
+   * alone. Hover used to be the only input and the cursor said "grab" over everything it
+   * could see, including a piece somebody had locked — which then refused to move, with no
+   * warning until it did not budge.
+   */
+  setCursor(cursor: string): void {
+    this.canvas.style.cursor = cursor
   }
 
   /** Whether a wall is currently drawn, or hidden so the room can be looked into. */

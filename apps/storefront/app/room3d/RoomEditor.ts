@@ -177,6 +177,7 @@ export class RoomEditor {
       setOrbitEnabled: enabled => this.scene.cameras.setOrbitEnabled(enabled),
       onSelect: id => this.select(id),
       onHover: id => this.scene.setHover(id, this.items, this.states, this.selectedId),
+      setCursor: cursor => this.scene.setCursor(cursor),
       onPreview: (id, at, state, guides) => {
         const item = this.find(id)
 
@@ -291,6 +292,23 @@ export class RoomEditor {
   /** Shift held: the turn handle stops snapping to fifteen degrees. */
   setFreeRotation(free: boolean): void {
     this.gizmo.setFreeRotation(free)
+  }
+
+  /**
+   * Space held: the next gesture turns the view, whatever it lands on.
+   *
+   * A piece of furniture used to be a hole in the camera — press anywhere on the sofa and the
+   * view would not turn — and in a room whose whole point is a large sofa in the middle of it,
+   * that is most of the screen. Every 3D tool spells this with the space bar; Alt does the
+   * same thing for a hand already holding one.
+   */
+  wantCamera(wanted: boolean): void {
+    this.drag.wantCamera(wanted)
+  }
+
+  /** Escape: put down whatever is being carried, where it was picked up. */
+  cancelGesture(): void {
+    this.drag.cancel()
   }
 
   // --- editing ---------------------------------------------------------------
@@ -531,18 +549,52 @@ export class RoomEditor {
 
     const placed = againstWall(item, nearest.wall, this.geometry, RoomEditor.WALL_GAP_MM)
 
+    /*
+     * Settled afterwards, like a drag.
+     *
+     * The wall is chosen by distance and nothing else, so "Duvara hizala" on the second
+     * armchair sent it to the wall the first one was already against and left them
+     * overlapping — a button that produces an invalid layout, where dragging the same piece
+     * to the same place would have refused. Every other way of moving a piece goes through
+     * the constraint engine; these two were the exceptions and there was no reason for it.
+     */
+    const held = this.constraints.settle(
+      { ...item, rotation_y_deg: placed.rotation_y_deg },
+      this.items,
+      { x: placed.position_x_mm, z: placed.position_z_mm },
+      { x: item.position_x_mm, z: item.position_z_mm },
+    )
+
     this.edit(id, (moved) => {
-      moved.position_x_mm = placed.position_x_mm
-      moved.position_z_mm = placed.position_z_mm
-      moved.rotation_y_deg = placed.rotation_y_deg
+      moved.position_x_mm = held.x
+      moved.position_z_mm = held.z
+      moved.rotation_y_deg = held.rotation ?? placed.rotation_y_deg
     })
   }
 
   /** Puts a piece in the middle of the room, keeping the way it faces. */
   centreInRoom(id: string): void {
-    this.edit(id, (item) => {
-      item.position_x_mm = Math.round(this.geometry.width_mm / 2)
-      item.position_z_mm = Math.round(this.geometry.length_mm / 2)
+    const item = this.find(id)
+
+    if (item === undefined) {
+      return
+    }
+
+    // Settled, for the same reason {@see alignToWall()} is: the middle of the room is where
+    // the coffee table already is, and two pieces in one place is not a layout.
+    const held = this.constraints.settle(
+      item,
+      this.items,
+      {
+        x: Math.round(this.geometry.width_mm / 2),
+        z: Math.round(this.geometry.length_mm / 2),
+      },
+      { x: item.position_x_mm, z: item.position_z_mm },
+    )
+
+    this.edit(id, (moved) => {
+      moved.position_x_mm = held.x
+      moved.position_z_mm = held.z
     })
   }
 
@@ -560,7 +612,40 @@ export class RoomEditor {
       return null
     }
 
-    const copy: LayoutItem = { ...item, id: crypto.randomUUID(), locked: false }
+    /*
+     * Beside it, which is what this has always said and never did.
+     *
+     * The copy was made at the original's exact position. Both pieces then occupied the same
+     * rectangle, so the new one came up red and stood inside the old one — invisible, because
+     * a sofa hides a sofa — and the customer's "Kopyala" appeared to do nothing at all until
+     * they dragged the first one away and found the second underneath.
+     *
+     * Half a width to the right, then settled like any other move: if that lands in a wall or
+     * on a neighbour the constraint engine slides it to the nearest place it fits, which is a
+     * better answer than anywhere this could guess.
+     */
+    const aside = Math.round((item.width_mm ?? 600) * 0.6) + RoomEditor.WALL_GAP_MM
+
+    const wanted = {
+      x: item.position_x_mm + aside,
+      z: item.position_z_mm,
+    }
+
+    const settled = this.constraints.settle(
+      { ...item, id: 'copy' },
+      this.items,
+      wanted,
+      { x: item.position_x_mm, z: item.position_z_mm },
+    )
+
+    const copy: LayoutItem = {
+      ...item,
+      id: crypto.randomUUID(),
+      locked: false,
+      position_x_mm: settled.x,
+      position_z_mm: settled.z,
+      rotation_y_deg: settled.rotation ?? item.rotation_y_deg,
+    }
 
     this.add(copy)
 
@@ -756,6 +841,18 @@ export class RoomEditor {
   /** Flies back out to the whole room. */
   frameRoom(): void {
     this.scene.cameras.reframe()
+    this.scene.invalidate()
+  }
+
+  /**
+   * A step closer, or a step back.
+   *
+   * For the buttons and the keyboard. Zoom was the wheel and the pinch and nothing else,
+   * which leaves out a trackpad whose scroll the browser has claimed, a stylus, and anybody
+   * working one-handed.
+   */
+  zoom(direction: 'in' | 'out'): void {
+    this.scene.cameras.zoomBy(direction === 'in' ? 1.15 : 1 / 1.15)
     this.scene.invalidate()
   }
 

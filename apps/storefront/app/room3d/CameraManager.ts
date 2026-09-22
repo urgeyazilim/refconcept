@@ -59,6 +59,26 @@ export class CameraManager {
     this.controls.minDistance = 0.6
     this.controls.maxDistance = 40
 
+    /*
+     * The wheel zooms towards whatever is under the pointer, not towards the middle.
+     *
+     * Three.js defaults to the orbit target, which is the centre of the room and stays there
+     * unless somebody pans. So leaning in to look at the corner where the bookcase goes
+     * pushed the corner off the screen and filled the view with the middle of the floor; the
+     * only way in was zoom, pan, zoom, pan. Every planner, map and drawing tool zooms to the
+     * cursor, and hands already expect it.
+     */
+    this.controls.zoomToCursor = true
+
+    /*
+     * A gentler wheel.
+     *
+     * One notch is a factor of 0.95 by default, and a mouse that sends several notches per
+     * flick crosses the whole 0.6-to-40-metre range in one gesture. At 0.6 a flick is about
+     * a third of the distance, which is a movement rather than a jump.
+     */
+    this.controls.zoomSpeed = 0.6
+
     this.listenForWalking(canvas)
   }
 
@@ -82,6 +102,38 @@ export class CameraManager {
     }
 
     return this.controls.update()
+  }
+
+  /**
+   * In or out by one step, for a button or a keyboard.
+   *
+   * Zoom was the wheel and the pinch and nothing else — so a laptop trackpad with no
+   * horizontal-scroll convention, a stylus, and every touch device in `İçeriden` mode had no
+   * way in or out at all. A step is the same fifteen percent a wheel notch gives, applied to
+   * the distance from the target in perspective and to the frustum in plan.
+   */
+  zoomBy(factor: number): void {
+    if (this.mode === 'top') {
+      // An orthographic camera has no distance to the room; it has a window onto it.
+      this.orthographic.zoom = Math.max(0.2, Math.min(12, this.orthographic.zoom * factor))
+      this.orthographic.updateProjectionMatrix()
+      this.controls.update()
+
+      return
+    }
+
+    const target = this.controls.target
+    const offset = this.perspective.position.clone().sub(target)
+    const distance = offset.length()
+
+    if (distance === 0) {
+      return
+    }
+
+    const wanted = Math.max(this.controls.minDistance, Math.min(this.controls.maxDistance, distance / factor))
+
+    this.perspective.position.copy(target).add(offset.multiplyScalar(wanted / distance))
+    this.controls.update()
   }
 
   // --- flights -------------------------------------------------------------------
@@ -121,7 +173,35 @@ export class CameraManager {
    * with that thing somewhere in it.
    */
   focusOn(point: Vector3, distance: number): void {
-    if (this.mode !== 'perspective') {
+    /*
+     * In the plan view there is no direction to come in from — the camera is straight above
+     * and the way to look closer is to narrow the window and slide it over the piece.
+     */
+    if (this.mode === 'top') {
+      this.controls.target.set(point.x, this.controls.target.y, point.z)
+      this.orthographic.position.set(point.x, this.orthographic.position.y, point.z)
+      this.orthographic.zoom = Math.max(0.2, Math.min(12, 3 / Math.max(distance, 0.5)))
+      this.orthographic.updateProjectionMatrix()
+      this.controls.update()
+
+      return
+    }
+
+    /*
+     * Standing in the room, "look closer" means turning to face the piece rather than flying
+     * at it. Until now this returned silently outside the perspective view, so the button
+     * stayed enabled, did nothing, and gave no reason.
+     */
+    if (this.mode === 'inside') {
+      this.perspective.lookAt(point)
+      this.walk.yaw = Math.atan2(
+        this.perspective.position.x - point.x,
+        this.perspective.position.z - point.z,
+      ) + Math.PI
+      this.walk.pitch = Math.asin(
+        Math.max(-1, Math.min(1, (point.y - this.perspective.position.y) / Math.max(this.perspective.position.distanceTo(point), 0.001))),
+      )
+
       return
     }
 
@@ -343,7 +423,25 @@ export class CameraManager {
    */
   /** Flies back to the whole room, from wherever the customer has orbited to. */
   reframe(): void {
-    if (this.geometry === null || this.mode !== 'perspective') {
+    if (this.geometry === null) {
+      return
+    }
+
+    /*
+     * Only the perspective view flies.
+     *
+     * From above there is nowhere to fly from — the camera is already straight down and
+     * framing the room is the window going back to the size of the floor. Standing inside it,
+     * a flight would walk the customer through their own furniture; the honest answer is to
+     * put them back where the view starts, in the corner, facing in.
+     *
+     * The button used to be disabled in both, which read as a view that could not be
+     * recovered once it had been lost.
+     */
+    if (this.mode !== 'perspective') {
+      this.frame(this.geometry)
+      this.controls.update()
+
       return
     }
 

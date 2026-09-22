@@ -197,6 +197,25 @@ export class FurnitureBuilder {
 
     group.add(body, edges)
 
+    /*
+     * The selection cage, at the piece's full height.
+     *
+     * `edges` used to be the whole of it, and it works right up until the product's own
+     * photograph or model arrives: {@see flatten()} then shrinks the box to a slab at floor
+     * level so the real shape can stand in its place. The outline shrinks with it, and a
+     * dressed sofa shows nothing at all when selected — no tint, no outline, nothing but a
+     * line around a pad hidden under its own feet. The customer clicks a sofa, the sidebar
+     * fills in, and the room looks exactly as it did.
+     *
+     * So the cage is its own object at its own size, and nothing flattens it.
+     */
+    const cage = new LineSegments(new EdgesGeometry(geometry), this.selectedEdgeMaterial)
+    cage.name = 'cage'
+    cage.position.y = body.position.y
+    cage.visible = false
+    cage.renderOrder = 2
+    group.add(cage)
+
     // Only for what stands on the floor: a picture on the wall casts nothing on it.
     if (measured && item.position_y_mm === 0) {
       const shadow = new Mesh(new PlaneGeometry(toUnits(width) * 1.25, toUnits(depth) * 1.25), this.contactShadowMaterial)
@@ -267,6 +286,7 @@ export class FurnitureBuilder {
     const body = group.getObjectByName('body')
     const edges = group.getObjectByName('edges')
     const footprint = group.getObjectByName('footprint')
+    const cage = group.getObjectByName('cage')
 
     if (body instanceof Mesh) {
       body.material = isMeasured(item) ? this.materials[state] : this.materials.placeholder
@@ -280,6 +300,19 @@ export class FurnitureBuilder {
     // up, which the piece itself — a sofa with arms, a lamp on a stem — does not.
     if (footprint !== undefined) {
       footprint.visible = selected || hovered
+    }
+
+    /*
+     * The cage says which piece, where the footprint says how much floor. Both, because
+     * neither is enough on its own: a floor rectangle under a tall bookcase is easy to miss
+     * from across the room, and a cage around a rug is a flat line.
+     *
+     * Shown for a hover as well as a selection, in the quieter colour, so a dressed piece
+     * finally answers the pointer resting on it.
+     */
+    if (cage instanceof LineSegments) {
+      cage.visible = selected || hovered
+      cage.material = selected ? this.selectedEdgeMaterial : this.hoverEdgeMaterial
     }
   }
 

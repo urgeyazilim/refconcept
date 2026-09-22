@@ -208,6 +208,48 @@ function onKeydown(event: KeyboardEvent): void {
     return
   }
 
+  /*
+   * Space: the view takes the gesture, whatever it lands on.
+   *
+   * Held rather than pressed, like every other 3D tool. Without it a piece of furniture is a
+   * hole in the camera — press anywhere on the sofa and the view will not turn — and in a
+   * room whose whole point is a large sofa in the middle of it, that is most of the screen.
+   * The default has to go too, or the page scrolls underneath.
+   */
+  if (event.code === 'Space') {
+    event.preventDefault()
+    editor.value.wantCamera(true)
+
+    return
+  }
+
+  /*
+   * Escape: put down whatever is being carried, where it was picked up; then, on a second
+   * press, let go of the selection. In that order — a half-finished drag is the thing the
+   * hand is in the middle of, and the selection is not going anywhere.
+   */
+  if (event.key === 'Escape') {
+    editor.value.cancelGesture()
+    editor.value.select(null)
+
+    return
+  }
+
+  // Zoom belongs to the view, so it works with nothing selected — as does undo, below.
+  if (event.key === '+' || event.key === '=') {
+    event.preventDefault()
+    editor.value.zoom('in')
+
+    return
+  }
+
+  if (event.key === '-' || event.key === '_') {
+    event.preventDefault()
+    editor.value.zoom('out')
+
+    return
+  }
+
   // Undo works with nothing selected; everything else needs something to act on.
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
     event.preventDefault()
@@ -238,12 +280,6 @@ function onKeydown(event: KeyboardEvent): void {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'd') {
     event.preventDefault()
     editor.value.duplicate(id)
-
-    return
-  }
-
-  if (event.key === 'Escape') {
-    editor.value.select(null)
 
     return
   }
@@ -284,6 +320,22 @@ function onKeyup(event: KeyboardEvent): void {
   if (event.key === 'Shift') {
     editor.value?.setFreeRotation(false)
   }
+
+  if (event.code === 'Space') {
+    editor.value?.wantCamera(false)
+  }
+}
+
+/**
+ * The window lost focus with a key held down.
+ *
+ * Alt-tabbing away while holding space and coming back leaves the editor believing the space
+ * bar is still down: every press then turns the camera and nothing can be picked up, with no
+ * way to find out why short of pressing and releasing space again.
+ */
+function onBlur(): void {
+  editor.value?.wantCamera(false)
+  editor.value?.setFreeRotation(false)
 }
 
 
@@ -316,11 +368,13 @@ onMounted(() => {
 
   window.addEventListener('keydown', onKeydown)
   window.addEventListener('keyup', onKeyup)
+  window.addEventListener('blur', onBlur)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('keyup', onKeyup)
+  window.removeEventListener('blur', onBlur)
 
   editor.value?.dispose()
   editor.value = null
@@ -397,7 +451,7 @@ defineExpose({
         -->
         <template v-if="openingsOnly">Soldaki simgelerden kapı ya da pencere seç, sonra odada tutup duvara sürükle.</template>
         <template v-else-if="state.items.length === 0">Odan boş. {{ workspace ? 'Sağdan' : 'Aşağıdan' }} ürün ekle ya da "Tasarıma göre yerleştir" de; kapıyı ve pencereyi tutup duvara sürükleyebilirsin.</template>
-        <template v-else>Bir ürüne tıkla: oklarla taşı, halkayla döndür. Kapı ve pencereyi tutup duvara sürükle.</template>
+        <template v-else>Ürünü tutup sürükle, halkayla döndür. Sahneyi çevirmek için <kbd class="rounded-xs bg-bg-muted px-1 font-sans">boşluk</kbd> basılı tut. Tekerlek yakınlaştırır.</template>
       </p>
 
       <!-- Padded below the toolbars, which float over the top corners of the box. -->
@@ -482,6 +536,30 @@ defineExpose({
         <button type="button" class="rounded-pill px-2.5 py-1.5 text-xs text-danger-strong hover:bg-danger-subtle" title="Delete" @click="editor?.remove(selected.id)">Sil</button>
       </div>
 
+      <!--
+        Zoom, as two buttons.
+        The wheel and the pinch still work and are what most people will use; these are for
+        the trackpad whose scroll the browser has taken, the stylus, and the hand that is
+        already holding something. Bottom left, away from the view switcher, because they are
+        pressed repeatedly and a button that moves under a repeated press is a misclick.
+      -->
+      <div v-if="display === '3d'" class="absolute bottom-4 left-4 flex flex-col gap-1 rounded-pill bg-surface/90 p-1 backdrop-blur-sm">
+        <button
+          type="button"
+          class="size-8 rounded-pill text-base leading-none text-ink-secondary transition-colors hover:bg-bg-muted"
+          title="Yakınlaştır · +"
+          aria-label="Yakınlaştır"
+          @click="editor?.zoom('in')"
+        >+</button>
+        <button
+          type="button"
+          class="size-8 rounded-pill text-base leading-none text-ink-secondary transition-colors hover:bg-bg-muted"
+          title="Uzaklaştır · −"
+          aria-label="Uzaklaştır"
+          @click="editor?.zoom('out')"
+        >−</button>
+      </div>
+
       <div class="absolute top-4 right-4 flex gap-1 rounded-pill bg-surface/90 p-1 backdrop-blur-sm">
         <button
           type="button"
@@ -522,7 +600,7 @@ defineExpose({
         <button
           type="button"
           class="rounded-pill px-3 py-1.5 text-xs text-ink-secondary transition-colors hover:bg-bg-muted disabled:opacity-40"
-          :disabled="display === 'plan' || view !== 'perspective'"
+          :disabled="display === 'plan'"
           title="Kamerayı odaya geri getir"
           @click="editor?.frameRoom()"
         >

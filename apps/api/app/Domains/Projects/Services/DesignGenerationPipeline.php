@@ -334,7 +334,7 @@ final class DesignGenerationPipeline
             'design_version_id' => $version->getKey(),
             'ai_job_id' => $ran->getKey(),
             'room_analysis_id' => $analysis->getKey(),
-            'style' => $this->stringOrNull($structured['style'] ?? null),
+            'style' => $this->fitted($structured['style'] ?? null, 200),
             'palette' => is_array($structured['palette'] ?? null) ? $structured['palette'] : null,
             /*
              * The room-level design decisions, kept because the renderer reads them.
@@ -1543,6 +1543,33 @@ final class DesignGenerationPipeline
     private function elapsed(float $startedAt): int
     {
         return (int) round((microtime(true) - $startedAt) * 1000);
+    }
+
+    /**
+     * A string the column will take, or nothing.
+     *
+     * The plan's style used to be a word from a list — "modern", "iskandinav" — and the
+     * column was sixty characters wide because that was generous for a word. The engine
+     * that plans rooms now answers in prose: "Modern ve çağdaş; açık gri, sıcak meşe ve
+     * kontrollü mat siyah vurgular", sixty-nine characters, and Postgres refused the insert.
+     * The whole plan went with it — ninety seconds, eleven placements, every width right —
+     * and the customer was told "Görsel üretilemedi: beklenmeyen bir hata."
+     *
+     * The column is text now, so this is no longer what stands between a good plan and the
+     * table. It stays because a column with no limit is an invitation for a model having a
+     * bad day to write an essay into a field a screen shows on one line, and because the
+     * front of a long style is still a style — unlike a measurement quality, where the first
+     * twenty characters of a sentence is a category nobody can look up.
+     */
+    private function fitted(mixed $value, int $limit): ?string
+    {
+        $text = $this->stringOrNull($value);
+
+        if ($text === null) {
+            return null;
+        }
+
+        return mb_strlen($text) <= $limit ? $text : rtrim(mb_substr($text, 0, $limit));
     }
 
     private function stringOrNull(mixed $value): ?string
