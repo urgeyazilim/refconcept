@@ -23,6 +23,8 @@ export interface OpeningDragDelegate {
   onHover: (id: string | null) => void
   /** What the pointer should look like; an empty string hands it back to whoever else is asking. */
   setCursor: (cursor: string) => void
+  /** A press landed on this opening, or on nothing. */
+  onSelect: (id: string | null) => void
 }
 
 /**
@@ -101,6 +103,16 @@ export class OpeningDragController {
     if (opening === undefined || opening.wall === null || opening.offset_mm === null || opening.width_mm === null) {
       return
     }
+
+    /*
+     * Picked as well as picked up.
+     *
+     * A door could be dragged and nothing else: its kind, its measurements and which way it
+     * opens all lived in a list down the side of the page, and the customer had to find the
+     * right row among five to change the thing they were pointing at. Pressing it now says
+     * which one they mean, and the panel comes to the door rather than the other way round.
+     */
+    this.delegate.onSelect(opening.id)
 
     this.dragging = { opening, wall: opening.wall, offsetMm: opening.offset_mm, moved: false }
 

@@ -1448,6 +1448,10 @@ onMounted(async () => {
         @resize-opening="resizeOpening"
         @resize-room="resizeRoom"
         @turn-compass="turnCompass"
+        @remove-opening="removeOpening"
+        @rekind-opening="rekindOpening"
+        @swing-opening="setSwing"
+        @size-opening="setOpeningSize"
       >
         <!--
           The end of the module, under the room's own list and its total: the basket. A plan is

@@ -29,11 +29,32 @@ export interface EditorState {
   items: LayoutItem[]
   states: Map<string, CollisionState>
   selectedId: string | null
+  /** The door or window the customer last pressed, if any. */
+  selectedOpeningId: string | null
   measurements: Measurement[]
   canUndo: boolean
   canRedo: boolean
   /** True between a change and the moment it has been written to the server. */
   unsaved: boolean
+}
+
+/**
+ * Where on screen a panel about something in the room should sit.
+ *
+ * The controls for a door lived in a list down the side of the page, so changing the thing
+ * you were pointing at meant finding the right row among five — all of them called
+ * "radiator · güney duvarı" or "Tek kanat pencere". The panel comes to the object now, and
+ * this is how it knows where that is: recomputed after every drawn frame, so it stays on the
+ * door while the camera turns.
+ *
+ * Null when nothing is selected, or when what is selected is behind the camera. A panel
+ * pointing at something nobody can see is worse than no panel.
+ */
+export interface Anchor {
+  kind: 'item' | 'opening'
+  id: string
+  x: number
+  y: number
 }
 
 /** Where a piece stands. The only part of an item a layout edit ever changes. */
@@ -54,6 +75,8 @@ type Snapshot = LayoutItem[]
 export interface RoomEditorOptions {
   onChange: (state: EditorState) => void
   onOverlay: (labels: OverlayLabel[]) => void
+  /** Where the panel for the selected thing should sit, or null when there is nothing to put it on. */
+  onAnchor?: (anchor: Anchor | null) => void
   /** Called after edits have settled. Absent in read-only contexts. */
   onPersist?: (items: LayoutItem[]) => void
   /** A door or window was dragged and let go on a wall. Absent in read-only contexts. */
@@ -178,6 +201,17 @@ export class RoomEditor {
             options.onMoveOpening?.(id, offsetMm, wall)
           },
           onCancel: () => this.scene.rebuildRoom(this.openings),
+          onSelect: (id) => {
+            this.selectedOpeningId = id
+
+            // One selection at a time: a door's panel and a sofa's panel would sit on top of
+            // each other, and both would claim the toolbar.
+            if (id !== null) {
+              this.select(null)
+            }
+
+            this.publish()
+          },
           onHover: id => this.scene.setOpeningHover(id),
           setCursor: cursor => this.scene.setCursor(cursor),
         })
@@ -188,7 +222,16 @@ export class RoomEditor {
       pickable: () => this.scene.pickable(),
       camera: () => this.scene.cameras.active,
       setOrbitEnabled: enabled => this.scene.cameras.setOrbitEnabled(enabled),
-      onSelect: id => this.select(id),
+      onSelect: (id) => {
+        /*
+         * A press on the floor lets go of the door as well as of the sofa.
+         *
+         * Two selections mean two panels, and a press on empty floor used to close only one
+         * of them: the door's panel stayed open over a door nobody was pointing at any more.
+         */
+        this.selectedOpeningId = null
+        this.select(id)
+      },
       onHover: id => this.scene.setHover(id, this.items, this.states, this.selectedId),
       setCursor: cursor => this.scene.setCursor(cursor),
       onPreview: (id, at, state, guides) => {
@@ -335,6 +378,26 @@ export class RoomEditor {
    */
   wantCamera(wanted: boolean): void {
     this.drag.wantCamera(wanted)
+  }
+
+  /** Which door or window the customer last pressed, if any. */
+  private selectedOpeningId: string | null = null
+
+  /**
+   * The opening the panel is for, and where it is on screen.
+   *
+   * Published with the measurements every frame, so a panel anchored to a door stays on the
+   * door while the camera turns. Null when nothing is selected, or when the door is behind
+   * the camera — a panel pointing at something nobody can see is worse than no panel.
+   */
+  selectOpening(id: string | null): void {
+    this.selectedOpeningId = id
+
+    if (id !== null) {
+      this.select(null)
+    }
+
+    this.publish()
   }
 
   /** Escape: put down whatever is being carried, where it was picked up. */
@@ -1039,6 +1102,7 @@ export class RoomEditor {
       items: this.items,
       states: this.states,
       selectedId: this.selectedId,
+      selectedOpeningId: this.selectedOpeningId,
       measurements: selected === undefined ? [] : this.measurements.measure(selected, this.items),
       canUndo: this.past.length > 0,
       canRedo: this.future.length > 0,
@@ -1081,8 +1145,17 @@ export class RoomEditor {
       }
     }
 
+    /*
+     * The anchor goes out whether or not a piece is selected.
+     *
+     * This used to return here, and a door's panel is anchored with nothing selected — the
+     * two selections are exclusive, so choosing a door clears the furniture one. So pressing
+     * a door found the door, set the selection and published everything except the one thing
+     * the panel needed to appear, and nothing happened at all.
+     */
     if (selected === undefined) {
       this.options.onOverlay(labels)
+      this.options.onAnchor?.(this.anchor())
 
       return
     }
@@ -1109,6 +1182,66 @@ export class RoomEditor {
     }
 
     this.options.onOverlay(labels)
+    this.options.onAnchor?.(this.anchor())
+  }
+
+  /**
+   * Where the panel goes: over the selected door, or over the selected piece.
+   *
+   * A door is anchored at the middle of its opening rather than at its centre of mass — the
+   * panel then sits over the glass, which is the thing being pointed at — and a piece at its
+   * own middle, a little above the floor so a low rug still gets a panel that is not on it.
+   */
+  private anchor(): Anchor | null {
+    const opening = this.selectedOpeningId === null
+      ? undefined
+      : this.openings.find(entry => entry.id === this.selectedOpeningId)
+
+    if (opening !== undefined) {
+      const at = this.middleOf(opening)
+      const point = at === null ? null : this.scene.projectToScreen(at)
+
+      return point === null ? null : { kind: 'opening', id: opening.id, x: point.x, y: point.y }
+    }
+
+    const item = this.selectedId === null ? undefined : this.find(this.selectedId)
+
+    if (item === undefined) {
+      return null
+    }
+
+    const point = this.scene.projectToScreen({
+      x: item.position_x_mm,
+      y: item.position_y_mm + (item.height_mm ?? 600),
+      z: item.position_z_mm,
+    })
+
+    return point === null ? null : { kind: 'item', id: item.id, x: point.x, y: point.y }
+  }
+
+  /** The middle of an opening, in the room's own millimetres. Null for one with no position. */
+  private middleOf(opening: RoomOpening): { x: number, y: number, z: number } | null {
+    const { wall, offset_mm: offset, width_mm: width } = opening
+
+    if (wall === null || offset === null || width === null) {
+      return null
+    }
+
+    const along = offset + width / 2
+    const y = (opening.sill_height_mm ?? 0) + (opening.height_mm ?? 2_000) / 2
+
+    switch (wall) {
+      case 'north':
+        return { x: along, y, z: 0 }
+      case 'south':
+        return { x: along, y, z: this.geometry.length_mm }
+      case 'west':
+        return { x: 0, y, z: along }
+      case 'east':
+        return { x: this.geometry.width_mm, y, z: along }
+      default:
+        return null
+    }
   }
 
   /**

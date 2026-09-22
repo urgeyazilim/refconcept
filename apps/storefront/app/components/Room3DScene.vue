@@ -18,9 +18,9 @@
  * back. The plan has no perspective, so two gaps that measure the same look the same.
  */
 import { formatDistance } from '~/room3d/MeasurementEngine'
-import { type EditorState, type OverlayLabel, RoomEditor } from '~/room3d/RoomEditor'
+import { type Anchor, type EditorState, type OverlayLabel, RoomEditor } from '~/room3d/RoomEditor'
 import { ICONS, type IconName } from '~/room3d/icons'
-import { OPENING_TYPES, type OpeningKind, type OpeningType, TYPE_LABELS, kindsFor } from '~/room3d/openings'
+import { OPENING_TYPES, type DoorSwing, type OpeningKind, type OpeningType, TYPE_LABELS, kindsFor } from '~/room3d/openings'
 import type { DisplayMode, LayoutItem, RoomGeometry, RoomOpening, ViewMode, WallName } from '~/room3d/types'
 
 const props = withDefaults(defineProps<{
@@ -91,6 +91,11 @@ const emit = defineEmits<{
   resizeOpening: [id: string, offsetMm: number, widthMm: number]
   /** The customer said which of the drawn walls faces north. */
   turnCompass: [wall: WallName]
+  /** A door or window was pressed in the room and its panel wants to change it. */
+  removeOpening: [id: string]
+  rekindOpening: [id: string, kind: OpeningKind]
+  swingOpening: [id: string, swing: DoorSwing]
+  sizeOpening: [id: string, field: 'width_mm' | 'height_mm' | 'sill_height_mm', centimetres: string]
   /** The room's own measurements, typed into the corner of the scene. */
   resizeRoom: [widthMm: number, lengthMm: number, heightMm: number]
 }>()
@@ -109,8 +114,47 @@ const paletteOpen = ref(props.openingsOnly)
 /** The room's measurements, open for typing over the corner of the scene. */
 const sizing = ref(false)
 
+/**
+ * Double-clicking the room.
+ *
+ * On a piece it comes in closer, which it always did. On the floor it opens the room's own
+ * measurements — the product owner asked to change the width and depth by pressing the room
+ * itself, and pressing the floor is pressing the room. Reframing the camera was what it used
+ * to do there, which is a thing nobody double-clicks empty floor to ask for.
+ */
+function onDoubleClick(): void {
+  if (state.value.selectedId !== null) {
+    editor.value?.focusSelected()
+
+    return
+  }
+
+  if (props.editable) {
+    openSizing()
+  }
+}
+
 /** Whether the compass is open for correcting. */
 const turningCompass = ref(false)
+
+/**
+ * Where the panel for the selected thing sits, in canvas pixels.
+ *
+ * Recomputed after every drawn frame by the editor, so a panel anchored to a door stays on
+ * the door while the camera turns.
+ */
+const anchor = ref<Anchor | null>(null)
+
+/** The opening the panel is about, looked up fresh so an edit shows in it immediately. */
+const openingPanel = computed(() => {
+  if (anchor.value === null || anchor.value.kind !== 'opening') {
+    return null
+  }
+
+  const opening = props.openings.find(entry => entry.id === anchor.value?.id)
+
+  return opening === undefined ? null : { opening, at: anchor.value }
+})
 
 /**
  * The four walls as the scene draws them, named as the scene draws them.
@@ -328,6 +372,7 @@ const state = shallowRef<EditorState>({
   items: [],
   states: new Map(),
   selectedId: null,
+  selectedOpeningId: null,
   measurements: [],
   canUndo: false,
   canRedo: false,
@@ -419,6 +464,10 @@ function onKeydown(event: KeyboardEvent): void {
     }
 
     editor.value.cancelGesture()
+
+    // Both selections: a door's panel is open with no furniture selected, so letting go of
+    // the furniture alone left it standing over a door nobody was pointing at any more.
+    editor.value.selectOpening(null)
     editor.value.select(null)
 
     return
@@ -563,6 +612,9 @@ onMounted(() => {
     onOverlay: (next) => {
       labels.value = next
     },
+    onAnchor: (next) => {
+      anchor.value = next
+    },
     // Read-only scenes pass no persist callback at all, so there is no path by which one can
     // write a layout — rather than a flag somewhere that has to stay false.
     onPersist: props.editable ? items => emit('save', items) : undefined,
@@ -645,7 +697,14 @@ defineExpose({
         refuses — there is a hard limit on live contexts per page.
       -->
       <!-- A double-click flies in to the selected piece, or back out to the whole room. -->
-      <canvas v-show="display === '3d'" ref="canvas" class="block size-full touch-none" @dblclick="editor?.focusSelected()" />
+      <!--
+        Double-click: closer on a piece, and the room's own measurements on the floor.
+
+        "Odanın bile üzerine tıklayınca en boy ölçülerini değiştireyim" — and the floor is the
+        room, so double-clicking where there is nothing opens the boxes in the corner rather
+        than flying the camera back to a framing nobody asked for.
+      -->
+      <canvas v-show="display === '3d'" ref="canvas" class="block size-full touch-none" @dblclick="onDoubleClick" />
 
       <!-- Inside the room the camera is walked, not orbited, and that has to be said once. -->
       <p
@@ -780,6 +839,26 @@ defineExpose({
           >{{ label.text }}</span>
         </template>
       </div>
+
+      <!--
+        Everything about the pressed door or window, on the door or window.
+
+        It was a list down the side of the page — five rows, most of them called "radiator ·
+        güney duvarı · ? cm'de" — and changing the one you were pointing at meant finding it
+        among them by reading. The panel comes to the thing now and follows it as the camera
+        turns; pressing another opening moves it, pressing the floor closes it.
+      -->
+      <RoomOpeningPopover
+        v-if="editable && display === '3d' && openingPanel !== null"
+        :opening="openingPanel.opening"
+        :x="openingPanel.at.x"
+        :y="openingPanel.at.y"
+        @close="editor?.selectOpening(null)"
+        @remove="id => { emit('removeOpening', id); editor?.selectOpening(null) }"
+        @rekind="(id, kind) => emit('rekindOpening', id, kind)"
+        @swing="(id, swing) => emit('swingOpening', id, swing)"
+        @size="(id, field, value) => emit('sizeOpening', id, field, value)"
+      />
 
       <!--
         The compass, when the labels are wrong.
