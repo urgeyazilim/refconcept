@@ -11,7 +11,7 @@ import type { RoomOpening, WallName } from './types'
 
 export type OpeningType = 'door' | 'window' | 'balcony_door'
 
-export type OpeningVariant = 'single' | 'double' | 'triple' | 'french_balcony' | 'single_door' | 'double_door' | 'sliding'
+export type OpeningVariant = 'single' | 'double' | 'triple' | 'fixed' | 'awning' | 'french_balcony' | 'single_door' | 'double_door' | 'sliding' | 'folding'
 
 export interface OpeningKind {
   type: OpeningType
@@ -34,12 +34,23 @@ export const OPENING_KINDS: readonly OpeningKind[] = [
   { type: 'window', variant: 'single', label: 'Tek kanat', width_mm: 900, height_mm: 1_400, sill_height_mm: 900, icon: 'M5 4h14v16H5zM5 12h14' },
   { type: 'window', variant: 'double', label: 'Çift kanat', width_mm: 1_400, height_mm: 1_400, sill_height_mm: 900, icon: 'M3 4h18v16H3zM12 4v16M3 12h18' },
   { type: 'window', variant: 'triple', label: 'Üçlü', width_mm: 2_100, height_mm: 1_400, sill_height_mm: 900, icon: 'M2 5h20v14H2zM8.7 5v14M15.3 5v14' },
+  // Sealed: one pane, no sash line, no handle. The picture window over a stair, the fixed
+  // light beside a front door — glass that is part of the wall rather than a way to open it.
+  { type: 'window', variant: 'fixed', label: 'Sabit cam', width_mm: 1_200, height_mm: 1_600, sill_height_mm: 800, icon: 'M3 4h18v16H3zM6 7l12 10' },
+  // A vasistas: small, high, hinged at the top. Over a door, in a kitchen, in a bathroom —
+  // and the one kind whose sill is well above eye level, which is why it is drawn small here.
+  { type: 'window', variant: 'awning', label: 'Vasistas', width_mm: 700, height_mm: 500, sill_height_mm: 1_800, icon: 'M3 8h18v8H3zM3 8l18 4' },
   { type: 'window', variant: 'french_balcony', label: 'Fransız balkon', width_mm: 1_200, height_mm: 2_200, sill_height_mm: 0, icon: 'M6 2h12v20H6zM12 2v20M4 14h16M6 14v8M18 14v8' },
   { type: 'door', variant: 'single_door', label: 'Tek kanat', width_mm: 900, height_mm: 2_100, sill_height_mm: 0, icon: 'M6 3h12v18H6zM14 12h1M6 21h12' },
   { type: 'door', variant: 'double_door', label: 'Çift kanat', width_mm: 1_600, height_mm: 2_100, sill_height_mm: 0, icon: 'M3 3h18v18H3zM12 3v18M9.5 12h1M13.5 12h1M3 21h18' },
+  // An interior door with nowhere to swing. Common in a flat, and the reason somebody draws
+  // a door at all is usually the clearance a swing needs — so the kind that needs none matters.
+  { type: 'door', variant: 'sliding', label: 'Sürgülü', width_mm: 900, height_mm: 2_100, sill_height_mm: 0, icon: 'M3 3h18v18H3zM12 3v18M3 21h18M15 12l3-2M15 12l3 2' },
   { type: 'balcony_door', variant: 'single_door', label: 'Tek kanat', width_mm: 900, height_mm: 2_200, sill_height_mm: 0, icon: 'M6 3h12v18H6zM6 12h12M14 8h1M6 21h12' },
   { type: 'balcony_door', variant: 'double_door', label: 'Çift kanat', width_mm: 1_600, height_mm: 2_200, sill_height_mm: 0, icon: 'M3 3h18v18H3zM12 3v18M3 12h18M9.5 8h1M13.5 8h1' },
   { type: 'balcony_door', variant: 'sliding', label: 'Sürgülü', width_mm: 2_400, height_mm: 2_200, sill_height_mm: 0, icon: 'M2 3h20v18H2zM12 3v18M2 21h20M15 12l3-2M15 12l3 2M9 12l-3-2M9 12l-3 2' },
+  // Concertina: four narrow panels that fold back against the jamb and open the whole wall.
+  { type: 'balcony_door', variant: 'folding', label: 'Katlanır', width_mm: 3_000, height_mm: 2_200, sill_height_mm: 0, icon: 'M2 3h20v18H2zM7 3v18M12 3v18M17 3v18M2 21h20' },
 ]
 
 export function kindsFor(type: OpeningType): OpeningKind[] {
@@ -69,6 +80,11 @@ export function variantOf(opening: Pick<RoomOpening, 'type' | 'variant' | 'width
       return 'french_balcony'
     }
 
+    // High and small is a vasistas; nothing else sits well above eye level.
+    if ((opening.sill_height_mm ?? 0) >= 1_600 && width > 0 && width <= 900) {
+      return 'awning'
+    }
+
     return width < 1_000 ? 'single' : width < 1_800 ? 'double' : 'triple'
   }
 
@@ -84,8 +100,9 @@ export function describeKind(opening: Pick<RoomOpening, 'type' | 'variant' | 'wi
   const type = TYPE_LABELS[opening.type as OpeningType] ?? opening.type
   const variant = variantOf(opening)
 
-  if (variant === 'french_balcony') {
-    return 'Fransız balkon'
+  // Named things rather than "<kind> <type>": nobody says "sabit cam pencere".
+  if (variant === 'french_balcony' || variant === 'awning' || variant === 'fixed') {
+    return kindOf(opening.type, variant)?.label ?? type
   }
 
   const kind = kindOf(opening.type, variant)
@@ -135,17 +152,30 @@ export function otherWay(swing: DoorSwing): DoorSwing {
 
 /** Whether the kind swings at all: a sliding door and a window do not. */
 export function hasSwing(opening: Pick<RoomOpening, 'type' | 'variant' | 'width_mm' | 'sill_height_mm'>): boolean {
-  return (opening.type === 'door' || opening.type === 'balcony_door') && variantOf(opening) !== 'sliding'
+  if (opening.type !== 'door' && opening.type !== 'balcony_door') {
+    return false
+  }
+
+  // Sliding and folding doors take no floor: that is the whole reason somebody fits one, and
+  // drawing a swing arc for them would put a clearance rule on a door that has none.
+  const variant = variantOf(opening)
+
+  return variant !== 'sliding' && variant !== 'folding'
 }
 
 /** How many leaves or panes across: what both the plan and the 3D room draw. */
 export function leavesOf(variant: OpeningVariant): number {
   switch (variant) {
+    // A sealed pane and a top-hung sash are each one sheet of glass with no mullion in it.
     case 'single':
     case 'single_door':
+    case 'fixed':
+    case 'awning':
       return 1
     case 'triple':
       return 3
+    case 'folding':
+      return 4
     default:
       return 2
   }

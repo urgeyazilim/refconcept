@@ -431,6 +431,19 @@ export class SceneManager {
     this.canvas.style.cursor = cursor
   }
 
+  /** Lights the door or window the pointer is on, and puts back the one it left. */
+  setOpeningHover(id: string | null): void {
+    if (this.room === null || id === this.hoveredOpening) {
+      return
+    }
+
+    this.hoveredOpening = id
+    this.rooms.paintOpening(this.room, id)
+    this.invalidate()
+  }
+
+  private hoveredOpening: string | null = null
+
   /** Whether a wall is currently drawn, or hidden so the room can be looked into. */
   wallVisible(name: string): boolean {
     return this.room?.getObjectByName(`wall-${name}`)?.visible ?? false

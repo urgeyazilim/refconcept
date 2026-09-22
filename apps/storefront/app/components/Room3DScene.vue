@@ -79,7 +79,59 @@ const emit = defineEmits<{
   addOpening: [kind: OpeningKind]
   /** A door or window's end was dragged on the plan: this wide now, starting here. */
   resizeOpening: [id: string, offsetMm: number, widthMm: number]
+  /** The room's own measurements, typed into the corner of the scene. */
+  resizeRoom: [widthMm: number, lengthMm: number, heightMm: number]
 }>()
+
+/**
+ * Whether the door and window palette is open.
+ *
+ * Open by default on the room step, where putting openings in is the job; folded away
+ * everywhere else, because on the design screen it is a column of eleven buttons standing
+ * over the room somebody is trying to look at. It remembers nothing between visits on
+ * purpose — a palette that is closed on arrival for reasons from last week is a palette
+ * nobody finds.
+ */
+const paletteOpen = ref(props.openingsOnly)
+
+/** The room's measurements, open for typing over the corner of the scene. */
+const sizing = ref(false)
+
+const size = reactive({ width: '', length: '', height: '' })
+
+/** Centimetres in the boxes, because that is how a room is measured with a tape. */
+function openSizing(): void {
+  size.width = String(Math.round(props.geometry.width_mm / 10))
+  size.length = String(Math.round(props.geometry.length_mm / 10))
+  size.height = String(Math.round(props.geometry.height_mm / 10))
+  sizing.value = true
+}
+
+/**
+ * A room somebody could actually be standing in.
+ *
+ * One metre to twenty, and a ceiling between two and five. Not politeness: the scene frames
+ * the camera from these, and a typo of 300 for 3.00 puts the customer inside a three
+ * hundred metre hall with their sofa a speck on the floor, from which there is no obvious
+ * way back.
+ */
+const sizeIsSane = computed(() => {
+  const w = Number(size.width)
+  const l = Number(size.length)
+  const h = Number(size.height)
+
+  return [w, l].every(value => Number.isFinite(value) && value >= 100 && value <= 2_000)
+    && Number.isFinite(h) && h >= 200 && h <= 500
+})
+
+function applySize(): void {
+  if (!sizeIsSane.value) {
+    return
+  }
+
+  emit('resizeRoom', Math.round(Number(size.width) * 10), Math.round(Number(size.length) * 10), Math.round(Number(size.height) * 10))
+  sizing.value = false
+}
 
 /** The palette: what a customer can put on a wall, grouped as they think of them. */
 const PALETTE: Array<{ type: OpeningType, label: string, kinds: OpeningKind[] }> = OPENING_TYPES.map(type => ({
@@ -474,7 +526,23 @@ defineExpose({
         — single, double, three panes, a French balcony, a sliding door. One tap puts it in
         the room; then it is picked up and put on a wall like anything else.
       -->
-      <div v-if="editable" class="absolute top-16 left-4 flex max-h-[calc(100%-5rem)] flex-col gap-1 overflow-y-auto rounded-md bg-surface/90 p-1 backdrop-blur-sm" role="toolbar" aria-label="Kapı ve pencere ekle">
+      <div v-if="editable" class="absolute top-16 left-4 flex max-h-[calc(100%-5rem)] flex-col gap-1 rounded-md bg-surface/90 p-1 backdrop-blur-sm" role="toolbar" aria-label="Kapı ve pencere ekle">
+        <button
+          type="button"
+          class="flex items-center justify-between gap-2 rounded-sm px-1.5 py-1 text-[10px] font-medium text-ink-secondary transition-colors hover:bg-bg-muted"
+          :aria-expanded="paletteOpen"
+          @click="paletteOpen = !paletteOpen"
+        >
+          <span class="flex items-center gap-1.5">
+            <svg class="size-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 3h12v18H6zM14 12h1" />
+            </svg>
+            Kapı · pencere
+          </span>
+          <span class="text-muted" aria-hidden="true">{{ paletteOpen ? '−' : '+' }}</span>
+        </button>
+
+        <template v-if="paletteOpen">
         <template v-for="group in PALETTE" :key="group.type">
           <p class="px-1.5 pt-1 text-[9px] font-medium tracking-wide text-muted uppercase">{{ group.label }}</p>
           <button
@@ -491,6 +559,7 @@ defineExpose({
             </svg>
             {{ kind.label }}
           </button>
+        </template>
         </template>
       </div>
 
@@ -660,13 +729,81 @@ defineExpose({
         were the customer's room, under a guide asking them for the measurements. A number
         nobody gave should not be shown as a fact.
       -->
-      <p class="absolute right-4 bottom-4 left-4 text-right text-xs text-muted">
-        <template v-if="measured">
-          {{ (geometry.width_mm / 1000).toFixed(2) }} × {{ (geometry.length_mm / 1000).toFixed(2) }} m ·
-          tavan {{ (geometry.height_mm / 1000).toFixed(2) }} m
-        </template>
-        <template v-else>Ölçü bekleniyor</template>
-      </p>
+      <!--
+        The measurements, and a way to correct them without leaving the room.
+
+        They were a line of grey text, and correcting them meant scrolling a column of panels
+        beside the scene to find "Ölçüleri düzelt". But the moment somebody knows the room is
+        wrong is the moment they are looking at it — a sofa that will not fit, a wall that is
+        obviously too short — so the correction belongs where the wrongness is.
+
+        Centimetres in the boxes, because that is what a tape measure reads.
+      -->
+      <div class="absolute right-4 bottom-4 text-right text-xs text-muted">
+        <form v-if="sizing && editable" class="flex items-center gap-1 rounded-md bg-surface/95 p-1.5 backdrop-blur-sm" @submit.prevent="applySize">
+          <label class="sr-only" for="room-width">Genişlik (cm)</label>
+          <input
+            id="room-width"
+            v-model="size.width"
+            type="number"
+            inputmode="numeric"
+            class="w-16 rounded-sm border border-line bg-surface px-1.5 py-1 text-right text-xs text-ink tabular-nums"
+            autofocus
+          >
+          <span aria-hidden="true">×</span>
+          <label class="sr-only" for="room-length">Derinlik (cm)</label>
+          <input
+            id="room-length"
+            v-model="size.length"
+            type="number"
+            inputmode="numeric"
+            class="w-16 rounded-sm border border-line bg-surface px-1.5 py-1 text-right text-xs text-ink tabular-nums"
+          >
+          <span class="pl-1" aria-hidden="true">tavan</span>
+          <label class="sr-only" for="room-height">Tavan yüksekliği (cm)</label>
+          <input
+            id="room-height"
+            v-model="size.height"
+            type="number"
+            inputmode="numeric"
+            class="w-16 rounded-sm border border-line bg-surface px-1.5 py-1 text-right text-xs text-ink tabular-nums"
+          >
+          <span class="pr-1">cm</span>
+          <button
+            type="submit"
+            class="rounded-pill bg-charcoal px-2.5 py-1 text-xs text-white disabled:opacity-40"
+            :disabled="!sizeIsSane"
+            :title="sizeIsSane ? 'Ölçüleri kaydet' : 'Oda 1–20 m, tavan 2–5 m olmalı'"
+          >
+            Kaydet
+          </button>
+          <button type="button" class="rounded-pill px-2 py-1 text-xs text-ink-secondary hover:bg-bg-muted" @click="sizing = false">
+            Vazgeç
+          </button>
+        </form>
+
+        <button
+          v-else-if="editable"
+          type="button"
+          class="rounded-pill px-2 py-1 transition-colors hover:bg-surface/80 hover:text-ink-secondary"
+          title="Ölçüleri düzelt"
+          @click="openSizing"
+        >
+          <template v-if="measured">
+            {{ (geometry.width_mm / 1000).toFixed(2) }} × {{ (geometry.length_mm / 1000).toFixed(2) }} m ·
+            tavan {{ (geometry.height_mm / 1000).toFixed(2) }} m
+          </template>
+          <template v-else>Ölçü bekleniyor — düzelt</template>
+        </button>
+
+        <p v-else>
+          <template v-if="measured">
+            {{ (geometry.width_mm / 1000).toFixed(2) }} × {{ (geometry.length_mm / 1000).toFixed(2) }} m ·
+            tavan {{ (geometry.height_mm / 1000).toFixed(2) }} m
+          </template>
+          <template v-else>Ölçü bekleniyor</template>
+        </p>
+      </div>
     </div>
 
     <!-- Column children must not shrink: a flex column with overflow squeezes them and the guide's sentence gets clipped. -->

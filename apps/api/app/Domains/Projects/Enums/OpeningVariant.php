@@ -24,12 +24,21 @@ enum OpeningVariant: string
     /** Floor-to-ceiling glazing with a guard rail outside and no balcony. */
     case FrenchBalcony = 'french_balcony';
 
+    /** One sealed pane that does not open. The picture window over a stair, the fixed light beside a door. */
+    case Fixed = 'fixed';
+
+    /** A small sash high on the wall, hinged at the top: over a door, in a kitchen, in a bathroom. */
+    case Awning = 'awning';
+
     // Doors and balcony doors.
     case SingleDoor = 'single_door';
     case DoubleDoor = 'double_door';
 
-    /** Two glass panels sliding past each other. Balcony doors only. */
+    /** Two panels sliding past each other. A balcony door, or an interior door with no room to swing. */
     case Sliding = 'sliding';
+
+    /** Panels that fold back against the jamb, concertina fashion. Wide balcony openings. */
+    case Folding = 'folding';
 
     public function label(): string
     {
@@ -38,9 +47,12 @@ enum OpeningVariant: string
             self::DoubleWindow => 'Çift kanat pencere',
             self::TripleWindow => 'Üçlü pencere',
             self::FrenchBalcony => 'Fransız balkon',
+            self::Fixed => 'Sabit cam',
+            self::Awning => 'Vasistas',
             self::SingleDoor => 'Tek kanat kapı',
             self::DoubleDoor => 'Çift kanat kapı',
             self::Sliding => 'Sürgülü kapı',
+            self::Folding => 'Katlanır kapı',
         };
     }
 
@@ -52,9 +64,11 @@ enum OpeningVariant: string
     public static function for(ConstraintType $type): array
     {
         return match ($type) {
-            ConstraintType::Window => [self::SingleWindow, self::DoubleWindow, self::TripleWindow, self::FrenchBalcony],
-            ConstraintType::Door => [self::SingleDoor, self::DoubleDoor],
-            ConstraintType::BalconyDoor => [self::SingleDoor, self::DoubleDoor, self::Sliding],
+            ConstraintType::Window => [self::SingleWindow, self::DoubleWindow, self::TripleWindow, self::Fixed, self::Awning, self::FrenchBalcony],
+            // Sliding, because a door with no room to swing is common in a flat and the
+            // clearance rules are the reason somebody draws one at all.
+            ConstraintType::Door => [self::SingleDoor, self::DoubleDoor, self::Sliding],
+            ConstraintType::BalconyDoor => [self::SingleDoor, self::DoubleDoor, self::Sliding, self::Folding],
             default => [],
         };
     }
@@ -81,6 +95,8 @@ enum OpeningVariant: string
         return match ($type) {
             ConstraintType::Window => match (true) {
                 is_int($sillMm) && $sillMm === 0 => self::FrenchBalcony,
+                // High and small is a vasistas; nothing else sits at shoulder height.
+                is_int($sillMm) && $sillMm >= 1_600 && $widthMm <= 900 => self::Awning,
                 $widthMm < 1_000 => self::SingleWindow,
                 $widthMm < 1_800 => self::DoubleWindow,
                 default => self::TripleWindow,
@@ -110,9 +126,12 @@ enum OpeningVariant: string
             self::DoubleWindow => ['width_mm' => 1_400, 'height_mm' => 1_400, 'sill_height_mm' => 900],
             self::TripleWindow => ['width_mm' => 2_100, 'height_mm' => 1_400, 'sill_height_mm' => 900],
             self::FrenchBalcony => ['width_mm' => 1_200, 'height_mm' => 2_200, 'sill_height_mm' => 0],
+            self::Fixed => ['width_mm' => 1_200, 'height_mm' => 1_600, 'sill_height_mm' => 800],
+            self::Awning => ['width_mm' => 700, 'height_mm' => 500, 'sill_height_mm' => 1_800],
             self::SingleDoor => ['width_mm' => 900, 'height_mm' => 2_100, 'sill_height_mm' => 0],
             self::DoubleDoor => ['width_mm' => 1_600, 'height_mm' => 2_100, 'sill_height_mm' => 0],
             self::Sliding => ['width_mm' => 2_400, 'height_mm' => 2_200, 'sill_height_mm' => 0],
+            self::Folding => ['width_mm' => 3_000, 'height_mm' => 2_200, 'sill_height_mm' => 0],
         };
     }
 }

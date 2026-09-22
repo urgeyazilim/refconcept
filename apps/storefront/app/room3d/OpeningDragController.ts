@@ -19,6 +19,10 @@ export interface OpeningDragDelegate {
   onCommit: (id: string, wall: WallName, offsetMm: number) => void
   /** On release, when it did not. */
   onCancel: (id: string) => void
+  /** The opening under a resting pointer changed: this one, or none. */
+  onHover: (id: string | null) => void
+  /** What the pointer should look like; an empty string hands it back to whoever else is asking. */
+  setCursor: (cursor: string) => void
 }
 
 /**
@@ -41,6 +45,12 @@ export class OpeningDragController {
     offsetMm: number
     moved: boolean
   } | null = null
+
+  /** What the resting pointer was last over, so hover is reported on change only. */
+  private hovered: string | null = null
+
+  /** A hover test waiting for the next frame: a raycast per pixel is a raycast wasted. */
+  private hoverPending = 0
 
   private readonly handlers: Array<[keyof HTMLElementEventMap, (event: never) => void]>
 
@@ -65,6 +75,11 @@ export class OpeningDragController {
   }
 
   dispose(): void {
+    if (this.hoverPending !== 0) {
+      cancelAnimationFrame(this.hoverPending)
+      this.hoverPending = 0
+    }
+
     for (const [name, handler] of this.handlers) {
       this.canvas.removeEventListener(name, handler as EventListener)
     }
@@ -90,6 +105,7 @@ export class OpeningDragController {
     this.dragging = { opening, wall: opening.wall, offsetMm: opening.offset_mm, moved: false }
 
     this.delegate.setOrbitEnabled(false)
+    this.delegate.setCursor('grabbing')
     this.canvas.setPointerCapture(event.pointerId)
     event.stopImmediatePropagation()
   }
@@ -98,6 +114,8 @@ export class OpeningDragController {
     const drag = this.dragging
 
     if (drag === null) {
+      this.scheduleHover(event)
+
       return
     }
 
@@ -132,6 +150,7 @@ export class OpeningDragController {
 
     this.dragging = null
     this.delegate.setOrbitEnabled(true)
+    this.delegate.setCursor(this.hovered === null ? '' : 'grab')
 
     if (this.canvas.hasPointerCapture(event.pointerId)) {
       this.canvas.releasePointerCapture(event.pointerId)
@@ -143,6 +162,41 @@ export class OpeningDragController {
     else {
       this.delegate.onCancel(drag.opening.id)
     }
+  }
+
+  /**
+   * The opening under the resting pointer, asked for at most once a frame.
+   *
+   * A door and a window could be dragged and said so nowhere. There was no hover, no cursor,
+   * no highlight — the only way to learn that the door moves is a line of grey text under
+   * the room, and the product owner read it and still could not tell whether they had hold
+   * of anything. A thing that can be picked up has to look like one before it is touched.
+   */
+  private scheduleHover(event: PointerEvent): void {
+    if (this.hoverPending !== 0) {
+      return
+    }
+
+    const at = { clientX: event.clientX, clientY: event.clientY } as PointerEvent
+
+    this.hoverPending = requestAnimationFrame(() => {
+      this.hoverPending = 0
+
+      const over = this.openingUnder(at)?.id ?? null
+
+      if (over === this.hovered) {
+        return
+      }
+
+      this.hovered = over
+      this.delegate.onHover(over)
+
+      // Only claims the cursor for its own: the furniture controller owns it otherwise, and
+      // two controllers both writing every frame would fight over it.
+      if (over !== null) {
+        this.delegate.setCursor('grab')
+      }
+    })
   }
 
   // --- picking -----------------------------------------------------------------

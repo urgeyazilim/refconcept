@@ -167,6 +167,8 @@ export class RoomEditor {
             options.onMoveOpening?.(id, offsetMm, wall)
           },
           onCancel: () => this.scene.rebuildRoom(this.openings),
+          onHover: id => this.scene.setOpeningHover(id),
+          setCursor: cursor => this.scene.setCursor(cursor),
         })
 
     this.drag = new DragController(canvas, {

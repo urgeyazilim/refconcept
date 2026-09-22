@@ -5,7 +5,9 @@ import {
   Group,
   Line,
   LineBasicMaterial,
+  type Material,
   Mesh,
+  MeshBasicMaterial,
   Path,
   PlaneGeometry,
   Shape,
@@ -112,6 +114,15 @@ export class RoomGeometryBuilder {
   private readonly swingMaterial = new LineBasicMaterial({ color: 0x9a8f80, transparent: true, opacity: 0.7 })
 
   /**
+   * The casing of whichever door or window the pointer is on.
+   *
+   * The same gold the furniture outlines use, so one colour in this room means one thing:
+   * "this is the piece you are pointing at". Unlit, because the casing is thin and a lit
+   * material on a thin thing reads as glare rather than as a highlight.
+   */
+  private readonly hoverTrimMaterial = new MeshBasicMaterial({ color: 0xb08f52 })
+
+  /**
    * Builds the shell.
    *
    * Returned as a group so the whole room can be hidden, swapped or disposed in one move —
@@ -203,6 +214,40 @@ export class RoomGeometryBuilder {
     mesh.name = 'ceiling'
 
     return mesh
+  }
+
+  /**
+   * Lights the parts of one opening, and puts everything else back.
+   *
+   * A door and a window could be dragged and said so nowhere: no hover, no cursor, no
+   * highlight. The only way to find out was a line of grey text under the room, and the
+   * product owner read it and still could not tell whether they had hold of anything.
+   *
+   * The original is kept on the part itself rather than in a map here, because the room is
+   * rebuilt from scratch on every opening move and a map would be about the old one.
+   */
+  paintOpening(room: Object3D, id: string | null): void {
+    room.traverse((part) => {
+      if (!(part instanceof Mesh) || typeof part.userData.openingId !== 'string') {
+        return
+      }
+
+      // The glass and the daylight keep their own look: a lit pane is a lamp, not a hint.
+      if (part.material === this.glassMaterial || part.material === this.skyMaterial) {
+        return
+      }
+
+      const on = part.userData.openingId === id
+
+      if (on && part.userData.plainMaterial === undefined) {
+        part.userData.plainMaterial = part.material
+        part.material = this.hoverTrimMaterial
+      }
+      else if (!on && part.userData.plainMaterial !== undefined) {
+        part.material = part.userData.plainMaterial as Material
+        part.userData.plainMaterial = undefined
+      }
+    })
   }
 
   /**
@@ -452,7 +497,38 @@ export class RoomGeometryBuilder {
     const leaves = leavesOf(variant)
     const isDoor = opening.type === 'door' || opening.type === 'balcony_door'
 
-    if (isDoor && variant === 'sliding') {
+    if (isDoor && variant === 'folding') {
+      /*
+       * A concertina: narrow panels standing across the opening, hinged to each other.
+       *
+       * Drawn shut, like the sliding door beside it — folded back it is a hole in a wall and
+       * looks like a missing door rather than an open one. What makes it read as folding is
+       * the rhythm: four tall panels of equal width, each with its own frame, where a sliding
+       * door is two wide ones overlapping.
+       */
+      const panels = leavesOf('folding')
+      const panelW = w / panels
+      const glassZ = innerZ - inward * thickness / 2
+
+      for (let index = 0; index < panels; index++) {
+        const panel = new Group()
+        const pane = new Mesh(new PlaneGeometry(panelW - 0.07, h - 0.08), this.glassMaterial)
+        const frame = new Mesh(new BoxGeometry(panelW, h, 0.045), this.trimMaterial)
+
+        pane.position.set(0, 0, 0.024)
+        panel.add(frame, pane)
+        panel.position.set(x1 + panelW * (index + 0.5), y1 + h / 2, glassZ)
+        parts.push(panel)
+      }
+
+      // The track: what it hangs from, and what a customer looks for to tell one from a
+      // sliding door in a drawing.
+      const rail = new Mesh(new BoxGeometry(w, 0.03, 0.08), this.trimMaterial)
+
+      rail.position.set(x1 + w / 2, y1 + h - 0.015, glassZ)
+      parts.push(rail)
+    }
+    else if (isDoor && variant === 'sliding') {
       /*
        * Two glass panels in the wall's thickness, one slid a third of the way behind the
        * other: shut, a sliding door is a window, and the customer cannot tell it from one.

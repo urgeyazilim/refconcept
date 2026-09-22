@@ -574,6 +574,22 @@ async function confirm(version: GeometryVersion): Promise<void> {
 }
 
 /**
+ * The measurements typed into the corner of the room itself.
+ *
+ * The same write as {@see saveCorrection()} and a different place to stand: the moment
+ * somebody knows the room is wrong is the moment they are looking at it — a sofa that will
+ * not fit, a wall that is obviously too short — and until now correcting it meant scrolling
+ * a column of panels beside the scene to find a link.
+ */
+async function resizeRoom(widthMm: number, lengthMm: number, heightMm: number): Promise<void> {
+  correction.width = String(Math.round(widthMm / 10))
+  correction.length = String(Math.round(lengthMm / 10))
+  correction.height = String(Math.round(heightMm / 10))
+
+  await saveCorrection()
+}
+
+/**
  * "Düzelt" — the customer's own figures, recorded and confirmed in one go.
  *
  * Confirmed immediately because they are the one holding the tape measure. Asking somebody
@@ -1334,6 +1350,7 @@ onMounted(async () => {
         @move-opening="moveOpening"
         @add-opening="addOpening"
         @resize-opening="resizeOpening"
+        @resize-room="resizeRoom"
       >
         <!--
           The end of the module, under the room's own list and its total: the basket. A plan is
