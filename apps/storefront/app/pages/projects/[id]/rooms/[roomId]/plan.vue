@@ -536,7 +536,7 @@ async function load(): Promise<void> {
         openings: RoomOpening[]
         layout: LayoutPayload | null
         room_type: string | null
-        room: { width_mm: number | null, length_mm: number | null, height_mm: number | null, photo_count: number }
+        room: { width_mm: number | null, length_mm: number | null, height_mm: number | null, photo_count: number, north_wall?: WallName }
         design: { design_id: string, version_id: string, version_number: number, image_url: string | null } | null
         detected: Detection | null
       }
@@ -552,6 +552,9 @@ async function load(): Promise<void> {
     items.value = response.data.layout?.items ?? []
     roomType.value = response.data.room_type
     roomFacts.value = response.data.room
+
+    // Which of the drawn walls the customer has already said faces north.
+    northWall.value = response.data.room.north_wall ?? 'north'
     design.value = response.data.design
     detected.value = response.data.detected
 
@@ -650,6 +653,29 @@ async function confirm(version: GeometryVersion): Promise<void> {
  * not fit, a wall that is obviously too short — and until now correcting it meant scrolling
  * a column of panels beside the scene to find a link.
  */
+/**
+ * Which of the four drawn walls the customer says faces north.
+ *
+ * Held here rather than read straight off `roomFacts` so the labels turn the moment the
+ * button is pressed: the write is a round trip and four labels that wait for the network to
+ * come back read as a button that did not work.
+ */
+const northWall = ref<WallName>('north')
+
+async function turnCompass(wall: WallName): Promise<void> {
+  const previous = northWall.value
+
+  northWall.value = wall
+
+  try {
+    await api.patch(base, { north_wall: wall })
+  }
+  catch (error) {
+    northWall.value = previous
+    saveError.value = error instanceof Error ? error.message : 'Kuzey kaydedilemedi.'
+  }
+}
+
 async function resizeRoom(widthMm: number, lengthMm: number, heightMm: number): Promise<void> {
   correction.width = String(Math.round(widthMm / 10))
   correction.length = String(Math.round(lengthMm / 10))
@@ -1414,12 +1440,14 @@ onMounted(async () => {
         :openings="openings"
         :items="items"
         editable
+        :north-wall="northWall"
         @save="save"
         @change="liveItems = $event; saved = false"
         @move-opening="moveOpening"
         @add-opening="addOpening"
         @resize-opening="resizeOpening"
         @resize-room="resizeRoom"
+        @turn-compass="turnCompass"
       >
         <!--
           The end of the module, under the room's own list and its total: the basket. A plan is

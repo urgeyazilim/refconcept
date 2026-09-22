@@ -55,6 +55,14 @@ const props = withDefaults(defineProps<{
    * is the shape, and putting them behind one button is how somebody can tell.
    */
   scanUrl?: string | null
+  /**
+   * Which of the four drawn walls actually faces north.
+   *
+   * The reading names the walls from photographs and gets it wrong often enough to be worth
+   * a control: a window facing east recorded as west makes every sentence about light
+   * backwards. Nothing in the room moves when this changes — the four labels do.
+   */
+  northWall?: WallName
 }>(), {
   items: () => [],
   editable: false,
@@ -62,6 +70,7 @@ const props = withDefaults(defineProps<{
   openingsOnly: false,
   measured: true,
   scanUrl: null,
+  northWall: 'north',
 })
 
 /**
@@ -80,6 +89,8 @@ const emit = defineEmits<{
   addOpening: [kind: OpeningKind]
   /** A door or window's end was dragged on the plan: this wide now, starting here. */
   resizeOpening: [id: string, offsetMm: number, widthMm: number]
+  /** The customer said which of the drawn walls faces north. */
+  turnCompass: [wall: WallName]
   /** The room's own measurements, typed into the corner of the scene. */
   resizeRoom: [widthMm: number, lengthMm: number, heightMm: number]
 }>()
@@ -97,6 +108,23 @@ const paletteOpen = ref(props.openingsOnly)
 
 /** The room's measurements, open for typing over the corner of the scene. */
 const sizing = ref(false)
+
+/** Whether the compass is open for correcting. */
+const turningCompass = ref(false)
+
+/**
+ * The four walls as the scene draws them, named as the scene draws them.
+ *
+ * Deliberately the drawn names rather than the corrected ones: the question is "which of the
+ * walls you are looking at faces north", and answering it with labels that have already been
+ * corrected is a loop nobody can reason about.
+ */
+const WALL_CHOICES: Array<{ value: WallName, label: string }> = [
+  { value: 'north', label: 'Üstteki' },
+  { value: 'east', label: 'Sağdaki' },
+  { value: 'south', label: 'Alttaki' },
+  { value: 'west', label: 'Soldaki' },
+]
 
 /**
  * The shortcut sheet, over the room.
@@ -571,6 +599,8 @@ onBeforeUnmount(() => {
 
 watch(view, mode => editor.value?.setView(mode))
 
+watch(() => props.northWall, wall => editor.value?.setNorthWall(wall))
+
 // A corrected measurement is a different room, not a moved camera.
 watch(
   () => [props.geometry, props.openings] as const,
@@ -749,6 +779,49 @@ defineExpose({
             :style="{ left: `${label.x}px`, top: `${label.y}px` }"
           >{{ label.text }}</span>
         </template>
+      </div>
+
+      <!--
+        The compass, when the labels are wrong.
+
+        Four buttons rather than a turn: the customer said the walls only need renaming, and
+        renaming is the common case — the room is drawn correctly and the reading guessed the
+        wrong way round. Pressing one says "this drawn wall is the one that faces north", and
+        the other three follow it clockwise. No measurement changes and nothing moves.
+
+        Folded behind the compass itself, because it is looked at once per room and would
+        otherwise be four more buttons over the floor for ever.
+      -->
+      <div v-if="editable && display === '3d'" class="absolute top-16 right-4 flex flex-col items-end gap-1">
+        <button
+          type="button"
+          class="flex items-center gap-1.5 rounded-pill bg-surface/90 px-2.5 py-1.5 text-[11px] text-ink-secondary shadow-sm backdrop-blur-sm transition-colors hover:bg-surface"
+          :aria-expanded="turningCompass"
+          @click="turningCompass = !turningCompass"
+        >
+          <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7l2.5 5.5L12 17l-2.5-4.5z" />
+          </svg>
+          Kuzey
+        </button>
+
+        <div v-if="turningCompass" class="w-44 rounded-md bg-surface/95 p-2 shadow-sm backdrop-blur-sm">
+          <p class="text-[10px] leading-snug text-muted">Kuzeye bakan duvar hangisi? Sadece isimler değişir, hiçbir şey yer değiştirmez.</p>
+
+          <div class="mt-1.5 grid grid-cols-2 gap-1">
+            <button
+              v-for="wall in WALL_CHOICES"
+              :key="wall.value"
+              type="button"
+              class="rounded-sm px-1.5 py-1 text-[11px] transition-colors"
+              :class="northWall === wall.value ? 'bg-charcoal text-white' : 'text-ink-secondary hover:bg-bg-muted'"
+              :aria-pressed="northWall === wall.value"
+              @click="emit('turnCompass', wall.value); turningCompass = false"
+            >
+              {{ wall.label }}
+            </button>
+          </div>
+        </div>
       </div>
 
       <!--

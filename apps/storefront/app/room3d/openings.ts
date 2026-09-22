@@ -53,6 +53,37 @@ export const OPENING_KINDS: readonly OpeningKind[] = [
   { type: 'balcony_door', variant: 'folding', label: 'Katlanır', width_mm: 3_000, height_mm: 2_200, sill_height_mm: 0, icon: 'M2 3h20v18H2zM7 3v18M12 3v18M17 3v18M2 21h20' },
 ]
 
+/**
+ * The four walls in the order they go round, clockwise seen from above.
+ *
+ * The room is always drawn the same way — the wall at the top of the plan is the one the
+ * model calls north — and which of them actually faces north is a separate fact about the
+ * building. Everything here turns one into the other.
+ */
+export const WALLS_CLOCKWISE: readonly WallName[] = ['north', 'east', 'south', 'west']
+
+/**
+ * What to call a drawn wall, given which drawn wall really faces north.
+ *
+ * The reading names the walls from photographs and gets it wrong often enough to be worth a
+ * control: a window facing east recorded as west makes every sentence the planner writes
+ * about light backwards. Nothing moves when this changes — no measurement, no opening, no
+ * piece of furniture. Four labels do.
+ *
+ * Both walls are drawn walls: `drawn` is the one being named, `north` is whichever one the
+ * customer says faces north. The offset between them, going clockwise, is the answer.
+ */
+export function compassName(drawn: WallName, north: WallName): WallName {
+  const from = WALLS_CLOCKWISE.indexOf(north)
+  const at = WALLS_CLOCKWISE.indexOf(drawn)
+
+  if (from < 0 || at < 0) {
+    return drawn
+  }
+
+  return WALLS_CLOCKWISE[(at - from + 4) % 4] ?? drawn
+}
+
 export function kindsFor(type: OpeningType): OpeningKind[] {
   return OPENING_KINDS.filter(kind => kind.type === type)
 }

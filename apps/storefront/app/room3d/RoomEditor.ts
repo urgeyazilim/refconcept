@@ -9,9 +9,13 @@ import { type Measurement, MeasurementEngine, formatDistance } from './Measureme
 import { SceneManager } from './SceneManager'
 import { SnapEngine } from './SnapEngine'
 import { againstWall, footprintOf, isWallMounted, wallMountHeight } from './footprint'
+import { compassName } from './openings'
 import { type LayoutItem, type RoomGeometry, type RoomOpening, type ViewMode, type WallName, toMm, toUnits } from './types'
 
 /** A measurement, already placed on the screen, for the HTML overlay to draw. */
+/** The four points of the compass, as a customer reads them over a wall. */
+const WALL_NAMES: Record<WallName, string> = { north: 'Kuzey', east: 'Doğu', south: 'Güney', west: 'Batı' }
+
 export interface OverlayLabel {
   id: string
   x: number
@@ -296,6 +300,24 @@ export class RoomEditor {
     this.scene.setView(mode)
     // The plan view is a different camera, and handles drawn for the old one point nowhere.
     this.gizmo.syncCamera()
+  }
+
+  /**
+   * Which of the four drawn walls the customer says faces north.
+   *
+   * Set by the page from the room. The default is the one the reading chose, which is right
+   * more often than not and wrong often enough that there is a control for it.
+   */
+  private northWall: WallName = 'north'
+
+  setNorthWall(wall: WallName): void {
+    if (wall === this.northWall) {
+      return
+    }
+
+    this.northWall = wall
+    this.publishOverlay()
+    this.scene.invalidate()
   }
 
   /** Shift held: the turn handle stops snapping to fifteen degrees. */
@@ -1103,11 +1125,19 @@ export class RoomEditor {
 
     const { width_mm: width, length_mm: length, height_mm: height } = this.geometry
 
-    const walls: Array<{ id: WallName, text: string, x: number, z: number }> = [
-      { id: 'north', text: 'Kuzey', x: width / 2, z: 0 },
-      { id: 'south', text: 'Güney', x: width / 2, z: length },
-      { id: 'west', text: 'Batı', x: 0, z: length / 2 },
-      { id: 'east', text: 'Doğu', x: width, z: length / 2 },
+    /*
+     * Where each drawn wall is, and what the customer calls it.
+     *
+     * The room is always drawn the same way round; which of its walls actually faces north is
+     * a fact about the building that the reading guesses from photographs and gets wrong
+     * often enough to be worth correcting. Nothing here moves when it is corrected — the
+     * labels do, and every sentence the planner writes about light stops being backwards.
+     */
+    const walls: Array<{ id: WallName, x: number, z: number }> = [
+      { id: 'north', x: width / 2, z: 0 },
+      { id: 'south', x: width / 2, z: length },
+      { id: 'west', x: 0, z: length / 2 },
+      { id: 'east', x: width, z: length / 2 },
     ]
 
     const labels: OverlayLabel[] = []
@@ -1123,7 +1153,13 @@ export class RoomEditor {
         continue
       }
 
-      labels.push({ id: `wall-${wall.id}`, x: point.x, y: point.y, text: wall.text, towards: 'wall' })
+      labels.push({
+        id: `wall-${wall.id}`,
+        x: point.x,
+        y: point.y,
+        text: WALL_NAMES[compassName(wall.id, this.northWall)],
+        towards: 'wall',
+      })
     }
 
     return labels

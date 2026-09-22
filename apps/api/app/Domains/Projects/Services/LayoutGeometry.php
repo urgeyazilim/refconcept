@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Domains\Projects\Services;
 
 use App\Domains\Projects\Enums\ConstraintType;
+use App\Domains\Projects\Enums\DoorSwing;
+use App\Domains\Projects\Enums\OpeningVariant;
 use App\Domains\Projects\Models\DesignLayout;
 use App\Domains\Projects\Models\DesignLayoutItem;
 use App\Domains\Projects\Models\RoomConstraint;
@@ -177,13 +179,27 @@ final class LayoutGeometry
 
             if ($this->polygonsOverlap($shape, $this->polygonFromRect($span))) {
                 /*
-                 * A blocked doorway is a refusal; a covered window is a warning.
+                 * Told, not refused.
                  *
-                 * The difference is whether the room still works. A sofa with its back to a
-                 * window is an ordinary arrangement somebody may want and be told about; a
-                 * wardrobe across the only door is not a taste question.
+                 * A doorway used to be 'blocked', and 'blocked' is what the arranger reads as
+                 * "put it somewhere else". So an armchair could not be placed in front of the
+                 * balcony glass — in a room where the glass is what you look at from the
+                 * armchair — and nothing on screen said why; it simply slid away each time.
+                 *
+                 * The clearance in front of a door is what a designer leaves, not something
+                 * the world enforces, and somebody who puts a chair there has a reason. The
+                 * things that are not taste questions — a piece inside a wall, two pieces in
+                 * one place — are still refused, and they are refused because they are
+                 * impossible rather than because they are unwise.
+                 *
+                 * Nothing at all for an opening that takes no floor in this room. A warning
+                 * about a problem that does not exist is one nobody reads the next time.
                  */
-                return $this->swings($constraint) ? 'blocked' : 'warning';
+                if ($this->sweepsFloor($constraint)) {
+                    return 'warning';
+                }
+
+                return $constraint->type === ConstraintType::Window ? 'warning' : 'ok';
             }
         }
 
@@ -375,6 +391,37 @@ final class LayoutGeometry
     private function swings(RoomConstraint $constraint): bool
     {
         return in_array($constraint->type, [ConstraintType::Door, ConstraintType::BalconyDoor], true);
+    }
+
+    /**
+     * Whether this opening actually takes floor inside the room.
+     *
+     * {@see swings()} asks what kind of thing it is; this asks what it does, and they are not
+     * the same question. A door onto the balcony sweeps the balcony. A sliding one sweeps
+     * nothing at all — that is the entire reason somebody fits one. A top-hung window takes
+     * the air above whatever is under it and nothing off the floor.
+     *
+     * It was the kind alone, so the south balcony door reserved nine hundred millimetres of
+     * the room along two metres of wall whichever way it opened.
+     *
+     * The browser has the same rule in `footprint.ts`. Both, or the room the customer drags
+     * in and the room the server arranges disagree about where a chair may stand.
+     */
+    private function sweepsFloor(RoomConstraint $constraint): bool
+    {
+        if (! $this->swings($constraint)) {
+            return false;
+        }
+
+        $variant = $constraint->variant ?? OpeningVariant::guess($constraint->type, $constraint->width_mm, $constraint->sill_height_mm);
+
+        if ($variant === OpeningVariant::Sliding || $variant === OpeningVariant::Folding) {
+            return false;
+        }
+
+        // Nobody said which way: a door is assumed to open inward, which is the careful
+        // assumption — it is the one that produces a warning rather than silence.
+        return ($constraint->swing ?? DoorSwing::StartIn)->opensIn();
     }
 
     /**

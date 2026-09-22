@@ -1,3 +1,4 @@
+import { opensIn, swingOf, variantOf } from './openings'
 import type { LayoutItem, RoomGeometry, RoomOpening, WallName } from './types'
 
 /**
@@ -373,6 +374,33 @@ export const isUnderfoot = (item: LayoutItem): boolean =>
   item.category !== null && UNDERFOOT_CATEGORIES.includes(item.category)
 
 export const swings = (opening: RoomOpening): boolean => SWINGING_TYPES.includes(opening.type)
+
+/**
+ * Whether this opening actually takes floor inside the room.
+ *
+ * `swings` asks what kind of thing it is; this asks what it does, and they are not the same
+ * question. A door that opens onto the balcony sweeps the balcony. A sliding one sweeps
+ * nothing at all — that is the entire reason somebody fits one. A top-hung window takes the
+ * air above whatever is under it and nothing off the floor.
+ *
+ * It was the kind alone, so the south balcony door reserved nine hundred millimetres of the
+ * room along two metres of wall whichever way it opened, and an armchair could not be put in
+ * front of the glass — in a room where the whole point of the glass is what you look at from
+ * the armchair.
+ */
+export function sweepsFloor(opening: RoomOpening): boolean {
+  if (!SWINGING_TYPES.includes(opening.type)) {
+    return false
+  }
+
+  const variant = variantOf(opening)
+
+  if (variant === 'sliding' || variant === 'folding') {
+    return false
+  }
+
+  return opensIn(swingOf(opening))
+}
 
 /**
  * The floor a door or window needs kept clear.

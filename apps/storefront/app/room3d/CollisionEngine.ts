@@ -7,7 +7,7 @@ import {
   polygonInsideRoom,
   polygonOf,
   polygonsOverlap,
-  swings,
+  sweepsFloor,
 } from './footprint'
 import type { LayoutItem, RoomGeometry, RoomOpening } from './types'
 
@@ -112,8 +112,24 @@ export class CollisionEngine {
         continue
       }
 
-      // A blocked doorway is a refusal; a covered window is something to be told about.
-      return swings(opening) ? 'blocked' : 'warning'
+      /*
+       * Told, not refused.
+       *
+       * A doorway used to be 'blocked', which the constraint engine read as "slide it away
+       * again" — so an armchair could not be put in front of the balcony glass at all, in a
+       * room where the glass is what you look at from the armchair. The clearance in front of
+       * a door is what a designer leaves rather than something the world enforces, and
+       * somebody putting a chair there has a reason. Amber says so and lets them.
+       *
+       * Nothing at all for a door that opens outward or slides: it takes no floor in this
+       * room, and a warning about a problem that does not exist is one nobody reads the next
+       * time either.
+       */
+      if (sweepsFloor(opening)) {
+        return 'warning'
+      }
+
+      return opening.type === 'window' ? 'warning' : 'ok'
     }
 
     return 'ok'

@@ -1,16 +1,13 @@
 import {
   againstWall,
-  clearanceRectangle,
   footprintOf,
   isMeasured,
   isUnderfoot,
   isWallMounted,
   nearestWall,
-  polygonFromRect,
   polygonOf,
   polygonsOverlap,
   pushOutCandidates,
-  swings,
   type Polygon,
 } from './footprint'
 import type { LayoutItem, RoomGeometry, RoomOpening } from './types'
@@ -172,12 +169,21 @@ export class ConstraintEngine {
   }
 
   /**
-   * Everything this piece must not stand on: the other floor-standing pieces, and the floor a
-   * door needs to swing into.
+   * Everything this piece may not stand on: the other floor-standing pieces, and that is all.
    *
-   * The same exceptions as the collision engine, because the two must agree: pieces off the
-   * floor pass over things, rugs are for standing on, and a window's clearance is a warning
-   * rather than a wall.
+   * A door's swing used to be in here, and being in here means the room refuses: drag an
+   * armchair in front of the balcony glass and it slid away, every time, with nothing said.
+   * The product owner tried it and could not work out what was stopping them.
+   *
+   * Two things were wrong. A door that opens onto the balcony takes no floor in the room, and
+   * a sliding one takes none anywhere — the rule never asked which way anything opened. And
+   * the rule itself is guidance rather than geometry: nine hundred millimetres in front of a
+   * door is what a designer leaves, not something the world enforces, and somebody who wants
+   * the armchair by the glass has a reason for it. A sofa inside a wall is impossible; a
+   * chair in a doorway is a decision.
+   *
+   * So it is told, not prevented — {@see CollisionEngine} colours it and the panel says why.
+   * Pieces still cannot be put through each other or through a wall, which is not advice.
    */
   private blockersFor(item: LayoutItem, items: LayoutItem[]): Polygon[] {
     const blockers: Polygon[] = []
@@ -192,18 +198,6 @@ export class ConstraintEngine {
         }
 
         blockers.push(polygonOf(other))
-      }
-    }
-
-    for (const opening of this.openings) {
-      if (!swings(opening)) {
-        continue
-      }
-
-      const span = clearanceRectangle(opening, this.geometry)
-
-      if (span !== null) {
-        blockers.push(polygonFromRect(span))
       }
     }
 

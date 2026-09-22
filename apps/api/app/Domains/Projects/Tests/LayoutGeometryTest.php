@@ -158,8 +158,52 @@ it('refuses a wardrobe standing in the doorway', function (): void {
 
     $states = $this->geometryService->evaluate($this->layout->fresh());
 
-    // A door that opens into a wardrobe has stopped being a door.
-    expect($states[$wardrobe->id])->toBe('blocked');
+    /*
+     * A door that opens into a wardrobe has stopped being a door — and saying so is the whole
+     * of what this should do.
+     *
+     * It used to be 'blocked', which the arranger reads as "put it somewhere else", so an
+     * armchair could not be placed in front of the balcony glass in a room where the glass is
+     * what you look at from the armchair. It slid away each time and nothing said why. The
+     * clearance in front of a door is what a designer leaves rather than something the world
+     * enforces; a piece inside a wall is refused because it is impossible, not unwise.
+     */
+    expect($states[$wardrobe->id])->toBe('warning');
+});
+
+it('says nothing about a piece in front of a door that opens outward', function (): void {
+    RoomConstraint::query()->create([
+        'room_id' => $this->room->getKey(),
+        'type' => 'door',
+        'wall' => 'east',
+        'offset_mm' => 400,
+        'width_mm' => 900,
+        'height_mm' => 2_100,
+        'swing' => 'start_out',
+    ]);
+
+    $wardrobe = place('Gardırop', 'gardirop', 1_200, 600, 4_500, 850, 90);
+
+    // It sweeps the landing, not this room. A warning about a problem that does not exist is
+    // one nobody reads the next time either.
+    expect($this->geometryService->evaluate($this->layout->fresh())[$wardrobe->id])->toBe('ok');
+});
+
+it('says nothing about a piece in front of a sliding balcony door', function (): void {
+    RoomConstraint::query()->create([
+        'room_id' => $this->room->getKey(),
+        'type' => 'balcony_door',
+        'wall' => 'south',
+        'offset_mm' => 1_000,
+        'width_mm' => 2_400,
+        'height_mm' => 2_200,
+        'variant' => 'sliding',
+    ]);
+
+    $sideboard = place('Konsol', 'konsol', 1_400, 450, 1_800, 4_900);
+
+    // Taking no floor is the entire reason somebody fits one.
+    expect($this->geometryService->evaluate($this->layout->fresh())[$sideboard->id])->toBe('ok');
 });
 
 it('warns rather than refuses when something stands in front of a window', function (): void {
@@ -179,11 +223,8 @@ it('warns rather than refuses when something stands in front of a window', funct
 
     $states = $this->geometryService->evaluate($this->layout->fresh());
 
-    /*
-     * A sofa with its back to a window is an ordinary arrangement somebody may well want,
-     * so this is something to be told rather than something to be stopped from doing. A
-     * blocked doorway is not a taste question; a covered window is.
-     */
+    // A sofa with its back to a window is an ordinary arrangement somebody may well want, so
+    // this is something to be told rather than something to be stopped from doing.
     expect($states[$sofa->id])->toBe('warning');
 });
 
@@ -201,9 +242,9 @@ it('treats a balcony door like a door', function (): void {
 
     $states = $this->geometryService->evaluate($this->layout->fresh());
 
-    // It was not, for one afternoon, and the layout engine let a sideboard stand across the
-    // only way onto the balcony.
-    expect($states[$sideboard->id])->toBe('blocked');
+    // It was not, for one afternoon, and the layout engine said nothing about a sideboard
+    // standing across the only way onto the balcony.
+    expect($states[$sideboard->id])->toBe('warning');
 });
 
 it('lets a picture hang above a sideboard', function (): void {

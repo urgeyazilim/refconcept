@@ -267,6 +267,19 @@ final class RoomController
             'length_mm' => ['sometimes', 'nullable', 'integer', 'min:100', 'max:100000'],
             'height_mm' => ['sometimes', 'nullable', 'integer', 'min:1000', 'max:20000'],
 
+            /*
+             * Which of the four drawn walls actually faces north.
+             *
+             * The walls are named from the photographs and the reading gets it wrong often
+             * enough to be worth a control: a window that faces east recorded as west makes
+             * every sentence the planner writes about light backwards.
+             *
+             * A name, not a turn. Nothing moves and no measurement changes; the four labels
+             * do. Rotating the room is the other answer and is for when the room itself is
+             * drawn the wrong way round.
+             */
+            'north_wall' => ['sometimes', Rule::in(['north', 'east', 'south', 'west'])],
+
             'notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
         ]);
 
@@ -376,6 +389,7 @@ final class RoomController
             'width_mm' => $room->width_mm,
             'length_mm' => $room->length_mm,
             'height_mm' => $room->height_mm,
+            'north_wall' => $room->north_wall,
             'floor_area_m2' => $room->floorAreaM2(),
             'notes' => $room->notes,
             'primary_media_id' => $room->primary_media_id,

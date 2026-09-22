@@ -89,12 +89,38 @@ describe('collisionEngine', () => {
     expect(engine().evaluate([sofa]).get('sofa')).toBe('blocked')
   })
 
-  it('refuses a wardrobe standing in the doorway', () => {
+  it('warns about a wardrobe standing in the doorway', () => {
     const wardrobe = place('wardrobe', 'gardirop', 1_200, 600, 4_500, 850, 90)
 
     const states = engine([opening('door', 'east', 400, 900)]).evaluate([wardrobe])
 
-    expect(states.get('wardrobe')).toBe('blocked')
+    /*
+     * Told, not refused. It used to be 'blocked', which the constraint engine reads as "slide
+     * it away again" — so an armchair could not be put in front of the balcony glass, in a
+     * room where the glass is what you look at from the armchair, and nothing said why. The
+     * clearance in front of a door is what a designer leaves rather than something the world
+     * enforces, and somebody who puts a wardrobe there has a reason or will see the amber.
+     */
+    expect(states.get('wardrobe')).toBe('warning')
+  })
+
+  it('says nothing about a piece in front of a door that opens outward', () => {
+    const wardrobe = place('wardrobe', 'gardirop', 1_200, 600, 4_500, 850, 90)
+
+    const outward = { ...opening('door', 'east', 400, 900), swing: 'start_out' }
+
+    // It sweeps the landing, not this room. A warning about a problem that does not exist is
+    // one nobody reads the next time either.
+    expect(engine([outward]).evaluate([wardrobe]).get('wardrobe')).toBe('ok')
+  })
+
+  it('says nothing about a piece in front of a sliding balcony door', () => {
+    const sideboard = place('sideboard', 'konsol', 1_400, 450, 1_800, 4_900)
+
+    const sliding = { ...opening('balcony_door', 'south', 1_000, 1_600), variant: 'sliding' }
+
+    // Taking no floor is the entire reason somebody fits one.
+    expect(engine([sliding]).evaluate([sideboard]).get('sideboard')).toBe('ok')
   })
 
   it('warns rather than refuses when something stands in front of a window', () => {
@@ -112,7 +138,9 @@ describe('collisionEngine', () => {
 
     const states = engine([opening('balcony_door', 'south', 1_000, 1_600)]).evaluate([sideboard])
 
-    expect(states.get('sideboard')).toBe('blocked')
+    // A balcony door is a door, and one that swings inward takes the same floor. It was not,
+    // for one afternoon, and the layout engine let a sideboard stand across the only way out.
+    expect(states.get('sideboard')).toBe('warning')
   })
 
   it('lets a picture hang above a sideboard', () => {

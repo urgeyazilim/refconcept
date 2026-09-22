@@ -35,6 +35,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $width_mm
  * @property int|null $length_mm
  * @property int|null $height_mm
+ * @property string $north_wall which of the four drawn walls actually faces north
  * @property string|null $primary_media_id
  * @property bool $primary_is_manual
  * @property string|null $notes
@@ -65,6 +66,7 @@ class Room extends Model implements SimulatedOwner
         'width_mm',
         'length_mm',
         'height_mm',
+        'north_wall',
         'primary_media_id',
         'primary_is_manual',
         'notes',
