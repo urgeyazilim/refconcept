@@ -190,6 +190,36 @@ enum AiTask: string
     }
 
     /**
+     * Whether the answer's shape has to be guaranteed rather than requested.
+     *
+     * A schema sent as a suggestion is a suggestion. The layout plan came back four times
+     * in a row with the spots but no `max_width_mm` on any of them, three hundred and
+     * thirty-two seconds of it, and the customer was told "Geçersiz yanıt biçimi. Lütfen
+     * tekrar deneyin" — which is true and useless, since trying again asks the same
+     * question the same way. Without that number the shopping list would hunt a
+     * three-metre sofa for a metre and a half of wall.
+     *
+     * Not everything wants it. A provider that guarantees a shape also refuses anything
+     * outside it, and the room reading is the case for leaving the door open: it came back
+     * with a label, a photograph index and a confidence on every opening that nothing had
+     * asked for and everything turned out to want. Reading a room is description, and a
+     * description that is only allowed to say what was anticipated is worth less.
+     *
+     * So: guaranteed where a missing field stops the work, open where the extra field is
+     * the work. {@see OpenAiProvider} falls back to asking when a schema is too loose to
+     * be guaranteed — an array with no stated element type cannot be pinned down — so this
+     * saying yes is a preference, never a promise the provider has to keep.
+     */
+    public function requiresExactShape(): bool
+    {
+        return match ($this) {
+            self::DesignPlan, self::RenderCheck,
+            self::ProductTagging, self::ProductViewTagging => true,
+            default => false,
+        };
+    }
+
+    /**
      * Whether a customer is waiting for this in a browser.
      *
      * Interactive tasks get shorter timeouts and fewer retries: a customer watching a

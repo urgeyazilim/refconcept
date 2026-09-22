@@ -70,6 +70,28 @@ final class DesignGenerationFailed extends RuntimeException
         );
     }
 
+    /**
+     * The platform cannot reach a model at all, and no amount of trying will change it.
+     *
+     * An empty provider account or a rejected key. Kept apart from every other failure
+     * because it is the only one where "Lütfen tekrar deneyin" is both false and rude: the
+     * customer is being asked to keep pressing a button on a bill they did not receive.
+     * Theirs said "Yerleşim planı hazırlanamadı: İstek sınırı. Lütfen tekrar deneyin", four
+     * times, while the provider had been answering "You have no credits remaining".
+     *
+     * Not retryable, so nothing above this offers to try again, and the credits held for
+     * the version go back as they do on any failure.
+     */
+    public static function platformCannotReachAModel(): self
+    {
+        return new self(
+            'Tasarım şu anda üretilemiyor — sorun bizde, sende değil. Kredin harcanmadı; '
+            .'kısa süre içinde düzeltiyoruz.',
+            'plan',
+            isRetryable: false,
+        );
+    }
+
     public static function renderFailed(string $reason): self
     {
         return new self(

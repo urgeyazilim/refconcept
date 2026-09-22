@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domains\Projects\Services;
 
+use App\Domains\Ai\Enums\AiFailureKind;
 use App\Domains\Ai\Enums\AiJobStatus;
 use App\Domains\Ai\Enums\AiTask;
 use App\Domains\Ai\Exceptions\AiJobRefused;
@@ -294,7 +295,7 @@ final class DesignGenerationPipeline
         );
 
         if ($ran->status !== AiJobStatus::Succeeded) {
-            throw DesignGenerationFailed::planFailed($this->reasonFor($ran));
+            throw $this->planGaveUp($ran);
         }
 
         /** @var array<string, mixed> $structured */
@@ -609,7 +610,7 @@ final class DesignGenerationPipeline
         );
 
         if ($ran->status !== AiJobStatus::Succeeded) {
-            throw DesignGenerationFailed::renderFailed($this->reasonFor($ran));
+            throw $this->ourFaultOr($ran, DesignGenerationFailed::renderFailed($this->reasonFor($ran)));
         }
 
         /** @var array<int, string> $refs */
@@ -1501,6 +1502,31 @@ final class DesignGenerationPipeline
      * "Rate limit exceeded for org-abc123" tells a customer nothing they can act on and
      * tells a competitor something they would like to know.
      */
+    /**
+     * The plan failed; whose fault it was decides what the customer is told.
+     */
+    private function planGaveUp(AiJob $job): DesignGenerationFailed
+    {
+        return $this->ourFaultOr($job, DesignGenerationFailed::planFailed($this->reasonFor($job)));
+    }
+
+    /**
+     * The same failure, unless it was the platform's and not the room's.
+     *
+     * A provider account with no money in it, or a key it will not take, has nothing to do
+     * with the customer's photographs, their style or their budget — and every message this
+     * class produces otherwise ends "Lütfen tekrar deneyin", which for these two is both
+     * untrue and an invitation to spend an afternoon pressing a button. One customer did.
+     */
+    private function ourFaultOr(AiJob $job, DesignGenerationFailed $otherwise): DesignGenerationFailed
+    {
+        return match ($job->failure_kind) {
+            AiFailureKind::ProviderOutOfCredit,
+            AiFailureKind::AuthenticationFailed => DesignGenerationFailed::platformCannotReachAModel(),
+            default => $otherwise,
+        };
+    }
+
     private function reasonFor(AiJob $job): string
     {
         /*

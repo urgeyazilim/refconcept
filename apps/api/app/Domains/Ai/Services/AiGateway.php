@@ -141,8 +141,23 @@ final class AiGateway
         $attempt = 0;
         $lastResult = null;
 
+        $emptyProviders = [];
+
         foreach ($models as $index => $model) {
             $isFallback = $index > 0;
+
+            /*
+             * An account with no money in it says no to every model it hosts.
+             *
+             * The layout plan falls back from Astra to GPT-5.5, which is the same account,
+             * so an empty one produced four refusals and a customer told "İstek sınırı.
+             * Lütfen tekrar deneyin". A fallback is still worth taking when it belongs to
+             * somebody else — that is the whole point of having one — but asking the same
+             * empty account again under a second model name only lengthens the wait.
+             */
+            if (in_array((string) $model->provider_id, $emptyProviders, true)) {
+                continue;
+            }
 
             for ($try = 0; $try < $route->max_attempts; $try++) {
                 $attempt++;
@@ -202,6 +217,10 @@ final class AiGateway
                 }
 
                 $lastResult = $result;
+
+                if ($result->failureKind === AiFailureKind::ProviderOutOfCredit) {
+                    $emptyProviders[] = (string) $model->provider_id;
+                }
 
                 if (! $result->isRetryable()) {
                     // No point trying the same model again; break to the fallback, or

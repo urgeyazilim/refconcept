@@ -32,6 +32,21 @@ enum AiFailureKind: string
     case NoRouteConfigured = 'no_route_configured';
     case KillSwitchEngaged = 'kill_switch_engaged';
 
+    /**
+     * The provider's own account has run out of money.
+     *
+     * Separate from {@see RateLimited} because OpenAI reports both as a 429 and they are
+     * opposite problems. A rate limit passes on its own and is worth waiting out; an empty
+     * account does not, and four attempts at it are four attempts at "no". The design that
+     * uncovered this told the customer "İstek sınırı. Lütfen tekrar deneyin" — true of
+     * neither half — while the sentence that would have fixed it, "You have no credits
+     * remaining", sat in a failure row nobody reads.
+     *
+     * Not the customer's balance: {@see CostCapExceeded} is that. This is the platform's
+     * own bill, and nothing a customer does will move it.
+     */
+    case ProviderOutOfCredit = 'provider_out_of_credit';
+
     public function label(): string
     {
         return match ($this) {
@@ -46,6 +61,7 @@ enum AiFailureKind: string
             self::CostCapExceeded => 'Maliyet sınırı aşıldı',
             self::NoRouteConfigured => 'Yönlendirme tanımlı değil',
             self::KillSwitchEngaged => 'AI geçici olarak kapalı',
+            self::ProviderOutOfCredit => 'Sağlayıcı hesabında bakiye yok',
         };
     }
 
@@ -64,7 +80,8 @@ enum AiFailureKind: string
 
             // These will fail identically however many times they are tried.
             self::SafetyRefusal, self::InvalidRequest, self::AuthenticationFailed,
-            self::CostCapExceeded, self::NoRouteConfigured, self::KillSwitchEngaged => false,
+            self::CostCapExceeded, self::NoRouteConfigured, self::KillSwitchEngaged,
+            self::ProviderOutOfCredit => false,
         };
     }
 
@@ -75,6 +92,15 @@ enum AiFailureKind: string
             // A configuration or policy problem follows us to the fallback.
             self::InvalidRequest, self::CostCapExceeded, self::NoRouteConfigured,
             self::KillSwitchEngaged => false,
+
+            /*
+             * An empty account is worth a fallback, and only when the fallback is somebody
+             * else's. The route's second model is usually the same provider's — the plan
+             * falls back from Astra to GPT-5.5 — and asking the same empty account again
+             * under a different model name is the same "no" with a second bill attached to
+             * the waiting. The gateway checks the provider before it tries.
+             */
+            self::ProviderOutOfCredit => true,
 
             /*
              * A safety refusal *does* warrant a fallback: providers draw the line in

@@ -206,7 +206,7 @@ services:
     container_name: refconcept-queue-ai
     restart: unless-stopped
     working_dir: /var/www/html
-    command: ["php", "artisan", "queue:work", "--queue=ai", "--tries=1", "--timeout=960", "--max-time=3600", "--sleep=1"]
+    command: ["php", "artisan", "queue:work", "--queue=ai", "--tries=1", "--timeout=1860", "--max-time=3600", "--sleep=1"]
     volumes:
       - api-app:/var/www/html
       - api-vendor:/var/www/html/vendor

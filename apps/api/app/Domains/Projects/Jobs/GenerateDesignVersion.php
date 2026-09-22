@@ -37,14 +37,26 @@ final class GenerateDesignVersion implements ShouldQueue
     public int $tries = 1;
 
     /**
-     * Three model calls, each with its own retries.
+     * Longer than everything inside it, with room to spare.
      *
-     * Generous on purpose: if the worker gives up first, the pipeline never writes the
-     * failure, the version sits at `generating` forever and the customer watches a spinner
-     * with no end — the exact state {@see failed()} exists to clean up and one worth not
-     * reaching by construction.
+     * Not three model calls. A design is the plan, one ranking call for every placement it
+     * produced, the render and the check — and the plans have thirteen placements in them.
+     * Fifteen minutes was written when a step took twenty seconds; on the engine that reads
+     * and decides now, the plan alone takes eighty and a ranking call is of that order, so
+     * thirteen placements put the sum past the limit and the worker would kill the run at
+     * the last step. The money is spent by then. Every model call has already been made and
+     * paid for, and the customer gets a version stuck at `generating` for the two minutes
+     * until {@see failed()} tidies it away.
+     *
+     * Half an hour, therefore, until the ranking stops being one call per placement — that
+     * is the real answer and it is a change to the pipeline, not to a number here.
+     *
+     * Generous on purpose in the other direction too: if the worker gives up first the
+     * pipeline never writes the failure, and the version sits at `generating` with a
+     * spinner that has no end. That is the state {@see failed()} exists to clean up, and
+     * one worth not reaching by construction.
      */
-    public int $timeout = 900;
+    public int $timeout = 1_800;
 
     /** The slow queue: see RunAiJob. A design render is minutes, not milliseconds. */
     public function __construct(public readonly string $versionId)

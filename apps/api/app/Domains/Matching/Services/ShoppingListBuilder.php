@@ -46,6 +46,10 @@ final class ShoppingListBuilder
     /** How many go to the model for reranking. More is a bill, fewer is not a shortlist. */
     private const RERANK_WINDOW = 10;
 
+    /** Ten centimetres: nothing that goes in a room is narrower, so a smaller cap is a
+     *  misunderstanding rather than a constraint. See widthOf(). */
+    private const NARROWEST_MM = 100;
+
     /** Set for the duration of one build; null when the design was written free-hand. */
     private ?string $styleCode = null;
 
@@ -372,12 +376,32 @@ final class ShoppingListBuilder
     }
 
     /**
+     * The widest a product may be for this spot, when that is a width at all.
+     *
+     * The plan states it in millimetres and it goes straight into the search as a ceiling,
+     * so a wrong number here does not narrow the results — it empties them. Thirteen
+     * placements came back saying 36: the sofa, the bookcase, the rug and the ceiling light,
+     * three and a half centimetres each. Nothing in the catalogue is that narrow, so every
+     * placement found nothing and the customer was told "Bu plandaki ürünlerin hiçbiri
+     * katalogda bulunamadı. Farklı bir stil veya bütçe ile tekrar deneyebilirsiniz" — which
+     * blames the catalogue and sends them to change a style that had nothing to do with it.
+     *
+     * A hundred millimetres is the floor, and it is a fact about rooms rather than about
+     * this catalogue: nothing a designer places in one — not a vase, not a picture frame —
+     * is narrower than ten centimetres. Below that the plan is not constraining the search,
+     * it has misunderstood the question, and the honest reading of a constraint nobody could
+     * have meant is that there is no constraint. The customer then gets a shopping list that
+     * may need a size corrected, instead of a design that could not be drawn.
+     *
+     * The misunderstanding itself is answered where it happens: prompt version 6 says what
+     * the field means, in millimetres, with the sizes a designer would recognise.
+     *
      * @param  array<string, mixed>  $placement
      */
     private function widthOf(array $placement): ?int
     {
         $width = $placement['max_width_mm'] ?? null;
 
-        return is_int($width) && $width > 0 ? $width : null;
+        return is_int($width) && $width >= self::NARROWEST_MM ? $width : null;
     }
 }

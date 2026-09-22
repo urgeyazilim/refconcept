@@ -110,6 +110,115 @@ describe('OpenAI adapter', function (): void {
             ->and($result->outputTokens)->toBe(4_160);
     });
 
+    /*
+     * --- a shape asked for, and a shape guaranteed -------------------------
+     *
+     * The layout plan came back four times in a row with the spots but no max_width_mm on
+     * any of them. Three hundred and thirty-two seconds, four attempts, one design thrown
+     * away, and the customer told "Geçersiz yanıt biçimi. Lütfen tekrar deneyin" — which is
+     * true and useless, because trying again asks the same question the same way. A schema
+     * sent as advice is advice.
+     */
+    it('guarantees the shape for a task that cannot work without it', function (): void {
+        Http::fake([
+            '*/chat/completions' => Http::response([
+                'choices' => [['message' => ['content' => '{"style":"modern","placements":[],"composition":{"focal_point":"a","entry_view":"b"}}'], 'finish_reason' => 'stop']],
+                'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
+            ]),
+        ]);
+
+        app(OpenAiProvider::class)->execute(callFor($this->provider, AiModality::Vision, AiTask::DesignPlan, [
+            'required' => ['style', 'placements'],
+            'properties' => [
+                'style' => ['type' => 'string'],
+                'notes' => ['type' => 'string'],
+                'placements' => [
+                    'type' => 'array',
+                    'items' => [
+                        'type' => 'object',
+                        'required' => ['category', 'max_width_mm'],
+                        'properties' => [
+                            'category' => ['type' => 'string'],
+                            'wall' => ['type' => 'string'],
+                            'max_width_mm' => ['type' => 'integer', 'minimum' => 100],
+                        ],
+                    ],
+                ],
+            ],
+        ]));
+
+        Http::assertSent(function (Request $request): bool {
+            $sent = $request->data()['response_format']['json_schema'];
+            $placement = $sent['schema']['properties']['placements']['items'];
+
+            expect($sent['strict'])->toBeTrue()
+                // Every property required and closed to anything else: what strict mode is.
+                ->and($placement['required'])->toBe(['category', 'wall', 'max_width_mm'])
+                ->and($placement['additionalProperties'])->toBeFalse()
+                // A number the plan cannot work without, promised rather than requested.
+                ->and($placement['properties']['max_width_mm']['type'])->toBe('integer')
+                // What the schema called optional, said the only way strict mode hears it.
+                ->and($placement['properties']['wall']['type'])->toBe(['string', 'null'])
+                ->and($sent['schema']['properties']['notes']['type'])->toBe(['string', 'null'])
+                // A bound strict mode refuses outright; the gateway checks it on the way back.
+                ->and($placement['properties']['max_width_mm'])->not->toHaveKey('minimum');
+
+            return true;
+        });
+    });
+
+    it('leaves a reading free to say more than it was asked', function (): void {
+        Http::fake([
+            '*/chat/completions' => Http::response([
+                'choices' => [['message' => ['content' => '{"room_type":"living_room"}'], 'finish_reason' => 'stop']],
+                'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
+            ]),
+        ]);
+
+        app(OpenAiProvider::class)->execute(callFor($this->provider, AiModality::Vision, AiTask::RoomAnalysis, [
+            'required' => ['room_type'],
+            'properties' => ['room_type' => ['type' => 'string']],
+        ]));
+
+        /*
+         * Reading a room is description, and a guarantee is also a ceiling: strict mode
+         * refuses any field the schema did not anticipate. This reading came back with a
+         * label, a photograph index and a confidence on every opening that nothing asked
+         * for and everything turned out to want.
+         */
+        Http::assertSent(function (Request $request): bool {
+            $sent = $request->data()['response_format']['json_schema'];
+
+            expect($sent['strict'])->toBeFalse()
+                ->and($sent['schema'])->not->toHaveKey('additionalProperties');
+
+            return true;
+        });
+    });
+
+    it('asks rather than promises when the schema cannot be pinned down', function (): void {
+        Http::fake([
+            '*/chat/completions' => Http::response([
+                'choices' => [['message' => ['content' => '{"verdict":"ok"}'], 'finish_reason' => 'stop']],
+                'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
+            ]),
+        ]);
+
+        // An array with no stated element type cannot be guaranteed, and three of the
+        // stored schemas are like that. Refusing to answer a customer over the shape of a
+        // row in a table nobody has looked at would be the worse fault.
+        app(OpenAiProvider::class)->execute(callFor($this->provider, AiModality::Vision, AiTask::RenderCheck, [
+            'required' => ['warnings'],
+            'properties' => ['warnings' => ['type' => 'array']],
+        ]));
+
+        Http::assertSent(function (Request $request): bool {
+            expect($request->data()['response_format']['json_schema']['strict'])->toBeFalse();
+
+            return true;
+        });
+    });
+
     it('classifies a rate limit as something worth trying again', function (): void {
         Http::fake(['*/chat/completions' => Http::response(['error' => ['message' => 'Rate limit reached']], 429)]);
 

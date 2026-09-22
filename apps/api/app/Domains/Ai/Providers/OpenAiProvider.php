@@ -177,6 +177,108 @@ final class OpenAiProvider implements AiProvider
     }
 
     /**
+     * The same schema, in the form OpenAI will guarantee — or nothing, if it cannot.
+     *
+     * Strict mode has three demands, and meeting them is a translation rather than a change
+     * of intent:
+     *
+     *  - **Every property listed as required.** A property the schema left optional says so
+     *    by being allowed to come back null instead, which means the same thing to the
+     *    application and something the provider can enforce.
+     *  - **`additionalProperties: false` on every object.** The cost of the guarantee: the
+     *    model may no longer volunteer a field. Only tasks that would rather have the
+     *    guarantee ask for this — see {@see AiTask::requiresExactShape()}.
+     *  - **No bounds it does not implement.** `minimum` and `maximum` are refused outright,
+     *    so they are dropped here. Nothing is lost: the gateway validates what arrives, and
+     *    it is the one that decided those bounds in the first place.
+     *
+     * Null when the schema cannot be pinned down — an array with no stated element type, an
+     * object with no properties. Three of the stored schemas are like that today, and the
+     * caller then sends the schema the ordinary way rather than failing the call. A task
+     * asking to be guaranteed and quietly not being is the lesser fault; refusing to answer
+     * a customer over the shape of a row in a table nobody has looked at is the greater one.
+     *
+     * @param  array<string, mixed>  $schema
+     * @return array<string, mixed>|null
+     */
+    private function exactly(array $schema): ?array
+    {
+        // Bounds first: they can sit on any node and strict mode refuses them everywhere.
+        unset($schema['minimum'], $schema['maximum']);
+
+        $type = $schema['type'] ?? null;
+
+        if ($type === 'array' || isset($schema['items'])) {
+            if (! isset($schema['items']) || ! is_array($schema['items'])) {
+                return null;
+            }
+
+            $items = $this->exactly($schema['items']);
+
+            if ($items === null) {
+                return null;
+            }
+
+            $schema['items'] = $items;
+
+            return $schema;
+        }
+
+        if ($type !== 'object' && ! isset($schema['properties'])) {
+            return $schema;
+        }
+
+        $properties = $schema['properties'] ?? null;
+
+        if (! is_array($properties) || $properties === []) {
+            return null;
+        }
+
+        $wanted = array_flip(array_map('strval', (array) ($schema['required'] ?? [])));
+
+        foreach ($properties as $name => $property) {
+            if (! is_array($property)) {
+                return null;
+            }
+
+            $exact = $this->exactly($property);
+
+            if ($exact === null) {
+                return null;
+            }
+
+            // What the schema called optional, said in the only way strict mode can hear it.
+            $properties[$name] = isset($wanted[$name]) ? $exact : $this->orNull($exact);
+        }
+
+        $schema['properties'] = $properties;
+        $schema['required'] = array_values(array_map('strval', array_keys($properties)));
+        $schema['additionalProperties'] = false;
+
+        return $schema;
+    }
+
+    /**
+     * A node that is also allowed to be null.
+     *
+     * How strict mode spells optional. `["string", "null"]` reaches the application as a
+     * key with nothing in it, which is what a missing key reached it as before.
+     *
+     * @param  array<string, mixed>  $node
+     * @return array<string, mixed>
+     */
+    private function orNull(array $node): array
+    {
+        $type = $node['type'] ?? null;
+
+        if (is_string($type) && $type !== 'null') {
+            $node['type'] = [$type, 'null'];
+        }
+
+        return $node;
+    }
+
+    /**
      * Whether this model still accepts a temperature.
      *
      * The GPT-4 and GPT-3.5 families do. Everything since — the 5s, the 6s, the o-series —
@@ -257,14 +359,24 @@ final class OpenAiProvider implements AiProvider
          * deneyin" after seven minutes and three credits. Retrying an unenforced shape is
          * paying six times for the same misunderstanding.
          *
-         * Not strict. Strict mode demands `additionalProperties: false` and every property
-         * required, on every object in the tree, and our schemas are deliberately open —
-         * the room reading came back with a label, a photo index and a confidence per
-         * opening that nothing asked for and everything wants. The gateway still validates
-         * what arrives, so this is a much better instruction rather than a second authority.
+         * An instruction was not enough either. The layout plan came back four more times
+         * with every `max_width_mm` missing — three hundred and thirty-two seconds, four
+         * attempts, one design thrown away — because a schema sent this way is advice, and
+         * a model that has already decided the field is unimportant will decline it again
+         * however many times it is asked.
+         *
+         * So the shape is guaranteed for the tasks that say they need it, and asked for on
+         * the rest. Strict mode demands `additionalProperties: false` and every property
+         * listed as required, which is why it is not on everywhere: the room reading is
+         * better for being allowed to volunteer a label, a photograph index and a
+         * confidence that nothing asked for. See {@see AiTask::requiresExactShape()}.
          */
         if ($call->expectsStructuredOutput() && $call->model->supports_structured_output) {
             $schema = $call->responseSchema;
+
+            $exact = $schema !== null && $schema !== [] && $call->task->requiresExactShape()
+                ? $this->exactly($this->wellFormed($schema))
+                : null;
 
             $payload['response_format'] = $schema === null || $schema === []
                 ? ['type' => 'json_object']
@@ -272,8 +384,8 @@ final class OpenAiProvider implements AiProvider
                     'type' => 'json_schema',
                     'json_schema' => [
                         'name' => str_replace('_', '', $call->task->value),
-                        'schema' => $this->wellFormed($schema),
-                        'strict' => false,
+                        'schema' => $exact ?? $this->wellFormed($schema),
+                        'strict' => $exact !== null,
                     ],
                 ];
         }
@@ -410,9 +522,14 @@ final class OpenAiProvider implements AiProvider
         $status = $response->status();
         $message = (string) (data_get($response->json(), 'error.message') ?? $response->body());
 
+        // The code says `insufficient_quota` where the prose says "no credits remaining".
+        // Which of the two arrives depends on the endpoint, so both are looked at.
+        $code = (string) (data_get($response->json(), 'error.code') ?? '');
+
         $kind = match (true) {
             $status === 401 || $status === 403 => AiFailureKind::AuthenticationFailed,
             $status === 408 || $status === 504 => AiFailureKind::Timeout,
+            $status === 429 && $this->looksLikeAnEmptyAccount($code.' '.$message) => AiFailureKind::ProviderOutOfCredit,
             $status === 429 => AiFailureKind::RateLimited,
             $status >= 500 => AiFailureKind::ProviderError,
             $status === 400 && $this->looksLikeSafety($message) => AiFailureKind::SafetyRefusal,
@@ -420,6 +537,32 @@ final class OpenAiProvider implements AiProvider
         };
 
         return AiResult::failure($kind, $message, httpStatus: $status);
+    }
+
+    /**
+     * Whether a 429 is an empty account rather than too many requests.
+     *
+     * OpenAI reports both the same way and they are opposite problems. A rate limit passes
+     * on its own and is worth waiting out; an account with no money in it does not, and
+     * four attempts at it are four attempts at "no" — which is what a customer waited
+     * through before being told "İstek sınırı. Lütfen tekrar deneyin", while the sentence
+     * that would have explained it sat in a failure row nobody reads.
+     *
+     * Matched on the message because that is the only thing that separates them. Both
+     * phrasings are checked: `insufficient_quota` is the code the error carries, and "no
+     * credits remaining" is what it says in prose.
+     */
+    private function looksLikeAnEmptyAccount(string $message): bool
+    {
+        $text = mb_strtolower($message);
+
+        foreach (['insufficient_quota', 'no credits remaining', 'exceeded your current quota', 'billing'] as $phrase) {
+            if (str_contains($text, $phrase)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function looksLikeSafety(string $message): bool
