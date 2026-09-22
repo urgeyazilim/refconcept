@@ -7,8 +7,13 @@
  * finding it among them by reading. The product owner said it plainly — the customer should
  * do this on the object, on the screen, without going anywhere.
  *
- * So the panel comes to the thing. It is anchored to the middle of the opening and follows it
- * as the camera turns; pressing another opening moves it there; pressing the floor closes it.
+ * So the panel comes to the thing — in two steps, because the first attempt opened it full
+ * size over the very door it was about, and a door with a panel on it cannot be dragged. A
+ * press puts a small tag beside the opening, and the tag opens the panel. Pointing at
+ * something and moving it stay one gesture; changing it is a second one, asked for.
+ *
+ * Both are anchored to the middle of the opening and follow it as the camera turns, both sit
+ * beside it rather than over it, and both close on the floor or on Escape.
  *
  * Every control writes immediately. There is no Kaydet, because there is nothing here that
  * needs thinking about between typing a number and meaning it — and an unsaved panel that
@@ -36,6 +41,8 @@ const props = defineProps<{
   /** Where on screen the opening is, in canvas pixels. */
   x: number
   y: number
+  /** How wide the canvas is, so a panel near the right edge opens to the left instead. */
+  canvasWidth: number
 }>()
 
 const emit = defineEmits<{
@@ -47,6 +54,34 @@ const emit = defineEmits<{
 }>()
 
 const WALL_LABELS: Record<string, string> = { north: 'kuzey', east: 'doğu', south: 'güney', west: 'batı' }
+
+/** Shut until asked for, and shut again whenever the panel moves to another opening. */
+const open = ref(false)
+
+watch(() => props.opening.id, () => {
+  open.value = false
+})
+
+/**
+ * Beside the opening, never over it.
+ *
+ * The first version centred the panel on the anchor, which is the middle of the door — so the
+ * door was under the panel and could not be picked up. Everything is offset to the right by
+ * more than half the opening's width on screen, and flips to the left when there is no room,
+ * which is what a menu does at the edge of a window.
+ *
+ * The numbers are pixels of canvas, not millimetres of room: what matters is that a finger
+ * can reach the door, and a finger is the same size however far away the wall is.
+ */
+const GAP_PX = 26
+
+const flipped = computed(() => props.x > props.canvasWidth - 300)
+
+const placement = computed(() => ({
+  left: `${props.x + (flipped.value ? -GAP_PX : GAP_PX)}px`,
+  top: `${props.y}px`,
+  transform: flipped.value ? 'translate(-100%, -50%)' : 'translate(0, -50%)',
+}))
 
 /** Centimetres in the boxes, because that is what a tape measure reads. */
 const cm = (millimetres: number | null): string => (millimetres === null ? '' : String(Math.round(millimetres / 10)))
@@ -80,9 +115,31 @@ const sealedKind = computed(() => kinds.value.find(kind => kind.variant === 'fix
 </script>
 
 <template>
+  <!--
+    Shut: a tag beside the opening saying what it is, with a way in.
+
+    Small on purpose. The door has to stay reachable — pointing at something and moving it are
+    one gesture, and a panel that opens under the finger that selected it takes the drag away.
+  -->
+  <button
+    v-if="!open"
+    type="button"
+    class="pointer-events-auto absolute z-20 flex items-center gap-1.5 rounded-pill bg-surface/95 py-1 pr-2 pl-2.5 text-[11px] whitespace-nowrap text-ink-secondary shadow-md backdrop-blur-sm transition-colors hover:bg-surface"
+    :style="placement"
+    :aria-label="`${describeKind(opening)} ayarları`"
+    @pointerdown.stop
+    @click="open = true"
+  >
+    {{ describeKind(opening) }}
+    <svg class="size-4 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z" />
+    </svg>
+  </button>
+
   <div
-    class="pointer-events-auto absolute z-20 w-64 -translate-x-1/2 rounded-md bg-surface/97 p-3 shadow-lg backdrop-blur-sm"
-    :style="{ left: `${x}px`, top: `${y}px` }"
+    v-else
+    class="pointer-events-auto absolute z-20 w-64 rounded-md bg-surface/97 p-3 shadow-lg backdrop-blur-sm"
+    :style="placement"
     role="dialog"
     :aria-label="`${describeKind(opening)} ayarları`"
     @pointerdown.stop
@@ -101,7 +158,7 @@ const sealedKind = computed(() => kinds.value.find(kind => kind.variant === 'fix
         type="button"
         class="-m-1 rounded-pill p-1 text-muted transition-colors hover:bg-bg-muted"
         aria-label="Kapat"
-        @click="emit('close')"
+        @click="open = false"
       >
         <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
           <path :d="ICONS.close" />

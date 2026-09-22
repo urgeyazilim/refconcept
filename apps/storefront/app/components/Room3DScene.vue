@@ -145,6 +145,9 @@ const turningCompass = ref(false)
  */
 const anchor = ref<Anchor | null>(null)
 
+/** How wide the canvas is, so a panel near the right edge opens to the left instead. */
+const canvasWidth = ref(0)
+
 /** The opening the panel is about, looked up fresh so an edit shows in it immediately. */
 const openingPanel = computed(() => {
   if (anchor.value === null || anchor.value.kind !== 'opening') {
@@ -614,6 +617,10 @@ onMounted(() => {
     },
     onAnchor: (next) => {
       anchor.value = next
+
+      // Read here rather than watched: the anchor arrives after every drawn frame, which is
+      // also the only moment the canvas can have changed size without anybody being told.
+      canvasWidth.value = canvas.value?.clientWidth ?? 0
     },
     // Read-only scenes pass no persist callback at all, so there is no path by which one can
     // write a layout — rather than a flag somewhere that has to stay false.
@@ -853,6 +860,7 @@ defineExpose({
         :opening="openingPanel.opening"
         :x="openingPanel.at.x"
         :y="openingPanel.at.y"
+        :canvas-width="canvasWidth"
         @close="editor?.selectOpening(null)"
         @remove="id => { emit('removeOpening', id); editor?.selectOpening(null) }"
         @rekind="(id, kind) => emit('rekindOpening', id, kind)"
