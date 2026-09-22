@@ -49,10 +49,7 @@ async function onSubmit() {
 const memberSince = computed(() => {
   if (!user.value?.created_at) return null
 
-  return new Date(user.value.created_at).toLocaleDateString('tr-TR', {
-    year: 'numeric',
-    month: 'long',
-  })
+  return monthAndYear(user.value.created_at)
 })
 </script>
 
@@ -92,7 +89,7 @@ const memberSince = computed(() => {
     <section class="rc-card p-6 sm:p-8">
       <h3 class="mb-6 text-lg font-medium">Profil bilgileri</h3>
 
-      <form class="space-y-5" novalidate @submit.prevent="onSubmit">
+      <form method="post" class="space-y-5" novalidate @submit.prevent="onSubmit">
         <RcAlert v-if="generalError" tone="danger">{{ generalError }}</RcAlert>
         <RcAlert v-if="saved" tone="success">Profiliniz güncellendi.</RcAlert>
 

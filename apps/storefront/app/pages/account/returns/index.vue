@@ -59,7 +59,7 @@ function money(minor: number, currency = 'TRY'): string {
 }
 
 function when(value: string | null): string {
-  return value === null ? '' : new Date(value).toLocaleDateString('tr-TR')
+  return shortDate(value)
 }
 
 const tone = (status: string): string => {

@@ -142,7 +142,7 @@ async function remove(address: Address) {
         {{ editingId ? 'Adresi düzenle' : 'Yeni adres' }}
       </h3>
 
-      <form class="space-y-5" novalidate @submit.prevent="onSubmit">
+      <form method="post" class="space-y-5" novalidate @submit.prevent="onSubmit">
         <RcAlert v-if="formError" tone="danger">{{ formError }}</RcAlert>
 
         <div class="grid gap-5 sm:grid-cols-2">

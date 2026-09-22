@@ -324,7 +324,7 @@ onBeforeUnmount(() => {
         <h1 class="text-xl font-medium">3B model karşılaştırması</h1>
         <p v-if="index" class="mt-1 text-sm text-muted">
           {{ index.products.length }} ürün × {{ index.models.length }} üretici · ~{{ cost.toFixed(2) }} $ ·
-          {{ new Date(index.generated_at).toLocaleString('tr-TR') }}
+          {{ dateAndTime(index.generated_at) }}
         </p>
       </div>
 

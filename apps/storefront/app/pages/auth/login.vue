@@ -46,7 +46,15 @@ async function onSubmit() {
 
 <template>
   <RcAuthCard title="Giriş yap" subtitle="Projelerinize ve tasarımlarınıza devam edin.">
-    <form class="space-y-5" novalidate @submit.prevent="onSubmit">
+    <!--
+      `method="post"` is never used once Vue is running — `@submit.prevent` stops the submit
+      before the browser gets there. It is here for the seconds before that: on a slow
+      connection somebody can type their password and press Enter while the page is still
+      the server's HTML, and a form with no method submits as GET. That puts the password in
+      the address bar, in the history, and in every access log it passes through. As a POST
+      it puts it nowhere, and Nuxt answers with this same page.
+    -->
+    <form method="post" class="space-y-5" novalidate @submit.prevent="onSubmit">
       <RcAlert v-if="notice" tone="success">{{ notice }}</RcAlert>
       <RcAlert v-if="generalError" tone="danger">{{ generalError }}</RcAlert>
 

@@ -86,7 +86,7 @@ async function onSubmit() {
     title="Hesap oluştur"
     subtitle="Odanızı yükleyin, yapay zekâ size özel bir tasarım üretsin."
   >
-    <form class="space-y-5" novalidate @submit.prevent="onSubmit">
+    <form method="post" class="space-y-5" novalidate @submit.prevent="onSubmit">
       <RcAlert v-if="generalError" tone="danger">{{ generalError }}</RcAlert>
 
       <div class="grid gap-5 sm:grid-cols-2">

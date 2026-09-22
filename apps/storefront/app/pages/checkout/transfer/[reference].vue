@@ -217,7 +217,7 @@ const stillOwed = computed(() =>
         </div>
 
         <p v-if="transfer.expires_at" class="mt-4 text-xs text-muted">
-          Ürünleriniz {{ new Date(transfer.expires_at).toLocaleString('tr-TR') }} tarihine
+          Ürünleriniz {{ dateAndTime(transfer.expires_at) }} tarihine
           kadar sizin için ayrıldı.
         </p>
 

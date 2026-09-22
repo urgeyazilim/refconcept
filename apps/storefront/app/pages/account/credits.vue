@@ -144,10 +144,6 @@ function daysUntil(iso: string | null): string {
 
   return `${days} gün içinde`
 }
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })
-}
 </script>
 
 <template>
@@ -218,7 +214,7 @@ function formatDate(iso: string): string {
         <h2 class="text-sm font-medium">Kampanya kodu</h2>
         <p class="mt-1 text-sm text-ink-secondary">Elinizde bir kod varsa buraya girin.</p>
 
-        <form class="mt-3 flex flex-wrap gap-2" @submit.prevent="redeem">
+        <form method="post" class="mt-3 flex flex-wrap gap-2" @submit.prevent="redeem">
           <input
             v-model="code"
             type="text"
@@ -294,7 +290,7 @@ function formatDate(iso: string): string {
             <div class="min-w-0">
               <p class="truncate text-sm">{{ movement.description }}</p>
               <p class="mt-0.5 text-xs text-muted">
-                {{ formatDate(movement.created_at) }} · {{ movement.type_label }}
+                {{ longDate(movement.created_at) }} · {{ movement.type_label }}
               </p>
               <!-- A hand-made correction says why. A customer is entitled to that. -->
               <p v-if="movement.reason" class="mt-0.5 text-xs text-ink-secondary">

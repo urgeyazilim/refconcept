@@ -47,7 +47,7 @@ async function onSubmit() {
     title="Yeni parola belirle"
     subtitle="Yeni parolanızı girin; ardından tekrar giriş yapmanız gerekecek."
   >
-    <form class="space-y-5" novalidate @submit.prevent="onSubmit">
+    <form method="post" class="space-y-5" novalidate @submit.prevent="onSubmit">
       <RcAlert v-if="generalError" tone="danger">{{ generalError }}</RcAlert>
 
       <RcField

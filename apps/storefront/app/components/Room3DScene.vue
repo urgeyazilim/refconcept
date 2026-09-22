@@ -1101,7 +1101,7 @@ defineExpose({
         Centimetres in the boxes, because that is what a tape measure reads.
       -->
       <div class="absolute right-4 bottom-4 text-right text-xs text-muted">
-        <form v-if="sizing && editable" class="flex items-center gap-1 rounded-md bg-surface/95 p-1.5 backdrop-blur-sm" @submit.prevent="applySize">
+        <form v-if="sizing && editable" method="post" class="flex items-center gap-1 rounded-md bg-surface/95 p-1.5 backdrop-blur-sm" @submit.prevent="applySize">
           <label class="sr-only" for="room-width">Genişlik (cm)</label>
           <input
             id="room-width"

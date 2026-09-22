@@ -1704,7 +1704,7 @@ onMounted(async () => {
               Odaya ürün ekle
             </h2>
     
-            <form class="mt-3 flex gap-2" @submit.prevent="findProducts(null)">
+            <form method="post" class="mt-3 flex gap-2" @submit.prevent="findProducts(null)">
               <input
                 v-model="search"
                 type="search"

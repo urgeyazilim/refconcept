@@ -1287,7 +1287,7 @@ function guideSecondary() {
           -->
           <section v-else-if="activeStep === 'recognise'" id="oda" class="flex min-h-0 flex-col gap-3">
             <!-- The size, only when somebody is typing it, and on one line: the room below is the point. -->
-            <form v-if="editingSize || typingSize || (!measured && !proposedSize)" class="rc-card flex flex-wrap items-end gap-3 p-3" @submit.prevent="submitSize">
+            <form v-if="editingSize || typingSize || (!measured && !proposedSize)" method="post" class="rc-card flex flex-wrap items-end gap-3 p-3" @submit.prevent="submitSize">
               <label class="w-28">
                 <span class="mb-1 block text-xs text-muted">Genişlik (cm)</span>
                 <input id="width" v-model="sizeForm.width" :disabled="!canEdit" inputmode="numeric" class="w-full rounded-sm border border-line bg-surface px-3 py-2 text-sm tabular-nums">
@@ -1338,7 +1338,7 @@ function guideSecondary() {
                     </RcButton>
                   </div>
 
-                  <form v-if="addingConstraint" class="mt-4 space-y-5 rounded-md bg-bg-muted p-5" @submit.prevent="addConstraint">
+                  <form v-if="addingConstraint" method="post" class="mt-4 space-y-5 rounded-md bg-bg-muted p-5" @submit.prevent="addConstraint">
                     <div class="grid gap-4 sm:grid-cols-2">
                       <div>
                         <label for="ctype" class="mb-1.5 block text-sm font-medium">Ne?</label>
@@ -1457,7 +1457,7 @@ function guideSecondary() {
                 Kendi cümlelerinle yaz. Boş bırakırsan odanın türüne ve ölçülerine göre bir öneri hazırlarım.
               </p>
 
-              <form class="mt-5 space-y-5" @submit.prevent="createDesign(null)">
+              <form method="post" class="mt-5 space-y-5" @submit.prevent="createDesign(null)">
                 <div>
                   <label for="prompt" class="mb-1.5 block text-sm font-medium">İstediklerin</label>
                   <textarea

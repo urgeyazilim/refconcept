@@ -38,7 +38,7 @@ function money(minor: number, currency = 'TRY'): string {
 }
 
 function when(value: string | null): string {
-  return value === null ? '' : new Date(value).toLocaleString('tr-TR')
+  return dateAndTime(value)
 }
 
 const address = computed(() => {

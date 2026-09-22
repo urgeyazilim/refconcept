@@ -1441,7 +1441,7 @@ const statusTone: Record<string, string> = {
                 <p v-else class="mt-1.5 text-sm text-muted">İlk deneme</p>
 
                 <p class="mt-1 text-xs text-muted">
-                  {{ row.node.created_at ? new Date(row.node.created_at).toLocaleString('tr-TR') : '' }}
+                  {{ dateAndTime(row.node.created_at) }}
                   <span v-if="row.node.credit_cost > 0"> · {{ row.node.credit_cost }} kredi</span>
                 </p>
 
@@ -1493,7 +1493,8 @@ const statusTone: Record<string, string> = {
 
             <!-- Refine from this version -->
             <form
-              v-if="branchingFrom?.id === row.node.id"
+v-if="branchingFrom?.id === row.node.id"
+              method="post"
               class="mt-4 space-y-3 rounded-sm bg-surface p-4"
               @submit.prevent="branch"
             >

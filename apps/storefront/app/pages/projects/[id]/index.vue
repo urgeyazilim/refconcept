@@ -179,7 +179,7 @@ async function setStatus(status: string) {
           </RcButton>
         </header>
 
-        <form v-if="addingRoom" class="rc-card mt-5 space-y-5 p-6" @submit.prevent="addRoom">
+        <form v-if="addingRoom" method="post" class="rc-card mt-5 space-y-5 p-6" @submit.prevent="addRoom">
           <RcAlert v-if="roomError" tone="danger">{{ roomError }}</RcAlert>
 
           <div class="grid gap-4 sm:grid-cols-2">
@@ -276,7 +276,7 @@ async function setStatus(status: string) {
           </RcButton>
         </header>
 
-        <form v-if="invitingOpen" class="rc-card mt-5 space-y-5 p-6" @submit.prevent="invite">
+        <form v-if="invitingOpen" method="post" class="rc-card mt-5 space-y-5 p-6" @submit.prevent="invite">
           <RcAlert v-if="inviteError" tone="danger">{{ inviteError }}</RcAlert>
 
           <div class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_200px]">

@@ -42,7 +42,7 @@ async function onSubmit() {
     title="Parolanızı sıfırlayın"
     subtitle="E-posta adresinizi girin, size bir sıfırlama bağlantısı gönderelim."
   >
-    <form class="space-y-5" novalidate @submit.prevent="onSubmit">
+    <form method="post" class="space-y-5" novalidate @submit.prevent="onSubmit">
       <RcAlert v-if="generalError" tone="danger">{{ generalError }}</RcAlert>
 
       <RcField

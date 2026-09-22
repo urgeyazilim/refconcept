@@ -31,7 +31,7 @@ function money(minor: number, currency = 'TRY'): string {
 }
 
 function when(value: string): string {
-  return new Date(value).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })
+  return longDate(value)
 }
 
 const tone = (status: string): string => {

@@ -113,7 +113,7 @@ async function create() {
 
       <RcAlert v-if="formError" tone="danger" class="mt-4">{{ formError }}</RcAlert>
 
-      <form class="mt-5 space-y-5" @submit.prevent="create">
+      <form method="post" class="mt-5 space-y-5" @submit.prevent="create">
         <RcField
           v-model="form.name"
           label="Evinin adı"
