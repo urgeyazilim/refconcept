@@ -44,17 +44,15 @@ services:
     networks: [refconcept]
 
   minio:
-    # quay.io, not Docker Hub.
+    # Built, not pulled — see `infra/docker/minio/Dockerfile`. Every registry that used to
+    # serve this image stopped answering anonymous pulls on 2026-09-26.
     #
-    # `minio/minio` on Docker Hub answers every pull with "pull access denied for
-    # minio/minio, repository does not exist or may require 'docker login'", which reads like
-    # a credentials problem on the machine doing the pulling and is not one: the same pull
-    # fails from a developer's laptop with a working Docker Hub login, while
-    # `pgvector/pgvector` beside it comes down anonymously. MinIO publishes to their own
-    # registry; quay.io is where the image actually is.
-    #
-    # It cost a deployment twice, both times reported as a server problem.
-    image: quay.io/minio/minio:latest
+    # The first build takes a few minutes because it compiles two Go programs; after that it
+    # is a cache hit and costs nothing. `docker compose build minio` refreshes it.
+    build:
+      context: .
+      dockerfile: infra/docker/minio/Dockerfile
+    image: refconcept-minio:local
     container_name: refconcept-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
@@ -67,14 +65,18 @@ services:
     volumes:
       - minio-data:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      # MinIO's own liveness endpoint rather than `mc ready local`, which needs an alias
+      # configured before it can answer. `wget` is busybox's and is already in the image.
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9000/minio/health/live"]
       interval: 5s
       timeout: 5s
       retries: 20
     networks: [refconcept]
 
   minio-init:
-    image: minio/mc:latest
+    # The same image: it carries `mc` beside the server, so the buckets are made by the
+    # client that belongs to this exact release rather than by a second image to keep pulled.
+    image: refconcept-minio:local
     container_name: refconcept-minio-init
     depends_on:
       minio:

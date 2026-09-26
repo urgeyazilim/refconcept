@@ -147,17 +147,15 @@ services:
       retries: 12
 
   minio:
-    # quay.io, not Docker Hub.
-    #
-    # `minio/minio` on Docker Hub answers every pull with "pull access denied for
-    # minio/minio, repository does not exist or may require 'docker login'", which reads like
-    # a credentials problem on the machine doing the pulling and is not one: the same pull
-    # fails from a developer's laptop with a working Docker Hub login, while
-    # `pgvector/pgvector` beside it comes down anonymously. MinIO publishes to their own
-    # registry; quay.io is where the image actually is.
-    #
-    # It cost a deployment twice, both times reported as a server problem.
-    image: quay.io/minio/minio:latest
+    # Built, not pulled. `infra/docker/minio/Dockerfile` says why at length; the short of it
+    # is that on 2026-09-26 Docker Hub, quay.io, ghcr.io and MinIO's own download server all
+    # stopped serving it anonymously within the same day, and this stack went down because
+    # Coolify pulls every image a compose file names before it stops the containers it is
+    # replacing. Building from the source, which is still public, is the only version of this
+    # that cannot be switched off by somebody else.
+    build:
+      context: .
+      dockerfile: infra/docker/minio/Dockerfile
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -170,7 +168,9 @@ services:
     volumes:
       - minio-data:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      # MinIO's own liveness endpoint rather than `mc ready local`, which needs an alias
+      # configured before it can answer. `wget` is busybox's and is already in the image.
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:9000/minio/health/live"]
       interval: 10s
       timeout: 5s
       retries: 20
